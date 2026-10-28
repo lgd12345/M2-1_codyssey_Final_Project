@@ -1,0 +1,11 @@
+.git
+.gitignore
+.env
+**/.env
+**/node_modules
+**/dist
+**/__pycache__
+**/*.pyc
+**/.venv
+**/.pytest_cache
+**/.vite
