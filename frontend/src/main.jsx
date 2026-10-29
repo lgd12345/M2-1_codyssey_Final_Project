@@ -24,7 +24,7 @@ function App() {
         </div>
       </div>
     </main>
-    <footer className="foot">Service Desk · UI Mockup</footer>
+    <footer className="foot">Service Desk · UI Mockup · auto-deploy test</footer>
   </div>
 }
 
