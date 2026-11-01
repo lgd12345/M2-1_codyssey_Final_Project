@@ -1,79 +1,29 @@
-import asyncio
 import logging
 import os
-from contextlib import asynccontextmanager, suppress
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 import psycopg
 from fastapi import FastAPI, HTTPException
 from fastapi.staticfiles import StaticFiles
 
+from app.auth.routes import install_auth
+from app.documents.routes import router as documents_router
+from app.runs.routes import router as runs_router
+
 logger = logging.getLogger(__name__)
-
-SCHEMA_STATEMENTS = (
-    "CREATE EXTENSION IF NOT EXISTS vector",
-    """
-    CREATE TABLE IF NOT EXISTS knowledge_documents (
-        id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-        title TEXT NOT NULL,
-        source_uri TEXT,
-        content TEXT NOT NULL,
-        metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
-        embedding vector(1536),
-        created_at TIMESTAMPTZ NOT NULL DEFAULT now()
-    )
-    """,
-    """
-    CREATE INDEX IF NOT EXISTS knowledge_documents_embedding_hnsw_idx
-        ON knowledge_documents USING hnsw (embedding vector_cosine_ops)
-        WHERE embedding IS NOT NULL
-    """,
-)
-
-
-def initialize_database(database_url: str) -> None:
-    """Create the pgvector schema idempotently when the database is reachable."""
-    with psycopg.connect(database_url, connect_timeout=3) as connection:
-        with connection.cursor() as cursor:
-            for statement in SCHEMA_STATEMENTS:
-                cursor.execute(statement)
-    logger.info("Database schema is ready")
-
-
-async def retry_database_initialization(database_url: str) -> None:
-    delay = 2
-    while True:
-        await asyncio.sleep(delay)
-        try:
-            await asyncio.to_thread(initialize_database, database_url)
-            return
-        except psycopg.Error:
-            logger.exception("Database initialization failed; retrying in %s seconds", delay)
-            delay = min(delay * 2, 30)
 
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
-    database_url = os.getenv("DATABASE_URL")
-    retry_task = None
-    if database_url:
-        try:
-            await asyncio.to_thread(initialize_database, database_url)
-        except psycopg.Error:
-            logger.exception("Database initialization failed; API will start and retry in the background")
-            retry_task = asyncio.create_task(retry_database_initialization(database_url))
-    else:
-        logger.info("DATABASE_URL is not set; skipping database initialization")
-    try:
-        yield
-    finally:
-        if retry_task:
-            retry_task.cancel()
-            with suppress(asyncio.CancelledError):
-                await retry_task
+    # Database schema changes are explicit migrations; app startup is read-only.
+    yield
 
 
-app = FastAPI(title="Service Desk PoC API", lifespan=lifespan)
+app = FastAPI(title="Service Desk Agent API", lifespan=lifespan)
+install_auth(app)
+app.include_router(runs_router)
+app.include_router(documents_router)
 
 
 @app.get("/api/health")
