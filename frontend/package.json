@@ -5,12 +5,18 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "test": "node --test src/chat.test.js src/markdown.test.js src/documents.test.js src/samples.test.js",
     "build": "vite build",
     "preview": "vite preview"
   },
   "dependencies": {
+    "@ai-sdk/react": "4.0.163",
+    "ai": "7.0.159",
     "react": "^19.0.0",
-    "react-dom": "^19.0.0"
+    "react-dom": "^19.0.0",
+    "react-markdown": "^10.1.0",
+    "remark-cjk-friendly": "^2.3.3",
+    "remark-gfm": "^4.0.1"
   },
   "devDependencies": {
     "vite": "^6.0.0"
