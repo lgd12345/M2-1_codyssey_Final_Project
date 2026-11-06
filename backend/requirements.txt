@@ -7,6 +7,3 @@ Pillow>=11,<13
 markdown-it-py>=3,<5
 pwdlib[argon2]>=0.2,<1
 pydantic-ai-slim[openai]==2.64.0
-dnspython==2.9.2
-aiosmtplib==5.1.3
-dkimpy==1.1.8
