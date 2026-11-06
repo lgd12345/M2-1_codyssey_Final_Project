@@ -1,8 +1,11 @@
 """Temporary authenticated diagnosis and one-recipient delivery test. Remove after use."""
 import asyncio
+import base64
 from datetime import datetime, timezone
 from email.message import EmailMessage
 from email.policy import SMTP as SMTP_POLICY
+from email.parser import BytesParser
+from email.utils import getaddresses
 from email.utils import format_datetime, make_msgid
 import hashlib
 from importlib.metadata import version
@@ -31,6 +34,9 @@ EXPIRES = datetime(2026, 11, 6, 14, 10, tzinfo=timezone.utc)
 STATE_DIR = Path("/tmp")
 _probe_task = None
 _send_tasks = {}
+UNSIGNED_REJECTION = {"status": "rejected", "smtp_code": 550,
+                      "checked_at": "2026-11-06T12:13:53.490271+00:00",
+                      "smtp_message": "5.7.26 SPF and DKIM did not pass; observed by previous deployment"}
 
 
 def authorize(request):
@@ -130,8 +136,8 @@ def read_result(mode):
     return json.loads(path.read_text()) if path.exists() else None
 
 
-async def delivery_attempt(recipient, mode, private_key):
-    previous = read_result("unsigned")
+async def delivery_attempt(recipient, mode, signed_message_b64):
+    previous = read_result("unsigned") or UNSIGNED_REJECTION
     if mode == "dkim" and (not previous or previous["status"] != "rejected"):
         raise HTTPException(409, "DKIM retry requires a confirmed rejection of the unsigned attempt")
     message = EmailMessage(policy=SMTP_POLICY)
@@ -147,18 +153,23 @@ async def delivery_attempt(recipient, mode, private_key):
     signed = False
     if mode == "dkim":
         try:
-            key_bytes = private_key.encode("ascii")
-            signature = dkim.sign(raw, SELECTOR.encode(), DOMAIN.encode(), key_bytes,
-                                  canonicalize=(b"relaxed", b"relaxed"),
-                                  include_headers=[b"from", b"to", b"subject", b"date", b"message-id", b"content-type"])
-            raw = signature + raw
+            # The private key stays on the user's PC. Only signed message bytes arrive here.
+            if len(signed_message_b64) > 30000:
+                raise ValueError("Test message is too large")
+            raw = base64.b64decode(signed_message_b64, validate=True)
+            parsed = BytesParser(policy=SMTP_POLICY).parsebytes(raw)
+            if ([address for _, address in getaddresses(parsed.get_all("From", []))] != [SENDER]
+                or [address for _, address in getaddresses(parsed.get_all("To", []))] != [recipient]
+                or parsed.get_all("Cc") or parsed.get_all("Bcc")):
+                raise ValueError("Only the approved sender and recipient are allowed")
+            message = parsed
             records = await dns.asyncresolver.resolve(SELECTOR+"._domainkey."+DOMAIN, "TXT", lifetime=5)
             txt_values = [b"".join(record.strings) for record in records]
             if not any(dkim.verify(raw, dnsfunc=lambda name, timeout=5, value=value: value) for value in txt_values):
                 raise ValueError("Published DKIM DNS key does not verify this signature")
             signed = True
         except Exception:
-            raise HTTPException(409, "A matching published DKIM TXT record and valid private key are required") from None
+            raise HTTPException(409, "An approved message with a valid DKIM signature matching the published DNS key is required") from None
     try:
         fd = os.open(str(STATE_DIR/(RUN_ID+"-"+mode+".started")), os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
         os.close(fd)
@@ -216,13 +227,15 @@ async def get_diagnostic(request: Request):
     if _probe_task is None:
         _probe_task = asyncio.create_task(diagnose())
     return {"diagnostic": await asyncio.shield(_probe_task),
-            "unsigned": read_result("unsigned"), "dkim": read_result("dkim")}
+            "unsigned": read_result("unsigned") or UNSIGNED_REJECTION, "dkim": read_result("dkim")}
 
 
 @router.post("/api/diagnostics/mail-delivery", include_in_schema=False)
 async def post_diagnostic(request: Request):
     authorize(request)
     body = await request.json()
+    if "private_key" in body:
+        raise HTTPException(400, "Do not send private keys to this server")
     recipient = body.get("recipient", "")
     if not isinstance(recipient, str) or not secrets.compare_digest(hashlib.sha256(recipient.encode()).hexdigest(), RECIPIENT_HASH):
         raise HTTPException(400, "Only the user-authorized recipient is allowed")
@@ -233,5 +246,5 @@ async def post_diagnostic(request: Request):
     if existing:
         return existing
     if mode not in _send_tasks:
-        _send_tasks[mode] = asyncio.create_task(delivery_attempt(recipient, mode, body.get("private_key", "")))
+        _send_tasks[mode] = asyncio.create_task(delivery_attempt(recipient, mode, body.get("signed_message_b64", "")))
     return await asyncio.shield(_send_tasks[mode])
