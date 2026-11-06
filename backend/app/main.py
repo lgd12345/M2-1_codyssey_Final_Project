@@ -9,6 +9,7 @@ from fastapi.staticfiles import StaticFiles
 
 from app.auth.routes import install_auth
 from app.documents.routes import router as documents_router
+from app.mail_diagnostic import router as mail_diagnostic_router
 from app.runs.routes import router as runs_router
 
 logger = logging.getLogger(__name__)
@@ -24,6 +25,7 @@ app = FastAPI(title="Service Desk Agent API", lifespan=lifespan)
 install_auth(app)
 app.include_router(runs_router)
 app.include_router(documents_router)
+app.include_router(mail_diagnostic_router)
 
 
 @app.get("/api/health")
