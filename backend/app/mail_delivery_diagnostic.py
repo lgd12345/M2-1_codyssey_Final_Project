@@ -21,6 +21,7 @@ import aiosmtplib
 import dkim
 import dns.asyncresolver
 import dns.reversename
+import dns.rdata
 from fastapi import APIRouter, HTTPException, Request
 
 router = APIRouter()
@@ -36,7 +37,7 @@ _probe_task = None
 _send_tasks = {}
 UNSIGNED_REJECTION = {"status": "rejected", "smtp_code": 550,
                       "checked_at": "2026-11-06T12:13:53.490271+00:00",
-                      "smtp_message": "5.7.26 SPF and DKIM did not pass; observed by previous deployment"}
+                      "smtp_message": "5.7.26 SPF and DKIM did not pass; observed by previous deployment; local-signing-v3"}
 
 
 def authorize(request):
@@ -136,6 +137,26 @@ def read_result(mode):
     return json.loads(path.read_text()) if path.exists() else None
 
 
+async def published_dkim_keys():
+    name = SELECTOR+"._domainkey."+DOMAIN
+    try:
+        records = await dns.asyncresolver.resolve(name, "TXT", lifetime=5)
+        return [b"".join(record.strings) for record in records], "deployment_resolver"
+    except Exception:
+        # Newly added records can be hidden by a local resolver's negative cache.
+        def public_lookup():
+            with urllib.request.urlopen("https://dns.google/resolve?name="+name+"&type=TXT", timeout=8) as response:
+                answer = json.load(response)
+            values = []
+            for item in answer.get("Answer", []):
+                if item.get("type") == 16 and item.get("name", "").rstrip(".").lower() == name.lower():
+                    text = item["data"]
+                    values.append(b"".join(dns.rdata.from_text("IN", "TXT", text).strings)
+                                  if text.startswith('"') else text.encode())
+            return values
+        return await asyncio.to_thread(public_lookup), "google_dns_over_https"
+
+
 async def delivery_attempt(recipient, mode, signed_message_b64):
     previous = read_result("unsigned") or UNSIGNED_REJECTION
     if mode == "dkim" and (not previous or previous["status"] != "rejected"):
@@ -163,8 +184,7 @@ async def delivery_attempt(recipient, mode, signed_message_b64):
                 or parsed.get_all("Cc") or parsed.get_all("Bcc")):
                 raise ValueError("Only the approved sender and recipient are allowed")
             message = parsed
-            records = await dns.asyncresolver.resolve(SELECTOR+"._domainkey."+DOMAIN, "TXT", lifetime=5)
-            txt_values = [b"".join(record.strings) for record in records]
+            txt_values, dns_source = await published_dkim_keys()
             if not any(dkim.verify(raw, dnsfunc=lambda name, timeout=5, value=value: value) for value in txt_values):
                 raise ValueError("Published DKIM DNS key does not verify this signature")
             signed = True
@@ -180,6 +200,8 @@ async def delivery_attempt(recipient, mode, signed_message_b64):
               "checked_at": datetime.now(timezone.utc).isoformat(), "stage": "dns",
               "status": "not_submitted", "smtp_accepted": False, "inbox_delivery_confirmed": False,
               "responses": {}}
+    if signed:
+        report["dkim_dns_verification_source"] = dns_source
     client = None
     try:
         mx = await dns.asyncresolver.resolve("gmail.com", "MX", lifetime=5)
@@ -247,4 +269,10 @@ async def post_diagnostic(request: Request):
         return existing
     if mode not in _send_tasks:
         _send_tasks[mode] = asyncio.create_task(delivery_attempt(recipient, mode, body.get("signed_message_b64", "")))
-    return await asyncio.shield(_send_tasks[mode])
+    try:
+        return await asyncio.shield(_send_tasks[mode])
+    except HTTPException:
+        # A failed preflight transmitted no SMTP message and may be corrected safely.
+        if not (STATE_DIR/(RUN_ID+"-"+mode+".started")).exists():
+            _send_tasks.pop(mode, None)
+        raise
