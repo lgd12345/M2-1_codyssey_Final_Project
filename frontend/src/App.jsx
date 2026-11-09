@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import { useChat } from '@ai-sdk/react'
 import { DefaultChatTransport } from 'ai'
 import ReactMarkdown from 'react-markdown'
@@ -11,19 +11,19 @@ import { SAMPLES } from './samples.js'
 // It goes away once customer complaints are fed to the agent automatically.
 
 const RUN_ERRORS = {
-  agent_not_configured: 'LLM 설정(.env)이 비어 있습니다.',
-  llm_unavailable: 'LLM 프록시 호출에 실패했습니다.',
+  agent_not_configured: '답변 서비스가 아직 준비되지 않았습니다. 관리자에게 문의해 주세요.',
+  llm_unavailable: '답변 서비스에 연결하지 못했습니다. 잠시 후 다시 시도해 주세요.',
   invalid_agent_output: '에이전트 답변이 검증을 통과하지 못했습니다(근거 없는 인용/이미지).',
   database_unavailable: 'DB 연결에 실패했습니다.',
   interrupted: '연결이 끊겨 실행이 중단됐습니다.',
   storage_error: '결과를 저장하지 못했습니다.',
-  agent_error: '알 수 없는 오류입니다(서버 로그 확인).',
+  agent_error: '답변을 처리하지 못했습니다. 문제가 계속되면 관리자에게 문의해 주세요.',
 }
 const API_ERRORS = {
   INVALID_CREDENTIALS: '아이디 또는 비밀번호가 올바르지 않습니다.',
   TOO_MANY_ATTEMPTS: '시도가 너무 많습니다. 10분 뒤 다시 시도하세요.',
   RUN_IN_PROGRESS: '이미 실행 중인 질문이 있습니다. 끝난 뒤 다시 시도하세요.',
-  AGENT_NOT_CONFIGURED: 'LLM 설정(.env)이 비어 있습니다.',
+  AGENT_NOT_CONFIGURED: '답변 서비스가 아직 준비되지 않았습니다. 관리자에게 문의해 주세요.',
 }
 
 class ApiError extends Error {
@@ -47,12 +47,57 @@ async function call(path, { method = 'GET', body, csrf } = {}) {
   return data
 }
 
-export function App() {
+export function App({ theme }) {
+  const preference = useSyncExternalStore(theme.subscribe, theme.getPreference)
   const [auth, setAuth] = useState(null)
-  useEffect(() => { call('/auth/me').then(setAuth).catch(() => setAuth({ authenticated: false })) }, [])
-  if (!auth) return <p className="muted pad">불러오는 중…</p>
-  if (!auth.authenticated) return <Login onDone={setAuth} />
-  return <Chat auth={auth} onLogout={() => setAuth({ authenticated: false })} />
+  const [authError, setAuthError] = useState('')
+  const [sessionAttempt, setSessionAttempt] = useState(0)
+  const onLogout = useCallback(() => setAuth({ authenticated: false }), [])
+
+  useEffect(() => {
+    let active = true
+    setAuth(null)
+    setAuthError('')
+    call('/auth/me').then((session) => { if (active) setAuth(session) })
+      .catch((error) => { if (active) setAuthError(error.message) })
+    return () => { active = false }
+  }, [sessionAttempt])
+
+  return (
+    <div className="app-shell">
+      <a className="skip-link" href="#main-content">본문으로 이동</a>
+      <header className="app-header">
+        <div className="brand">
+          <span className="brand-eyebrow">공작기계 서비스 지원</span>
+          <strong className="brand-title">매뉴얼 지원</strong>
+        </div>
+        <label className="theme-control">
+          <span>화면 테마</span>
+          <select value={preference} onChange={(event) => theme.setPreference(event.target.value)}>
+            <option value="system">시스템 설정</option>
+            <option value="light">라이트</option>
+            <option value="dark">다크</option>
+          </select>
+        </label>
+      </header>
+      <main id="main-content" className="app-main" tabIndex={-1}>
+        {authError ? (
+          <section className="status-card" aria-labelledby="session-error-title">
+            <h1 id="session-error-title">연결을 확인해 주세요</h1>
+            <p className="error" role="alert">{authError}</p>
+            <p className="muted">로그인 상태를 확인하지 못했습니다. 연결 후 다시 시도해 주세요.</p>
+            <button className="primary" onClick={() => setSessionAttempt((attempt) => attempt + 1)}>다시 시도</button>
+          </section>
+        ) : !auth ? (
+          <section className="status-card" aria-busy="true" role="status">
+            <h1>로그인 상태 확인 중</h1>
+            <p className="muted">잠시만 기다려 주세요.</p>
+          </section>
+        ) : auth.authenticated ? <Chat auth={auth} onLogout={onLogout} /> : <Login onDone={setAuth} />}
+      </main>
+      <footer className="footer-helper">AI가 생성한 답변은 인용된 근거와 원본 매뉴얼을 함께 확인해 주세요.</footer>
+    </div>
+  )
 }
 
 function Login({ onDone }) {
@@ -68,13 +113,21 @@ function Login({ onDone }) {
     finally { setBusy(false) }
   }
   return (
-    <form className="login" onSubmit={submit}>
-      <h1>매뉴얼 에이전트 테스트</h1>
-      <label>아이디<input value={loginId} onChange={(e) => setLoginId(e.target.value)} autoComplete="username" autoFocus /></label>
-      <label>비밀번호<input type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="current-password" /></label>
-      {error && <p className="error" role="alert">{error}</p>}
-      <button disabled={busy || !loginId || !password}>{busy ? '확인 중…' : '로그인'}</button>
-    </form>
+    <section className="login-panel" aria-labelledby="login-title">
+      <form className="login" onSubmit={submit} aria-busy={busy}>
+        <h1 id="login-title">로그인</h1>
+        <p className="login-description muted">등록된 계정으로 매뉴얼과 답변을 확인하세요.</p>
+        <p className="ai-notice" role="note" aria-label="AI 생성 콘텐츠 안내">
+          <strong>AI 생성 콘텐츠 안내</strong><br />
+          로그인 후 제공되는 답변은 AI가 생성합니다. 내용이 부정확할 수 있으니 인용된 근거와 원본 매뉴얼을 함께 확인해 주세요.
+        </p>
+        <label>아이디<input name="login_id" value={loginId} onChange={(e) => setLoginId(e.target.value)} autoComplete="username" autoCapitalize="none" spellCheck={false} disabled={busy} required autoFocus /></label>
+        <label>비밀번호<input name="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="current-password" disabled={busy} required /></label>
+        {error && <p className="error" role="alert">{error}</p>}
+        <button type="submit" disabled={busy || !loginId || !password}>{busy ? '확인 중…' : '로그인'}</button>
+        <p className="login-helper muted">계정 이용이 어려우면 관리자에게 문의해 주세요.</p>
+      </form>
+    </section>
   )
 }
 
@@ -138,31 +191,36 @@ function Chat({ auth, onLogout }) {
 
   return (
     <div className="wrap">
-      <header><strong>매뉴얼 에이전트 테스트</strong>
-        <span className="muted">{auth.user.login_id}
+      <header><h1>매뉴얼 질의</h1>
+        <div className="chat-actions"><span className="muted">{auth.user.login_id}</span>
           <button className="link" onClick={reset} disabled={busy}>새 대화</button>
-          <button className="link" onClick={logout}>로그아웃</button></span></header>
-      <p className="notice">임시 확인용 화면입니다. 고객 민원이 에이전트로 자동 전달되는 구조가 되면 제거됩니다. 대화는 새로고침하면 사라지고, 실행 기록은 서버에 저장됩니다.</p>
+          <button className="link" onClick={logout}>로그아웃</button></div></header>
+      <p className="notice">매뉴얼 질의 확인용 화면입니다. 대화는 새로고침하면 사라지고, 실행 기록은 서버에 저장됩니다.</p>
 
       <Documents />
 
-      <div className="thread">
-        {messages.length === 0 && <p className="muted">질문을 입력하거나 예시를 눌러 보세요.</p>}
+      <div className="thread" role="log" aria-label="질문과 답변">
+        {messages.length === 0 && <div className="empty-state"><h2>어떤 내용을 찾으시나요?</h2><p className="muted">질문을 입력하거나 아래 예시를 선택해 보세요.</p></div>}
         {messages.map((message, index) => message.role === 'user'
           ? <div key={message.id} className="bubble user">{textOf(message)}</div>
           : <Assistant key={message.id} message={message} info={finished[message.id]}
               live={busy && index === messages.length - 1} />)}
-        {status === 'submitted' && <div className="bubble bot muted">조사 중…</div>}
+        {status === 'submitted' && <div className="bubble bot muted" role="status">매뉴얼을 확인하고 있습니다…</div>}
         {error && <p className="error" role="alert">{error.message}</p>}
       </div>
 
       <div className="samples">{SAMPLES.map((s) => (
         <button key={s.question} className="chip" onClick={() => send(s.question)} disabled={busy} title={s.question}>
           <b>{s.label}</b> {s.question}</button>))}</div>
-      <form className="composer" onSubmit={(e) => { e.preventDefault(); send(input) }}>
-        <textarea rows={2} value={input} maxLength={4000} placeholder="매뉴얼에 대해 질문하세요 (Enter 전송, Shift+Enter 줄바꿈)"
+      <form className="composer" onSubmit={(e) => { e.preventDefault(); send(input) }} aria-busy={busy}>
+        <div className="composer-field">
+        <label htmlFor="manual-question">매뉴얼 질문</label>
+        <textarea id="manual-question" name="question" rows={2} value={input} maxLength={4000} placeholder="확인할 기종·알람·증상을 입력하세요"
+          aria-describedby="question-help"
           onChange={(e) => setInput(e.target.value)}
-          onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); send(input) } }} />
+          onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing && e.nativeEvent.keyCode !== 229) { e.preventDefault(); send(input) } }} />
+        <span id="question-help" className="muted small">Enter로 전송 · Shift+Enter로 줄바꿈 · 최대 4,000자</span>
+        </div>
         <button className="primary" disabled={busy || !input.trim()}>{busy ? '실행 중…' : '전송'}</button>
       </form>
     </div>
@@ -171,18 +229,27 @@ function Chat({ auth, onLogout }) {
 
 function Documents() {
   const [overview, setOverview] = useState(null)
-  const [failed, setFailed] = useState(false)
-  useEffect(() => { call('/documents').then(setOverview).catch(() => setFailed(true)) }, [])
+  const [failure, setFailure] = useState('')
+  useEffect(() => {
+    let active = true
+    call('/documents').then((result) => { if (active) setOverview(result) })
+      .catch((error) => { if (active) setFailure(error.status === 403 ? '문서 목록을 볼 권한이 없습니다.' : '문서 목록을 불러오지 못했습니다.') })
+    return () => { active = false }
+  }, [])
   return (
     <details className="docs">
-      <summary>{failed ? '문서 목록을 불러오지 못했습니다.' : summaryLine(overview)}</summary>
-      {overview && (
+      <summary>{failure || summaryLine(overview)}</summary>
+      {failure && <p className="error" role="alert">{failure}</p>}
+      {overview?.documents.length === 0 && <p className="muted">등록된 매뉴얼이 없습니다.</p>}
+      {overview && overview.documents.length > 0 && (
+        <div className="table-scroll" role="region" aria-label="등록된 매뉴얼 목록" tabIndex={0}>
         <table>
+          <caption className="sr-only">매뉴얼별 검색·벡터 색인 현황</caption>
           <thead><tr><th>문서</th><th>기종</th><th>전체</th><th>검색 대상</th><th>벡터</th></tr></thead>
           <tbody>{overview.documents.map(documentRow).map((row) => (
             <tr key={row.key}><td>{row.title}</td><td>{row.machines}</td>
               <td>{row.pages}</td><td>{row.searchable}</td><td>{row.vector}</td></tr>))}</tbody>
-        </table>)}
+        </table></div>)}
       <p className="muted small">검색 대상은 본문이 있는 페이지입니다(표지·목차·번호만 있는 도면 쪽은 제외). 벡터는 임베딩이 만들어진 페이지 수입니다.</p>
     </details>
   )
@@ -194,11 +261,11 @@ function Assistant({ message, info, live }) {
   const steps = info ? info.steps : toolSteps(message.parts)
   const run = info?.run
   return (
-    <div className="bubble bot">
+    <div className="bubble bot" aria-label="에이전트 응답">
       {steps.length > 0 && <Steps steps={steps} />}
       {live && !info && <p className="muted">에이전트가 작업 중입니다…</p>}
-      {info && !run && <p className="error">검증된 결과를 불러오지 못했습니다.</p>}
-      {run?.status === 'failed' && <p className="error">{RUN_ERRORS[run.error_code] || run.error_code}</p>}
+      {info && !run && <p className="error" role="alert">검증된 결과를 불러오지 못했습니다.</p>}
+      {run?.status === 'failed' && <p className="error" role="alert">{RUN_ERRORS[run.error_code] || '답변을 처리하지 못했습니다.'}</p>}
       {run?.answer_markdown && <Answer run={run} />}
     </div>
   )
@@ -226,9 +293,11 @@ const markdownComponents = (assets) => ({
   img: ({ src, alt }) => {
     const image = resolveImage(src, assets)
     return image
-      ? <figure><img src={image.url} alt={alt || `원본 PDF ${image.page}쪽`} /><figcaption>원본 PDF {image.page}쪽</figcaption></figure>
+      ? <span className="source-figure"><img src={image.url} alt={alt || `원본 PDF ${image.page}쪽`} /><span className="source-caption">원본 PDF {image.page}쪽</span></span>
       : <span className="muted">[이미지 생략]</span>
   },
+  table: ({ children }) => <div className="table-scroll" role="region" aria-label="답변 표" tabIndex={0}><table>{children}</table></div>,
+  pre: ({ children }) => <pre tabIndex={0}>{children}</pre>,
   a: ({ href, children }) => (/^https?:\/\//i.test(href || '')
     ? <a href={href} target="_blank" rel="noreferrer noopener">{children}</a> : <span>{children}</span>),
 })
@@ -238,13 +307,14 @@ function Answer({ run }) {
   const others = (run.assets || []).filter((a) => !referenced.has(a.asset_id))
   return (
     <div className="answer">
+      <p className="ai-notice">AI가 생성한 답변입니다. 인용된 근거와 원본 매뉴얼을 함께 확인해 주세요.</p>
       <span className={`tag ${run.answer_status}`}>{answerLabel(run.answer_status)}</span>
       <ReactMarkdown remarkPlugins={remarkPlugins} urlTransform={(url) => url} components={markdownComponents(run.assets)}>
         {run.answer_markdown}
       </ReactMarkdown>
       {run.citations?.length > 0 && (
-        <ul className="citations">{run.citations.map((c, i) =>
-          <li key={i}>{c.title} · PDF {c.page}쪽{c.printed_page ? ` (인쇄 ${c.printed_page})` : ''}</li>)}</ul>)}
+        <div className="source-label"><strong>답변에 인용된 매뉴얼</strong><ul className="citations">{run.citations.map((c, i) =>
+          <li key={i}>{c.title} · PDF {c.page}쪽{c.printed_page ? ` (인쇄 ${c.printed_page})` : ''}</li>)}</ul></div>)}
       {others.length > 0 && (
         <details><summary>에이전트가 연 원본 페이지 ({others.length})</summary>
           <div className="gallery">{others.map((a) =>

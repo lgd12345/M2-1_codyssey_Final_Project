@@ -3,7 +3,19 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>매뉴얼 에이전트 테스트</title>
+    <script>
+      // Apply the saved theme before styles and the app bundle can paint.
+      (() => {
+        let theme
+        try { theme = localStorage.getItem('claim-ui-theme') } catch {}
+        if (theme !== 'light' && theme !== 'dark') {
+          theme = 'light'
+          try { if (window.matchMedia('(prefers-color-scheme: dark)').matches) theme = 'dark' } catch {}
+        }
+        document.documentElement.dataset.theme = theme
+      })()
+    </script>
+    <title>매뉴얼 지원</title>
     <link rel="icon" href="data:," />
   </head>
   <body>
