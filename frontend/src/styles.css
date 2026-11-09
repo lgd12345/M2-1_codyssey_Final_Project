@@ -164,10 +164,6 @@ button:disabled, .primary:disabled, .login button:disabled {
 
 .brand-title { display: block; margin: 0; font-size: clamp(20px, 2.5vw, 24px); line-height: 1.4; }
 
-.theme-control { display: grid; gap: 4px; min-width: 164px; }
-.theme-control > span { color: var(--color-muted); font-size: 13px; font-weight: 700; }
-.theme-control select { width: 100%; padding: 8px 32px 8px 12px; }
-
 .app-main {
   flex: 1;
   width: 100%;
@@ -385,7 +381,6 @@ figcaption, .source-caption { display: block; margin-top: 4px; color: var(--colo
   input, textarea, select { font-size: 16px; }
   .app-header { gap: 12px; padding: 16px; }
   .brand { flex: 1 1 100%; }
-  .theme-control { width: 100%; }
   .app-main { padding: 16px 16px 24px; }
   .login-panel, .status-card { margin-block: 16px; }
   .wrap { padding-inline: 16px; }

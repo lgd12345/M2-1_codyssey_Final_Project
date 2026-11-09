@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client'
 import { App } from './App.jsx'
 import { createThemeController } from './theme.js'
 import './styles.css'
+import './site.css'
 
 const theme = createThemeController(window)
 createRoot(document.getElementById('root')).render(<App theme={theme} />)

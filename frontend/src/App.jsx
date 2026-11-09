@@ -6,6 +6,8 @@ import { answerLabel, describeStep, historyText, resolveImage, toolSteps } from 
 import { documentRow, summaryLine } from './documents.js'
 import { remarkPlugins } from './markdown.js'
 import { SAMPLES } from './samples.js'
+import { AccessGuide, HomePage, SiteFooter, SiteHeader, SupportPage } from './Site.jsx'
+import { needsSession, pageFromHash } from './navigation.js'
 
 // Temporary chat screen for checking that the manual agent works and HOW it works.
 // It goes away once customer complaints are fed to the agent automatically.
@@ -49,39 +51,48 @@ async function call(path, { method = 'GET', body, csrf } = {}) {
 
 export function App({ theme }) {
   const preference = useSyncExternalStore(theme.subscribe, theme.getPreference)
+  const [page, setPage] = useState(() => pageFromHash(window.location.hash))
   const [auth, setAuth] = useState(null)
   const [authError, setAuthError] = useState('')
   const [sessionAttempt, setSessionAttempt] = useState(0)
-  const onLogout = useCallback(() => setAuth({ authenticated: false }), [])
+  const firstPage = useRef(true)
+  const sessionPage = needsSession(page)
+  const onLogout = useCallback(() => { setAuth({ authenticated: false }); window.location.hash = '/login' }, [])
 
   useEffect(() => {
+    const changePage = () => setPage((current) => pageFromHash(window.location.hash, current))
+    window.addEventListener('hashchange', changePage)
+    return () => window.removeEventListener('hashchange', changePage)
+  }, [])
+
+  useEffect(() => {
+    document.title = `${page === 'home' ? '공작기계 고객지원' : page === 'support' ? '고객센터' : sessionPage ? '로그인 · 매뉴얼 지원' : '서비스 이용 안내'} | MORRONO`
+    if (window.location.hash === '#machines') document.getElementById('machines')?.scrollIntoView()
+    else if (!firstPage.current) {
+      window.scrollTo(0, 0)
+      document.getElementById('main-content')?.focus({ preventScroll: true })
+    }
+    firstPage.current = false
+  }, [page, sessionPage])
+
+  useEffect(() => {
+    if (!sessionPage) return
     let active = true
     setAuth(null)
     setAuthError('')
     call('/auth/me').then((session) => { if (active) setAuth(session) })
       .catch((error) => { if (active) setAuthError(error.message) })
     return () => { active = false }
-  }, [sessionAttempt])
+  }, [sessionAttempt, sessionPage])
 
   return (
     <div className="app-shell">
       <a className="skip-link" href="#main-content">본문으로 이동</a>
-      <header className="app-header">
-        <div className="brand">
-          <span className="brand-eyebrow">공작기계 서비스 지원</span>
-          <strong className="brand-title">매뉴얼 지원</strong>
-        </div>
-        <label className="theme-control">
-          <span>화면 테마</span>
-          <select value={preference} onChange={(event) => theme.setPreference(event.target.value)}>
-            <option value="system">시스템 설정</option>
-            <option value="light">라이트</option>
-            <option value="dark">다크</option>
-          </select>
-        </label>
-      </header>
-      <main id="main-content" className="app-main" tabIndex={-1}>
-        {authError ? (
+      <SiteHeader preference={preference} theme={theme} authenticated={auth?.authenticated} page={page} />
+      <main id="main-content" className={`app-main ${sessionPage ? 'session-main' : 'public-main'}`} tabIndex={-1}>
+        {!sessionPage ? (
+          page === 'support' ? <SupportPage /> : page === 'register' || page === 'guest' ? <AccessGuide kind={page} /> : <HomePage />
+        ) : authError ? (
           <section className="status-card" aria-labelledby="session-error-title">
             <h1 id="session-error-title">연결을 확인해 주세요</h1>
             <p className="error" role="alert">{authError}</p>
@@ -93,9 +104,9 @@ export function App({ theme }) {
             <h1>로그인 상태 확인 중</h1>
             <p className="muted">잠시만 기다려 주세요.</p>
           </section>
-        ) : auth.authenticated ? <Chat auth={auth} onLogout={onLogout} /> : <Login onDone={setAuth} />}
+        ) : auth.authenticated ? <Chat auth={auth} onLogout={onLogout} /> : <Login onDone={(session) => { setAuth(session); window.location.hash = '/workspace' }} />}
       </main>
-      <footer className="footer-helper">AI가 생성한 답변은 인용된 근거와 원본 매뉴얼을 함께 확인해 주세요.</footer>
+      <SiteFooter />
     </div>
   )
 }
@@ -113,8 +124,10 @@ function Login({ onDone }) {
     finally { setBusy(false) }
   }
   return (
-    <section className="login-panel" aria-labelledby="login-title">
+    <section className="login-experience" aria-labelledby="login-title">
+      <div className="login-visual"><img src="/images/cnc-machining.jpg" alt="" width="2000" height="1125" /><div><p className="eyebrow">CONNECTED TO YOUR WORK</p><h2>현장과 지원을,<br />하나로 연결합니다.</h2><a href="#/home">MORRONO MACHINE SUPPORT ↗</a></div></div>
       <form className="login" onSubmit={submit} aria-busy={busy}>
+        <a className="back-link" href="#/support">← 고객센터</a>
         <h1 id="login-title">로그인</h1>
         <p className="login-description muted">등록된 계정으로 매뉴얼과 답변을 확인하세요.</p>
         <p className="ai-notice" role="note" aria-label="AI 생성 콘텐츠 안내">
@@ -126,6 +139,7 @@ function Login({ onDone }) {
         {error && <p className="error" role="alert">{error}</p>}
         <button type="submit" disabled={busy || !loginId || !password}>{busy ? '확인 중…' : '로그인'}</button>
         <p className="login-helper muted">계정 이용이 어려우면 관리자에게 문의해 주세요.</p>
+        <div className="login-extra"><a href="#/register">회원가입 안내</a><a href="#/guest">비회원 문의 안내</a></div>
       </form>
     </section>
   )
