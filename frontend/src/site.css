@@ -179,3 +179,32 @@ button, a { -webkit-tap-highlight-color: transparent; }
   .login-experience .login { padding: 22px; }
 }
 @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+
+.customer-access { max-width: 860px; padding-block: 28px 80px; }
+.access-heading { margin: 28px 0 32px; }
+.access-heading h1 { margin: 0; font-size: clamp(30px,4vw,42px); font-weight: 600; }
+.access-heading > p:last-child { color: var(--color-muted); font-size: 14px; }
+.access-form-panel { border: 1px solid var(--color-border); border-radius: 6px; padding: clamp(22px,4vw,40px); background: var(--color-surface); }
+.access-form-panel form { display: grid; gap: 18px; }
+.access-form-panel form > label { display: grid; gap: 8px; font-size: 14px; font-weight: 600; }
+.access-form-panel input:not([type='checkbox']), .access-form-panel textarea { width: 100%; }
+.access-form-panel textarea { min-height: 160px; resize: vertical; }
+.access-step { margin: 0; color: var(--color-accent); font-size: 12px; font-weight: 600; }
+.access-form-panel p { margin-block: 8px; }
+.access-consent { padding-block: 8px; border-block: 1px solid var(--color-border); }
+.access-consent summary { padding-block: 12px; min-height: 44px; font-size: 13px; }
+.access-consent dl { font-size: 12px; color: var(--color-muted); }
+.access-consent dt { font-weight: 600; }
+.access-consent dd { margin: 3px 0 12px; }
+.consent-check { display: flex; align-items: center; gap: 10px; padding-block: 10px; font-size: 12px; cursor: pointer; }
+.consent-check input { width: 20px; height: 20px; min-height: 20px; flex-shrink: 0; accent-color: var(--color-accent); }
+.access-secondary { min-height: 44px; padding: 8px; border: 1px solid var(--color-border); border-radius: 4px; background: var(--color-surface); color: var(--color-muted); font-size: 13px; }
+.access-notice { padding: 12px; background: var(--color-accent-soft); color: var(--color-accent-text); font-size: 13px; }
+.inquiry-body { white-space: pre-wrap; overflow-wrap: anywhere; }
+.inquiry-meta { color: var(--color-muted); font-size: 12px; }
+.inquiry-meta dd { margin: 4px 0 16px; }
+.customer-workspace { padding-block: 24px 48px; }
+.customer-workspace > header { display: flex; justify-content: space-between; align-items: center; gap: 20px; }
+.customer-workspace h1 { margin: 0; font-size: 30px; }
+.customer-workspace .eyebrow { margin-bottom: 8px; color: var(--color-accent); }
+.customer-workspace .access-form-panel { margin-top: 28px; }

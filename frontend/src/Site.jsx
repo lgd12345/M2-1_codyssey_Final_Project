@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useEffect, useState } from 'react'
 
 export function Icon({ name = 'arrow', ...props }) {
   const paths = {
@@ -77,6 +77,13 @@ export function HomePage() {
 }
 
 export function SupportPage() {
+  const [access, setAccess] = useState(null)
+  useEffect(() => {
+    let active = true
+    fetch('/api/v1/access/status', { credentials: 'same-origin', cache: 'no-store' })
+      .then((response) => response.ok ? response.json() : null).then((value) => { if (active) setAccess(value) }).catch(() => {})
+    return () => { active = false }
+  }, [])
   return <section className="support-page section-container" aria-labelledby="support-title">
     <p className="eyebrow">CUSTOMER SUPPORT</p><h1 id="support-title">무엇을 도와드릴까요?</h1><p className="page-description">이용 방법을 선택해 주세요. 필요한 지원으로 이어드립니다.</p>
     <div className="support-options">
@@ -84,7 +91,7 @@ export function SupportPage() {
       <a className="support-option" href="#/register"><Icon name="plus" /><span className="option-kicker">JOIN US</span><h2>회원가입 안내</h2><p>처음 방문하셨나요?<br />계정 이용 안내를 확인하세요.</p><span className="option-action">안내 확인<Icon /></span></a>
       <a className="support-option" href="#/guest"><Icon name="message" /><span className="option-kicker">GUEST</span><h2>비회원 문의 안내</h2><p>계정 없이 문의하는 방법과<br />이용 준비 현황을 확인하세요.</p><span className="option-action">안내 확인<Icon /></span></a>
     </div>
-    <p className="service-note">현재는 발급받은 계정으로 로그인할 수 있습니다. 온라인 회원가입과 비회원 문의는 준비 중입니다.</p>
+    <p className="service-note">{access?.available ? '회원가입·비회원 메뉴에서 이용 가능한 서비스를 확인해 주세요. 회사코드만으로 운영진 권한이 부여되지는 않습니다.' : '현재는 발급받은 계정으로 로그인할 수 있습니다. 온라인 회원가입과 비회원 문의는 준비 중입니다.'}</p>
   </section>
 }
 

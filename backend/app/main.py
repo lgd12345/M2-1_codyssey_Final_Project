@@ -10,6 +10,8 @@ from fastapi.staticfiles import StaticFiles
 from app.auth.routes import install_auth
 from app.documents.routes import router as documents_router
 from app.db_inspection import router as db_inspection_router
+from app.customer_access.routes import router as customer_access_router
+from app.customer_access.limits import AccessBodyLimit
 from app.runs.routes import router as runs_router
 
 logger = logging.getLogger(__name__)
@@ -22,10 +24,12 @@ async def lifespan(_app: FastAPI):
 
 
 app = FastAPI(title="Service Desk Agent API", lifespan=lifespan)
+app.add_middleware(AccessBodyLimit)
 install_auth(app)
 app.include_router(runs_router)
 app.include_router(documents_router)
 app.include_router(db_inspection_router)
+app.include_router(customer_access_router)
 
 
 @app.get("/api/health")

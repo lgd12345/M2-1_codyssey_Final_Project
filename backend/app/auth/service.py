@@ -18,7 +18,7 @@ SESSION_INTERVAL = "7 days"
 THROTTLE_INTERVAL = "10 minutes"
 MAX_FAILURES_PER_CLIENT = 5
 MAX_FAILURES_PER_LOGIN = 10
-ROLES = ("admin", "user")
+ROLES = ("admin", "user", "customer")
 
 _LOGIN_ID = re.compile(r"^[a-z0-9._@-]{3,64}$")
 _HASHER = PasswordHash((Argon2Hasher(),))
@@ -108,7 +108,7 @@ def _dummy() -> str:
 
 def create_user(connection, login_id: str, password: str, *, role: str = "user") -> AuthUser:
     if role not in ROLES:
-        raise ValueError("role must be admin or user")
+        raise ValueError("unsupported account role")
     normalized = normalize_login_id(login_id)
     if not _LOGIN_ID.fullmatch(normalized):
         raise InvalidLoginId()
@@ -148,7 +148,7 @@ def authenticate(connection, login_id: str, password: str, client: str) -> AuthU
         (normalize_login_id(login_id),)).fetchone() if key != "?" else None
     stored = row[3] if row else _dummy()
     valid = _HASHER.verify(password[:MAX_PASSWORD_LENGTH], stored)
-    if not (row and valid and row[4]):
+    if not (row and valid and len(password) <= MAX_PASSWORD_LENGTH and row[4]):
         connection.execute("INSERT INTO app_login_failure(login_id, client) VALUES (%s,%s)", (key, client))
         raise InvalidCredentials()
     connection.execute("UPDATE app_user SET last_login_at = now() WHERE id=%s", (row[0],))

@@ -10,7 +10,7 @@ from pydantic import BaseModel, Field, field_validator
 
 from app.agent_rag.agent import ManualAgentResult
 from app.agent_rag.runner import AgentSession, open_agent_session, run_manual_agent
-from app.auth.deps import database, require_csrf, require_user
+from app.auth.deps import database, require_operator_csrf, require_operator
 from app.auth.service import SessionInfo
 from app.runs import service
 from app.runs.stream import start_stream
@@ -74,7 +74,7 @@ async def execute_run(run_id: UUID, question: str, runner: AgentRunner) -> None:
 
 @router.post("/runs", status_code=202)
 def create_run(body: RunRequest, background: BackgroundTasks,
-               session: SessionInfo = Depends(require_csrf),
+               session: SessionInfo = Depends(require_operator_csrf),
                runner: AgentRunner = Depends(get_agent_runner)):
     with database() as connection:
         run_id = service.create_run(connection, session.user.id, body.question)
@@ -83,25 +83,25 @@ def create_run(body: RunRequest, background: BackgroundTasks,
 
 
 @router.post("/stream")
-async def stream_run(request: Request, session: SessionInfo = Depends(require_csrf),
+async def stream_run(request: Request, session: SessionInfo = Depends(require_operator_csrf),
                      factory: Callable[[], AgentSession] = Depends(get_agent_session_factory)):
     return await start_stream(request, session.user.id, factory)
 
 
 @router.get("/runs")
-def list_runs(session: SessionInfo = Depends(require_user)):
+def list_runs(session: SessionInfo = Depends(require_operator)):
     with database() as connection:
         return {"runs": service.list_runs(connection, session.user.id)}
 
 
 @router.get("/runs/{run_id}")
-def get_run(run_id: str, session: SessionInfo = Depends(require_user)):
+def get_run(run_id: str, session: SessionInfo = Depends(require_operator)):
     with database() as connection:
         return service.get_run(connection, session.user.id, _parse(run_id))
 
 
 @router.get("/runs/{run_id}/assets/{asset_id}")
-def get_asset(run_id: str, asset_id: str, session: SessionInfo = Depends(require_user)):
+def get_asset(run_id: str, asset_id: str, session: SessionInfo = Depends(require_operator)):
     with database() as connection:
         data, media_type = service.get_asset(connection, session.user.id, _parse(run_id), asset_id)
     return Response(content=data, media_type=media_type, headers={

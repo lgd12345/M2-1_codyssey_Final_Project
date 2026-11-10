@@ -11,3 +11,9 @@ export function pageFromHash(hash, current = 'home') {
 export function needsSession(page) {
   return page === 'login' || page === 'workspace'
 }
+
+export function accountArea(user) {
+  if (user?.role === 'customer') return 'customer'
+  if (user?.role === 'admin' || user?.role === 'user') return 'operator'
+  return 'blocked'
+}

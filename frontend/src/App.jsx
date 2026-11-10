@@ -6,8 +6,10 @@ import { answerLabel, describeStep, historyText, resolveImage, toolSteps } from 
 import { documentRow, summaryLine } from './documents.js'
 import { remarkPlugins } from './markdown.js'
 import { SAMPLES } from './samples.js'
-import { AccessGuide, HomePage, SiteFooter, SiteHeader, SupportPage } from './Site.jsx'
-import { needsSession, pageFromHash } from './navigation.js'
+import { HomePage, SiteFooter, SiteHeader, SupportPage } from './Site.jsx'
+import { accountArea, needsSession, pageFromHash } from './navigation.js'
+import { CustomerAccess } from './CustomerAccess.jsx'
+import { CustomerWorkspace } from './CustomerWorkspace.jsx'
 
 // Temporary chat screen for checking that the manual agent works and HOW it works.
 // It goes away once customer complaints are fed to the agent automatically.
@@ -91,7 +93,7 @@ export function App({ theme }) {
       <SiteHeader preference={preference} theme={theme} authenticated={auth?.authenticated} page={page} />
       <main id="main-content" className={`app-main ${sessionPage ? 'session-main' : 'public-main'}`} tabIndex={-1}>
         {!sessionPage ? (
-          page === 'support' ? <SupportPage /> : page === 'register' || page === 'guest' ? <AccessGuide kind={page} /> : <HomePage />
+          page === 'support' ? <SupportPage /> : page === 'register' || page === 'guest' ? <CustomerAccess key={page} kind={page} /> : <HomePage />
         ) : authError ? (
           <section className="status-card" aria-labelledby="session-error-title">
             <h1 id="session-error-title">연결을 확인해 주세요</h1>
@@ -104,7 +106,9 @@ export function App({ theme }) {
             <h1>로그인 상태 확인 중</h1>
             <p className="muted">잠시만 기다려 주세요.</p>
           </section>
-        ) : auth.authenticated ? <Chat auth={auth} onLogout={onLogout} /> : <Login onDone={(session) => { setAuth(session); window.location.hash = '/workspace' }} />}
+        ) : auth.authenticated ? (
+          accountArea(auth.user) === 'customer' ? <CustomerWorkspace auth={auth} onLogout={onLogout} /> : accountArea(auth.user) === 'operator' ? <Chat auth={auth} onLogout={onLogout} /> : <section className="status-card"><h1>이용 권한을 확인해 주세요</h1><p>이 계정의 서비스 권한을 확인할 수 없습니다.</p><button className="primary" onClick={onLogout}>로그인 화면으로</button></section>
+        ) : <Login onDone={(session) => { setAuth(session); window.location.hash = '/workspace' }} />}
       </main>
       <SiteFooter />
     </div>
@@ -129,7 +133,7 @@ function Login({ onDone }) {
       <form className="login" onSubmit={submit} aria-busy={busy}>
         <a className="back-link" href="#/support">← 고객센터</a>
         <h1 id="login-title">로그인</h1>
-        <p className="login-description muted">등록된 계정으로 매뉴얼과 답변을 확인하세요.</p>
+        <p className="login-description muted">고객·운영진 계정으로 로그인하세요. 계정 권한에 맞는 서비스로 연결됩니다.</p>
         <p className="ai-notice" role="note" aria-label="AI 생성 콘텐츠 안내">
           <strong>AI 생성 콘텐츠 안내</strong><br />
           로그인 후 제공되는 답변은 AI가 생성합니다. 내용이 부정확할 수 있으니 인용된 근거와 원본 매뉴얼을 함께 확인해 주세요.

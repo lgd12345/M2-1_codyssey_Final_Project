@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { needsSession, pageFromHash } from './navigation.js'
+import { accountArea, needsSession, pageFromHash } from './navigation.js'
 
 test('first visits and malformed routes safely show the public home', () => {
   for (const hash of ['', '#', '#/not-found', '#/https://example.org', '#/login?next=https://example.org']) assert.equal(pageFromHash(hash), 'home')
@@ -16,4 +16,10 @@ test('public information pages do not depend on an authentication/database reque
   for (const page of ['home', 'support', 'register', 'guest']) assert.equal(needsSession(page), false)
   assert.equal(needsSession('login'), true)
   assert.equal(needsSession('workspace'), true)
+})
+
+test('customer identities never enter the operator workspace; unknown roles fail closed', () => {
+  assert.equal(accountArea({ role: 'customer' }), 'customer')
+  for (const role of ['admin', 'user']) assert.equal(accountArea({ role }), 'operator')
+  for (const user of [null, {}, { role: 'operator' }, { role: 'administrator' }]) assert.equal(accountArea(user), 'blocked')
 })
