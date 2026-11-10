@@ -96,7 +96,7 @@ export function CompanyRegistry({ auth, onLogout }) {
   const company = detail?.company.id === selected ? detail.company : null
   return <section className="registry-page" aria-labelledby="registry-title">
     <header className="registry-heading"><div><p className="eyebrow">CUSTOMER OPERATIONS</p><h1 id="registry-title">고객사 관리</h1><p className="muted">회사와 등록 이메일, 현장의 설비를 한곳에서 관리합니다.</p></div><a className="registry-back" href="#/workspace">매뉴얼로 돌아가기 ↗</a></header>
-    {status?.demo && <p className="registry-demo" role="note">시연 명부입니다. 생성된 이메일은 발송·가입에 사용되지 않으며 실제 연락처를 별도로 등록해야 합니다.</p>}
+    {status?.demo && <p className="registry-demo" role="note">시연 명부입니다. example.invalid 주소는 가입에 사용할 수 없습니다. 별도로 등록한 활성 이메일은 회원가입 자격 확인에 사용됩니다.</p>}
     {error && <div className="registry-message"><p className="error" role="alert">{error}</p><button onClick={() => { setError(''); setRefresh((n) => n + 1) }} disabled={busy}>최신 정보 불러오기</button></div>}
     {notice && <p className="registry-notice" role="status">{notice}</p>}
     {!status ? <p role="status">관리 서비스를 확인하고 있습니다…</p> : !status.available ? <div className="registry-panel"><h2>고객사 관리를 준비하고 있습니다.</h2><p className="muted">관리 데이터 연결이 완료되면 사용할 수 있습니다.</p></div> : <>
