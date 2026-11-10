@@ -13,21 +13,24 @@ from getpass import getpass
 import psycopg
 
 from app.customer_access.core import company_code, email_address
-from app.customer_access.store import MIGRATION, ROLE_MIGRATION, migration_checksum
+from app.customer_access.store import MIGRATION, ROLE_MIGRATION, EMAIL_MIGRATION, migration_checksum
 from app.auth.service import create_user
 
 
 def run(args):
+    with_email = getattr(args, 'with_customer_email', False)
     dsn = os.environ.get('CUSTOMER_ACCESS_MIGRATION_DATABASE_URL', '').strip()
     if not dsn:
         raise ValueError('CUSTOMER_ACCESS_MIGRATION_DATABASE_URL is required; no fallback')
-    if (args.apply or args.company_file or args.with_customer_role) and not args.expect_database:
+    if (args.apply or args.company_file or args.with_customer_role or with_email) and not args.expect_database:
         raise ValueError('Writes require --expect-database and --apply')
     if args.company_file and not args.apply:
         raise ValueError('Company/contact changes require --apply')
     if args.with_customer_role and not args.apply:
         raise ValueError('Role migration requires --apply')
-    if args.create_operator and (not args.apply or args.company_file or args.with_customer_role):
+    if with_email and not args.apply:
+        raise ValueError('Email migration requires --apply')
+    if args.create_operator and (not args.apply or args.company_file or args.with_customer_role or with_email):
         raise ValueError('Operator creation is a separate explicit --apply operation')
     operator_password = getpass('New operator password: ') if args.create_operator else None
     # Read and validate the whole private input before starting a DB transaction.
@@ -70,6 +73,18 @@ def run(args):
             if not role_row:
                 connection.execute(ROLE_MIGRATION.read_text(encoding='utf-8'))
                 connection.execute('INSERT INTO claim_access.schema_version(version,checksum) VALUES (%s,%s)', ('002', role_checksum))
+        if with_email:
+            expected_role = hashlib.sha256(ROLE_MIGRATION.read_text(encoding='utf-8').encode('utf-8')).hexdigest()
+            role_row = connection.execute('SELECT checksum FROM claim_access.schema_version WHERE version=%s', ('002',)).fetchone()
+            if not role_row or role_row[0] != expected_role:
+                raise ValueError('Apply and verify the role migration first')
+            checksum = hashlib.sha256(EMAIL_MIGRATION.read_text(encoding='utf-8').encode('utf-8')).hexdigest()
+            row = connection.execute('SELECT checksum FROM claim_access.schema_version WHERE version=%s', ('003',)).fetchone()
+            if row and row[0] != checksum:
+                raise ValueError('Email migration checksum mismatch')
+            if not row:
+                connection.execute(EMAIL_MIGRATION.read_text(encoding='utf-8'))
+                connection.execute('INSERT INTO claim_access.schema_version(version,checksum) VALUES (%s,%s)', ('003', checksum))
         if company:
             code, name, emails = company
             existing = connection.execute('SELECT id,name,is_active FROM claim_access.company WHERE code=%s FOR UPDATE', (code,)).fetchone()
@@ -90,6 +105,7 @@ def main():
     parser.add_argument('--expect-database')
     parser.add_argument('--company-file', help='Private JSON file containing code/name/emails; never commit it')
     parser.add_argument('--with-customer-role', action='store_true', help='Explicitly extend public.app_user role constraint on the selected auth DB')
+    parser.add_argument('--with-customer-email', action='store_true', help='Explicitly allow customer email logins; requires the verified role migration')
     parser.add_argument('--create-operator', metavar='LOGIN_ID', help='Issue an operator account on the explicitly selected auth DB; password is entered privately')
     parser.add_argument('--operator-role', choices=('user', 'admin'), default='user', help='user is ordinary operator; admin also has restricted system management access')
     args = parser.parse_args()

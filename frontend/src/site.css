@@ -208,3 +208,5 @@ button, a { -webkit-tap-highlight-color: transparent; }
 .customer-workspace h1 { margin: 0; font-size: 30px; }
 .customer-workspace .eyebrow { margin-bottom: 8px; color: var(--color-accent); }
 .customer-workspace .access-form-panel { margin-top: 28px; }
+
+.customer-workspace > p { overflow-wrap: anywhere; }

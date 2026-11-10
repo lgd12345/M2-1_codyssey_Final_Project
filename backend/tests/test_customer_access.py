@@ -3,6 +3,7 @@ from datetime import timedelta
 from dataclasses import replace
 import json
 from uuid import UUID
+from unittest.mock import Mock
 
 import pytest
 
@@ -57,10 +58,62 @@ def test_plaintext_code_proof_client_and_email_are_not_stored():
     assert c.code_hash == s.code_hash(c, number)
 
 
-def test_unknown_company_or_contact_gets_dummy_not_a_valid_code():
-    s = service(); proof, identity, recipient, number = issue(s, company='UNKNOWN')
-    assert recipient is None and s.repository.challenges[identity].state == 'dummy'
-    with pytest.raises(AccessError): s.guest(proof,number,'synthetic-v1',True)
+def test_unknown_contact_is_rejected_and_cannot_receive_or_use_a_code():
+    s = service()
+    with pytest.raises(AccessError) as error: issue(s, email='unknown@example.org')
+    assert error.value.code == 'COMPANY_EMAIL_MISMATCH'
+    challenge = next(iter(s.repository.challenges.values()))
+    assert challenge.contact_id is None and challenge.state == 'dummy'
+    with pytest.raises(AccessError): s.guest(None,'123456','synthetic-v1',True)
+
+
+@pytest.mark.parametrize('inactive', [False, True])
+def test_unknown_or_inactive_company_is_rejected_before_contact_lookup(inactive):
+    s = service()
+    if inactive: s.repository.contacts[UUID(int=1)]['company_active'] = False
+    s.repository.contact = Mock(side_effect=AssertionError('No contact lookup for invalid company'))
+    with pytest.raises(AccessError) as error: issue(s, company='DEMO' if inactive else 'UNKNOWN')
+    assert error.value.code == 'COMPANY_NOT_FOUND'
+    assert len(s.repository.challenges) == 1
+    assert next(iter(s.repository.challenges.values())).state == 'dummy'
+    s.repository.contact.assert_not_called()
+
+
+def test_invalid_company_attempts_cannot_bypass_issuance_rate_limit():
+    s = service()
+    for n in range(5):
+        with pytest.raises(AccessError) as error: issue(s, company='UNKNOWN', email=f'unknown{n}@example.org')
+        assert error.value.code == 'COMPANY_NOT_FOUND'
+    with pytest.raises(AccessError) as error: issue(s, company='UNKNOWN', email='next@example.org')
+    assert error.value.status_code == 429
+
+
+def test_company_typo_can_be_corrected_without_email_resend_delay():
+    s = service()
+    with pytest.raises(AccessError): issue(s, company='UNKNOWN')
+    proof, identity, recipient, code = issue(s, company='DEMO')
+    assert recipient == 'contact@example.org' and len(s.repository.challenges) == 2
+    assert s.repository.challenges[identity].state == 'sent'
+
+
+
+
+@pytest.mark.parametrize('condition', ['missing', 'wrong_code', 'wrong_purpose', 'expired', 'revoked', 'consumed', 'contact_disabled'])
+def test_unverified_email_verification_never_queries_account_existence(condition):
+    s = service(); proof, identity, _, code = issue(s, 'guest' if condition == 'wrong_purpose' else 'register')
+    s.repository.registration_exists = Mock(side_effect=AssertionError('No unauthenticated account lookup'))
+    if condition == 'missing': proof = None
+    if condition == 'wrong_code': code = '999999' if code != '999999' else '000000'
+    if condition == 'expired': s.repository.time += timedelta(minutes=10)
+    if condition in ('revoked', 'consumed'): s.repository.challenges[identity].state = condition
+    if condition == 'contact_disabled': s.repository.contacts[UUID(int=1)]['active'] = False
+    with pytest.raises(AccessError): s.verify_registration(proof, code, 'synthetic-v1', True)
+    s.repository.registration_exists.assert_not_called()
+    if condition == 'wrong_code': assert s.repository.challenges[identity].attempts == 1
+
+
+
+
 
 
 def test_wrong_attempts_persist_and_lock_out_even_correct_code():
@@ -103,17 +156,77 @@ def test_codes_are_single_use_under_concurrent_verification():
 
 def test_rate_limits_include_unknown_destinations_and_are_durable():
     s = service()
-    for n in range(5): issue(s,email=f'unknown{n}@example.org')
+    for n in range(5):
+        with pytest.raises(AccessError) as error: issue(s,email=f'unknown{n}@example.org')
+        assert error.value.code == 'COMPANY_EMAIL_MISMATCH'
     with pytest.raises(AccessError) as error: issue(s,email='next@example.org')
     assert error.value.status_code == 429
+
+
+def test_registration_verification_routes_existing_contact_without_account_lookup_or_changes():
+    s = service(); proof, identity, _, code = issue(s, 'register')
+    original = {'id':UUID(int=77),'role':'customer','contact':UUID(int=1),'password_hash':'synthetic-original-hash'}
+    s.repository.users['existing-customer'] = original.copy()
+    wrong = '999999' if code != '999999' else '000000'
+    with pytest.raises(AccessError): s.verify_registration(proof, wrong, 'synthetic-v1', True)
+    assert s.repository.challenges[identity].state == 'sent'
+    assert s.verify_registration(proof, code, 'synthetic-v1', True) == {'state':'already_registered'}
+    assert s.repository.challenges[identity].state == 'consumed'
+    assert s.repository.users == {'existing-customer':original}
+
+
+def test_new_contact_registers_only_with_the_verified_email():
+    s = service(); proof, _, _, code = issue(s, 'register')
+    assert s.verify_registration(proof, code, 'synthetic-v1', True) == {'state':'verified','email':'contact@example.org'}
+    assert s.register(proof, code, 'synthetic-password-123', 'synthetic-v1', True)['state']=='registered'
+    with pytest.raises(AccessError): s.verify_registration(proof, code, 'synthetic-v1', True)
+
+
+def test_email_verified_after_four_wrong_attempts_can_still_finish_registration():
+    s=service();proof,identity,_,code=issue(s,'register')
+    wrong='999999' if code!='999999' else '000000'
+    for _ in range(4):
+        with pytest.raises(AccessError):s.verify_registration(proof,wrong,'synthetic-v1',True)
+    assert s.verify_registration(proof,code,'synthetic-v1',True)['state']=='verified'
+    assert s.repository.challenges[identity].attempts==4
+    assert s.register(proof,code,'synthetic-password-123','synthetic-v1',True)['state']=='registered'
+
+
+def test_email_race_never_overwrites_an_existing_identity():
+    s=service();proof,_,_,code=issue(s,'register')
+    assert s.verify_registration(proof,code,'synthetic-v1',True)['state']=='verified'
+    original={'id':UUID(int=77),'role':'user','password_hash':'synthetic-original'}
+    s.repository.users['contact@example.org']=original.copy()
+    with pytest.raises(AccessError) as error:s.register(proof,code,'synthetic-password-123','synthetic-v1',True)
+    assert error.value.code=='REGISTRATION_EXISTS' and s.repository.users=={'contact@example.org':original}
+
+
+def test_same_email_in_another_company_does_not_move_account_or_grant_membership():
+    s=service();proof,_,_,code=issue(s,'register')
+    s.register(proof,code,'synthetic-password-123','synthetic-v1',True)
+    original=s.repository.users['contact@example.org'].copy()
+    s.repository.contacts[UUID(int=2)]={'id':UUID(int=2),'code':'OTHER','email':'contact@example.org','active':True,'company_id':UUID(int=20)}
+    s.repository.time+=timedelta(seconds=61)
+    proof,_,_,code=issue(s,'register',company='OTHER')
+    assert s.verify_registration(proof,code,'synthetic-v1',True)=={'state':'already_registered'}
+    assert s.repository.users['contact@example.org']==original
+
+
+
+
+def test_existing_customer_may_still_use_guest_inquiry():
+    s=service();s.repository.users['customer']={'id':UUID(int=77),'contact':UUID(int=1),'role':'customer'}
+    proof,_,_,code=issue(s)
+    token,state=s.guest(proof,code,'synthetic-v1',True)
+    assert s.inquiry(token,'합성 문의','가입된 고객의 비회원 문의',state['csrf_token'],'synthetic-v1',True)['title']=='합성 문의'
 
 
 def test_registration_creates_only_customer_and_cannot_replay():
     s = service(); proof, _, _, code = issue(s,'register')
     s.repository.users['existing-operator']={'id':UUID(int=30),'role':'user'}
-    assert s.register(proof,code,'new-customer','synthetic-password-123','synthetic-v1',True)['state']=='registered'
-    assert s.repository.users['new-customer']['role']=='customer'
-    with pytest.raises(AccessError): s.register(proof,code,'other-user','synthetic-password-123','synthetic-v1',True)
+    assert s.register(proof,code,'synthetic-password-123','synthetic-v1',True)['state']=='registered'
+    assert s.repository.users['contact@example.org']['role']=='customer'
+    with pytest.raises(AccessError): s.register(proof,code,'synthetic-password-123','synthetic-v1',True)
 
 
 def test_guest_csrf_is_required_and_own_inquiry_is_idempotent():

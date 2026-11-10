@@ -138,7 +138,7 @@ function Login({ onDone }) {
           <strong>AI 생성 콘텐츠 안내</strong><br />
           로그인 후 제공되는 답변은 AI가 생성합니다. 내용이 부정확할 수 있으니 인용된 근거와 원본 매뉴얼을 함께 확인해 주세요.
         </p>
-        <label>아이디<input name="login_id" value={loginId} onChange={(e) => setLoginId(e.target.value)} autoComplete="username" autoCapitalize="none" spellCheck={false} disabled={busy} required autoFocus /></label>
+        <label>이메일 또는 운영진 아이디<input name="login_id" value={loginId} onChange={(e) => setLoginId(e.target.value)} autoComplete="username" autoCapitalize="none" spellCheck={false} disabled={busy} required autoFocus /></label>
         <label>비밀번호<input name="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="current-password" disabled={busy} required /></label>
         {error && <p className="error" role="alert">{error}</p>}
         <button type="submit" disabled={busy || !loginId || !password}>{busy ? '확인 중…' : '로그인'}</button>

@@ -12,7 +12,7 @@ from uuid import UUID, uuid4
 
 from email_validator import EmailNotValidError, validate_email
 
-from app.auth.service import AuthError, normalize_login_id, MIN_PASSWORD_LENGTH, MAX_PASSWORD_LENGTH
+from app.auth.service import AuthError, MIN_PASSWORD_LENGTH, MAX_PASSWORD_LENGTH
 
 
 class AccessError(AuthError):
@@ -27,6 +27,10 @@ def unavailable():
 
 def invalid_code():
     return AccessError('ACCESS_CODE_INVALID', '인증번호가 올바르지 않거나 만료되었습니다.', 400)
+
+
+def already_registered():
+    return AccessError('REGISTRATION_EXISTS', '이미 가입된 계정입니다. 기존 계정으로 로그인해 주세요.', 409)
 
 
 def email_address(value):
@@ -128,24 +132,32 @@ class AccessService:
         proof, number = secrets.token_urlsafe(32), f'{secrets.randbelow(1000000):06d}'
         with self.repository.transaction() as work:
             now = work.now()
-            client_key, email_key = self.keyed('client|' + client), self.keyed('email|' + email)
+            registered_company = work.company_exists(company)
+            client_key = self.keyed('client|' + client)
+            # A typo must not impose the email resend cooldown on a corrected
+            # company. All attempts still share the client's durable quota.
+            email_key = self.keyed(('email|' if registered_company else 'invalid-company-email|') + email)
             work.throttle(client_key, email_key, now)
-            contact = work.contact(company, email)
+            contact = work.contact(company, email) if registered_company else None
             challenge = Challenge(uuid4(), purpose, digest(proof), '', contact['id'] if contact else None,
                                   client_key, email_key, version, now, now + timedelta(minutes=10))
             challenge.code_hash = self.code_hash(challenge, number)
             if not contact:
                 challenge.state = 'dummy'
             work.add_challenge(challenge)
-        # Unknown companies/addresses get the same response and a dummy challenge.
-        # Only an existing active company contact can receive a message.
-        return f'{challenge.id}.{proof}', challenge.id, contact['email'] if contact else None, number
+        # Commit rejected company attempts too, so validation cannot bypass the
+        # durable issuance limit. A rejected company never reaches the mailer.
+        if not registered_company:
+            raise AccessError('COMPANY_NOT_FOUND', '등록되지 않은 회사코드입니다. 회사코드를 확인해 주세요.')
+        if not contact:
+            raise AccessError('COMPANY_EMAIL_MISMATCH', '회사에 등록된 이메일과 일치하지 않습니다. 이메일을 확인해 주세요.')
+        return f'{challenge.id}.{proof}', challenge.id, contact['email'], number
 
     def sent(self, identity, success):
         with self.repository.transaction() as work:
             work.delivery(identity, success)
 
-    def _authorized(self, work, cookie, purpose, number):
+    def _authorized(self, work, cookie, purpose, number, *, count_success=True):
         try:
             identity, proof = cookie.split('.', 1)
             identity = UUID(identity)
@@ -158,23 +170,39 @@ class AccessService:
                 or c.policy_version != self.settings.policy['version'] or c.expires_at <= work.now()
                 or c.attempts >= 5 or not hmac.compare_digest(c.proof_hash, digest(proof))):
             return None
-        c.attempts += 1
-        work.attempt(c.id, c.attempts)
         if not re.fullmatch(r'[0-9]{6}', number) or not hmac.compare_digest(c.code_hash, self.code_hash(c, number)):
+            work.attempt(c.id, c.attempts + 1)
             return None
         if not work.active_contact(c.contact_id):
             return None
+        if count_success:
+            work.attempt(c.id, c.attempts + 1)
         return c
 
-    def register(self, cookie, number, login_id, password, version, consent):
+    def verify_registration(self, cookie, number, version, consent):
         self.policy_check(version, consent)
         if not self.settings.registration:
             raise unavailable()
-        login_id = normalize_login_id(login_id)
-        if not re.fullmatch(r'[a-z0-9._@-]{3,64}', login_id):
-            raise AccessError(message='아이디는 3~64자의 영문·숫자와 . _ @ - 만 사용할 수 있습니다.')
-        if not MIN_PASSWORD_LENGTH <= len(password) <= MAX_PASSWORD_LENGTH or password.casefold() == login_id:
-            raise AccessError(message='비밀번호는 12~256자로 입력하고 아이디와 다르게 설정해 주세요.')
+        result = None
+        with self.repository.transaction() as work:
+            challenge = self._authorized(work, cookie, 'register', number, count_success=False)
+            if challenge is not None:
+                existing = work.registration_exists(challenge.contact_id)
+                result = {'state': 'already_registered' if existing else 'verified'}
+                if existing:
+                    work.consume(challenge.id)
+                else:
+                    result['email'] = work.contact_email(challenge.contact_id)
+        if result is None:
+            raise invalid_code()
+        return result
+
+    def register(self, cookie, number, password, version, consent):
+        self.policy_check(version, consent)
+        if not self.settings.registration:
+            raise unavailable()
+        if not MIN_PASSWORD_LENGTH <= len(password) <= MAX_PASSWORD_LENGTH:
+            raise AccessError(message='비밀번호는 12~256자로 입력해 주세요.')
         error = None
         with self.repository.transaction() as work:
             challenge = self._authorized(work, cookie, 'register', number)
@@ -182,7 +210,7 @@ class AccessService:
                 error = invalid_code()
             else:
                 try:
-                    work.register_customer(challenge.contact_id, login_id, password, version)
+                    work.register_customer(challenge.contact_id, password, version)
                 except AuthError as exc:
                     error = exc
                 else:

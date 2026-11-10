@@ -6,11 +6,12 @@ import hashlib
 import psycopg
 from psycopg.rows import dict_row
 
-from app.auth.service import create_user
-from app.customer_access.core import AccessError, Challenge
+from app.auth.service import create_user, DuplicateUser
+from app.customer_access.core import AccessError, Challenge, already_registered, email_address, invalid_code
 
 MIGRATION = Path(__file__).parent / 'migrations' / '001_initial.sql'
 ROLE_MIGRATION = Path(__file__).parent / 'migrations' / '002_customer_role.sql'
+EMAIL_MIGRATION = Path(__file__).parent / 'migrations' / '003_customer_email.sql'
 
 
 def migration_checksum():
@@ -44,6 +45,10 @@ class PostgresRepository:
                     expected = hashlib.sha256(ROLE_MIGRATION.read_text(encoding='utf-8').encode('utf-8')).hexdigest()
                     if role_row is None or role_row[0] != expected:
                         return False
+                    email_row = connection.execute('SELECT checksum FROM claim_access.schema_version WHERE version=%s', ('003',)).fetchone()
+                    expected = hashlib.sha256(EMAIL_MIGRATION.read_text(encoding='utf-8').encode('utf-8')).hexdigest()
+                    if email_row is None or email_row[0] != expected:
+                        return False
                 return True
         except (psycopg.Error, OSError):
             return False
@@ -71,6 +76,9 @@ class Work:
             AND (client_key=%s OR email_key=%s)""", (client, email, email, now, now, client, email))
         if row['client_count'] >= 5 or row['email_count'] >= 5 or row['recent']:
             raise AccessError('ACCESS_RATE_LIMIT', '요청이 많습니다. 잠시 후 다시 시도해 주세요.', 429)
+
+    def company_exists(self, company):
+        return self.one('SELECT id FROM claim_access.company WHERE code=%s AND is_active FOR SHARE', (company,)) is not None
 
     def contact(self, company, email):
         return self.one('''SELECT c.id,c.email FROM claim_access.contact c
@@ -107,13 +115,31 @@ class Work:
     def consume(self, identity):
         self.connection.execute("UPDATE claim_access.challenge SET state='consumed' WHERE id=%s", (identity,))
 
-    def register_customer(self, contact, login_id, password, version):
+    def registration_exists(self, contact):
+        # Email login identities are globally unique across companies and roles.
+        # Never move a pre-existing identity to a newly supplied company.
+        return self.one('''SELECT EXISTS(
+            SELECT 1 FROM claim_access.registration WHERE contact_id=%s
+            UNION ALL SELECT 1 FROM app_user u JOIN claim_access.contact c ON c.email=u.login_id WHERE c.id=%s
+        ) AS present''', (contact, contact))['present']
+
+    def contact_email(self, contact):
+        row = self.one('SELECT email FROM claim_access.contact WHERE id=%s AND is_active FOR SHARE', (contact,))
+        if row is None:
+            raise invalid_code()
+        return email_address(row['email'])
+
+    def register_customer(self, contact, password, version):
         # Nested transaction keeps a duplicate user's failure from aborting the
         # attempt counter transaction. Existing credentials are never overwritten.
         with self.connection.transaction():
-            if self.one('SELECT id FROM claim_access.registration WHERE contact_id=%s', (contact,)):
-                raise AccessError('REGISTRATION_EXISTS', '이 연락처의 가입 신청을 확인해 주세요.', 409)
-            user = create_user(self.connection, login_id, password, role='customer')
+            if self.registration_exists(contact):
+                raise already_registered()
+            login_id = self.contact_email(contact)
+            try:
+                user = create_user(self.connection, login_id, password, role='customer')
+            except DuplicateUser:
+                raise already_registered() from None
             self.connection.execute('INSERT INTO claim_access.registration(app_user_id,contact_id,policy_version) VALUES (%s,%s,%s)', (user.id, contact, version))
 
     def customer_profile(self, identity):

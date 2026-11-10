@@ -36,7 +36,7 @@ export function CustomerAccess({ kind }) {
   const [company, setCompany] = useState('')
   const [email, setEmail] = useState('')
   const [code, setCode] = useState('')
-  const [loginId, setLoginId] = useState('')
+  const [verifiedEmail, setVerifiedEmail] = useState('')
   const [password, setPassword] = useState('')
   const [confirmation, setConfirmation] = useState('')
   const [consent, setConsent] = useState(false)
@@ -82,9 +82,15 @@ export function CustomerAccess({ kind }) {
     try { await action() }
     catch (failure) {
       setError(failure.message)
+      if (failure.code === 'REGISTRATION_EXISTS') {
+        setStep('existing'); setCode(''); setVerifiedEmail(''); setPassword(''); setConfirmation(''); setError('')
+      }
+      if (failure.code === 'COMPANY_NOT_FOUND' || failure.code === 'COMPANY_EMAIL_MISMATCH') {
+        setStep('identity'); setCode(''); setVerifiedEmail(''); setPassword(''); setConfirmation('')
+      }
       if (failure.status === 401) { setStep('identity'); setCsrf(''); setCode(''); setConsent(false) }
       if (failure.code === 'ACCESS_CONSENT_REQUIRED') {
-        setStep('identity'); setConsent(false); setCode(''); setPassword(''); setConfirmation('')
+        setStep('identity'); setConsent(false); setCode(''); setVerifiedEmail(''); setPassword(''); setConfirmation('')
         setAttempt((n) => n + 1)
       }
     } finally { setBusy(false) }
@@ -95,23 +101,32 @@ export function CustomerAccess({ kind }) {
     if (cooldown) return
     perform(async () => {
       const result = await request('/challenges', { ...policyBody(), purpose: guest ? 'guest' : 'register', company_code: company, email })
-      setStep('verify'); setCode(''); setPassword(''); setConfirmation('')
+      setStep('verify'); setCode(''); setVerifiedEmail(''); setPassword(''); setConfirmation('')
       setCooldown(result.retry_after); setNotice(result.message)
     })
   }
 
   function verify(event) {
     event.preventDefault()
-    if (!guest && password !== confirmation) { setError('비밀번호 확인이 일치하지 않습니다.'); return }
     perform(async () => {
       if (guest) {
         const session = await request('/guest/session', { ...policyBody(), code })
-        setCsrf(session.csrf_token); setConsent(false); setStep('inquiry')
+        setCsrf(session.csrf_token); setConsent(false); setCode(''); setStep('inquiry')
       } else {
-        await request('/registration', { ...policyBody(), code, login_id: loginId, password })
-        setStep('registered'); setPassword(''); setConfirmation('')
+        const result = await request('/registration/verify', { ...policyBody(), code })
+        setVerifiedEmail(result.email || '')
+        setStep(result.state === 'already_registered' ? 'existing' : 'account')
+        if (result.state === 'already_registered') setCode('')
       }
-      setCode('')
+    })
+  }
+
+  function registerAccount(event) {
+    event.preventDefault()
+    if (password !== confirmation) { setError('비밀번호 확인이 일치하지 않습니다.'); return }
+    perform(async () => {
+      await request('/registration', { ...policyBody(), code, password })
+      setStep('registered'); setCode(''); setVerifiedEmail(''); setPassword(''); setConfirmation('')
     })
   }
 
@@ -123,6 +138,11 @@ export function CustomerAccess({ kind }) {
     })
   }
 
+  const verificationActions = <>
+    <button className="access-secondary" type="button" disabled={busy || cooldown > 0} onClick={sendCode}>{cooldown ? `${cooldown}초 후 인증번호 재요청` : '인증번호 재요청'}</button>
+    <button className="access-secondary" type="button" disabled={busy} onClick={() => { setStep('identity'); setCode(''); setVerifiedEmail(''); setPassword(''); setConfirmation(''); setError(''); setNotice('') }}>회사·이메일 다시 입력</button>
+  </>
+
   if (loadError) return <section className="status-card" aria-labelledby="access-load-title"><h1 id="access-load-title">서비스를 확인하지 못했습니다.</h1><p>연결을 확인한 후 다시 시도해 주세요.</p><button className="primary" onClick={() => setAttempt((n) => n + 1)}>다시 시도</button></section>
   if (!capabilities) return <section className="status-card" role="status"><h1>서비스 확인 중</h1><p>잠시만 기다려 주세요.</p></section>
   if (!available) return <AccessGuide kind={kind} />
@@ -132,19 +152,25 @@ export function CustomerAccess({ kind }) {
     <div className="access-heading"><p className="eyebrow">{guest ? 'GUEST SUPPORT' : 'MEMBERSHIP'}</p><h1 id="customer-access-title">{guest ? '비회원 문의' : '고객 회원가입'}</h1><p>{guest ? '회사에 등록된 이메일로 인증하고 본인의 문의를 확인하세요.' : '회사에 등록된 이메일로 인증하고 고객 계정을 만드세요.'}</p></div>
     <div className="access-form-panel">
       {step === 'registered' ? <div role="status"><span className="preparing-label">고객 회원가입 완료</span><h2>고객 계정이 만들어졌습니다.</h2><p>로그인하여 고객 서비스를 이용하세요. 운영진 매뉴얼 기능은 제공되지 않습니다.</p><a className="site-button" href="#/login">로그인 화면으로</a></div>
+      : step === 'existing' ? <div role="status"><span className="preparing-label">고객 계정 확인</span><h2>이미 가입된 계정입니다.</h2><p>기존 계정으로 로그인해 서비스를 이용해 주세요.</p><a className="site-button" href="#/login">로그인 화면으로</a></div>
       : step === 'submitted' ? <div role="status"><span className="preparing-label">문의 접수 완료</span><h2>{inquiry.title}</h2><p className="inquiry-body">{inquiry.body}</p><dl className="inquiry-meta"><dt>문의번호</dt><dd>{inquiry.id}</dd><dt>접수일시</dt><dd>{new Date(inquiry.created_at).toLocaleString('ko-KR')}</dd></dl><p className="muted">이 인증 세션에서는 본인의 문의만 확인할 수 있습니다.</p></div>
       : step === 'inquiry' ? <form onSubmit={submitInquiry} aria-busy={busy}>
         <p className="access-step">문의 작성</p><label>제목<input value={title} onChange={(e) => setTitle(e.target.value)} maxLength={120} required disabled={busy} /></label>
         <label>문의 내용<textarea value={body} onChange={(e) => setBody(e.target.value)} maxLength={4000} rows={7} required disabled={busy} /></label><p className="small muted">최대 4,000자 · 주민등록번호 등 불필요한 민감정보는 입력하지 마세요.</p>
         <Consent policy={policy} value={consent} onChange={setConsent} /><button className="primary" disabled={busy || !consent || !title.trim() || !body.trim()}>{busy ? '접수 중…' : '문의 접수'}</button>
       </form>
+      : step === 'account' ? <form onSubmit={registerAccount} aria-busy={busy}>
+        <p className="access-step">03 / 계정 정보 입력</p><p className="muted">이메일이 확인되었습니다. 로그인에 사용할 비밀번호를 설정해 주세요.</p>
+        <label>로그인 이메일<input type="email" value={verifiedEmail} readOnly autoComplete="username" /></label><p className="small muted">인증한 이메일을 로그인 아이디로 사용합니다.</p>
+        <label>비밀번호<input type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="new-password" minLength={12} maxLength={256} required disabled={busy} /></label><label>비밀번호 확인<input type="password" value={confirmation} onChange={(e) => setConfirmation(e.target.value)} autoComplete="new-password" minLength={12} maxLength={256} required disabled={busy} /></label><p className="small muted">비밀번호는 12~256자로 설정해 주세요. 고객 계정으로만 가입되며 운영진 권한은 부여되지 않습니다.</p>
+        <button className="primary" disabled={busy || !consent || !verifiedEmail}>{busy ? '확인 중…' : '고객 계정 만들기'}</button>
+        {verificationActions}
+      </form>
       : step === 'verify' ? <form onSubmit={verify} aria-busy={busy}>
         <p className="access-step">02 / 이메일 인증</p><p className="muted">{email}로 받은 인증번호를 10분 안에 입력해 주세요.</p>
-        <label>인증번호<input value={code} onChange={(e) => setCode(e.target.value.replace(/[^0-9]/g, ''))} inputMode="numeric" autoComplete="one-time-code" maxLength={6} pattern="[0-9]{6}" required disabled={busy} /></label>
-        {!guest && <><label>아이디<input value={loginId} onChange={(e) => setLoginId(e.target.value)} autoComplete="username" autoCapitalize="none" minLength={3} maxLength={64} pattern="[a-zA-Z0-9._@-]{3,64}" required disabled={busy} /></label><label>비밀번호<input type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="new-password" minLength={12} maxLength={256} required disabled={busy} /></label><label>비밀번호 확인<input type="password" value={confirmation} onChange={(e) => setConfirmation(e.target.value)} autoComplete="new-password" minLength={12} maxLength={256} required disabled={busy} /></label><p className="small muted">비밀번호는 12~256자로 설정해 주세요. 고객 계정으로만 가입되며 운영진 권한은 부여되지 않습니다.</p></>}
-        <button className="primary" disabled={busy || code.length !== 6 || !consent}>{busy ? '확인 중…' : guest ? '이메일 인증' : '고객 계정 만들기'}</button>
-        <button className="access-secondary" type="button" disabled={busy || cooldown > 0} onClick={sendCode}>{cooldown ? `${cooldown}초 후 인증번호 재요청` : '인증번호 재요청'}</button>
-        <button className="access-secondary" type="button" disabled={busy} onClick={() => { setStep('identity'); setCode(''); setPassword(''); setConfirmation(''); setError(''); setNotice('') }}>회사·이메일 다시 입력</button>
+        <label>인증번호<input value={code} onChange={(e) => { setCode(e.target.value.replace(/[^0-9]/g, '')); setVerifiedEmail('') }} inputMode="numeric" autoComplete="one-time-code" maxLength={6} pattern="[0-9]{6}" required disabled={busy} /></label>
+        <button className="primary" disabled={busy || code.length !== 6 || !consent}>{busy ? '확인 중…' : '이메일 인증'}</button>
+        {verificationActions}
       </form>
       : <form onSubmit={sendCode} aria-busy={busy}>
         <p className="access-step">01 / 회사 확인</p><label>회사코드<input value={company} onChange={(e) => setCompany(e.target.value.toUpperCase())} autoComplete="off" minLength={3} maxLength={24} pattern="[A-Z0-9][A-Z0-9-]{2,23}" required disabled={busy} /></label><label>회사에 등록된 이메일<input type="email" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" maxLength={254} required disabled={busy} /></label>

@@ -58,7 +58,6 @@ class Verify(PolicyConsent):
 
 
 class Register(Verify):
-    login_id: str = Field(min_length=3, max_length=64)
     password: str = Field(min_length=12, max_length=256)
 
 
@@ -125,13 +124,22 @@ def start(body: Start, request: Request, response: Response, tasks: BackgroundTa
     response.headers['Cache-Control'] = 'no-store, private'
     if recipient:
         tasks.add_task(deliver, value, identity, recipient, number)
-    return {'message': '등록된 회사 연락처라면 인증번호가 발송됩니다. 메일을 확인해 주세요.', 'expires_in': 600, 'retry_after': 60}
+    return {'message': '인증번호 발송을 요청했습니다. 메일을 확인해 주세요.', 'expires_in': 600, 'retry_after': 60}
+
+
+@router.post('/registration/verify', dependencies=[Depends(same_origin)])
+def verify_registration(body: Verify, request: Request, response: Response, value=Depends(service)):
+    result = value.verify_registration(request.cookies.get(CHALLENGE_COOKIES['register']), body.code,
+                                       body.policy_version, body.consent)
+    if result['state'] == 'already_registered':
+        response.delete_cookie(CHALLENGE_COOKIES['register'], path='/api/v1/access', secure=True, httponly=True, samesite='strict')
+    return result
 
 
 @router.post('/registration', status_code=201, dependencies=[Depends(same_origin)])
 def register(body: Register, request: Request, response: Response, value=Depends(service)):
     result = value.register(request.cookies.get(CHALLENGE_COOKIES['register']), body.code,
-        body.login_id, body.password, body.policy_version, body.consent)
+        body.password, body.policy_version, body.consent)
     response.delete_cookie(CHALLENGE_COOKIES['register'], path='/api/v1/access', secure=True, httponly=True, samesite='strict')
     response.headers['Cache-Control'] = 'no-store, private'
     return result

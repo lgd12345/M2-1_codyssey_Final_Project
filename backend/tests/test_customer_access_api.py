@@ -63,11 +63,67 @@ def test_challenge_response_never_includes_code_or_destination_and_cookie_is_sco
     assert 'no-store' in response.headers['cache-control']
 
 
-def test_unknown_contact_has_identical_public_response_without_sending(client,enabled):
-    _,outbox=enabled
+def test_unknown_contact_has_explicit_input_error_without_sending_or_exposing_registered_email(client,enabled):
+    value,outbox=enabled
     response=client.post('/api/v1/access/challenges',json={**START,'email':'unknown@example.org'},headers=ORIGIN)
-    assert response.status_code==202 and not outbox
-    assert response.json()['expires_in']==600
+    assert response.status_code==400 and not outbox
+    assert response.json()['code']=='COMPANY_EMAIL_MISMATCH'
+    assert '이메일을 확인해 주세요' in response.json()['detail']
+    assert START['email'] not in response.text and 'set-cookie' not in response.headers
+    assert len(value.repository.challenges)==1
+
+
+def test_invalid_company_has_explicit_error_and_never_schedules_mail(client,enabled):
+    value,outbox=enabled
+    response=client.post('/api/v1/access/challenges',json={**START,'company_code':'UNKNOWN'},headers=ORIGIN)
+    assert response.status_code==400 and response.json()['code']=='COMPANY_NOT_FOUND'
+    assert '등록되지 않은 회사코드' in response.json()['detail']
+    assert not outbox and 'set-cookie' not in response.headers
+    assert len(value.repository.challenges)==1
+    assert 'no-store' in response.headers['cache-control']
+
+
+
+
+def test_existing_customer_is_disclosed_only_after_email_verification_and_gets_no_login_session(client,enabled):
+    value,outbox=enabled
+    original={'id':UUID(int=77),'contact':UUID(int=1),'role':'customer','password_hash':'synthetic-original'}
+    value.repository.users['existing-customer']=original.copy()
+    start=client.post('/api/v1/access/challenges',json={**START,'purpose':'register'},headers=ORIGIN)
+    assert start.status_code==202 and 'already_registered' not in start.text
+    payload={'code':'wrong','consent':True,'policy_version':'synthetic-v1'}
+    assert client.post('/api/v1/access/registration/verify',json=payload,headers=ORIGIN).json()['code']=='ACCESS_CODE_INVALID'
+    payload['code']=outbox[-1][1]
+    verified=client.post('/api/v1/access/registration/verify',json=payload,headers=ORIGIN)
+    assert verified.status_code==200 and verified.json()=={'state':'already_registered'}
+    assert 'manual_session' not in client.cookies and 'claim_register_challenge' not in client.cookies
+    assert value.repository.users=={'existing-customer':original}
+
+
+@pytest.mark.parametrize('origin',[{}, {'Origin':'https://evil.example.org'}])
+def test_email_verification_requires_same_origin(client,enabled,origin):
+    assert client.post('/api/v1/access/registration/verify',json={'code':'123456','consent':True,'policy_version':'synthetic-v1'},headers=origin).status_code==403
+
+
+@pytest.mark.parametrize('extra',[{'login_id':'operator-demo'},{'email':'other@example.org'},{'role':'admin'}])
+def test_public_registration_cannot_choose_identity_or_role(client,enabled,extra):
+    response=client.post('/api/v1/access/registration',json={'code':'123456','password':'synthetic-password-123','consent':True,'policy_version':'synthetic-v1',**extra},headers=ORIGIN)
+    assert response.status_code==422 and not enabled[0].repository.users
+
+
+def test_email_registration_flow_returns_verified_identity_and_no_operator_session(client,enabled):
+    value,outbox=enabled
+    client.post('/api/v1/access/challenges',json={**START,'purpose':'register'},headers=ORIGIN)
+    payload={'code':outbox[-1][1],'consent':True,'policy_version':'synthetic-v1'}
+    verified=client.post('/api/v1/access/registration/verify',json=payload,headers=ORIGIN)
+    assert verified.status_code==200 and verified.json()=={'state':'verified','email':START['email']}
+    result=client.post('/api/v1/access/registration',json={**payload,'password':'synthetic-password-123'},headers=ORIGIN)
+    assert result.status_code==201 and value.repository.users[START['email']]['role']=='customer'
+    assert 'manual_session' not in client.cookies
+
+
+
+
 
 
 @pytest.mark.parametrize('origin',[{}, {'Origin':'https://evil.example.org'}])
@@ -115,9 +171,9 @@ def test_public_registration_is_customer_only_and_does_not_create_operator_cooki
     value,outbox=enabled
     client.post('/api/v1/access/challenges',json={**START,'purpose':'register'},headers=ORIGIN)
     response=client.post('/api/v1/access/registration',json={'code':outbox[-1][1],'consent':True,'policy_version':'synthetic-v1',
-        'login_id':'new-customer','password':'synthetic-password-123'},headers=ORIGIN)
+        'password':'synthetic-password-123'},headers=ORIGIN)
     assert response.status_code==201 and response.json()['state']=='registered'
-    assert value.repository.users['new-customer']['role']=='customer'
+    assert value.repository.users['contact@example.org']['role']=='customer'
     assert 'manual_session' not in client.cookies
 
 

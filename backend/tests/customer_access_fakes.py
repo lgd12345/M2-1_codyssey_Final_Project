@@ -4,8 +4,7 @@ from datetime import datetime, timedelta, timezone
 from threading import RLock
 from uuid import UUID, uuid4
 
-from app.auth.service import DuplicateUser
-from app.customer_access.core import AccessError, AccessService, Settings
+from app.customer_access.core import AccessError, AccessService, Settings, already_registered
 
 POLICY = dict(version='synthetic-v1', purpose='합성 검증', items='합성 데이터', retention='테스트 종료까지',
               recipients='외부 전달 없음', contact='합성 테스트 담당자')
@@ -36,6 +35,9 @@ class MemoryRepository:
                 or any(c.email_key == email and c.created_at > now - timedelta(seconds=60) for c in recent)):
             raise AccessError('ACCESS_RATE_LIMIT', status=429)
 
+    def company_exists(self, company):
+        return any(c['code'] == company and c.get('company_active', True) for c in self.contacts.values())
+
     def contact(self, company, email):
         return next((c for c in self.contacts.values() if c['code'] == company and c['email'] == email and c['active']), None)
 
@@ -55,9 +57,14 @@ class MemoryRepository:
     def attempt(self, identity, n): self.challenges[identity].attempts = n
     def consume(self, identity): self.challenges[identity].state = 'consumed'
 
-    def register_customer(self, contact, login, password, version):
-        if login in self.users: raise DuplicateUser()
-        if any(u.get('contact') == contact for u in self.users.values()): raise DuplicateUser()
+    def registration_exists(self, contact):
+        return self.contact_email(contact) in self.users or any(u.get('contact') == contact for u in self.users.values())
+
+    def contact_email(self, contact): return self.contacts[contact]['email']
+
+    def register_customer(self, contact, password, version):
+        if self.registration_exists(contact): raise already_registered()
+        login = self.contact_email(contact)
         self.users[login] = {'id': uuid4(), 'contact': contact, 'role': 'customer', 'version': version}
 
     def add_guest(self, key, contact, expires, version):
