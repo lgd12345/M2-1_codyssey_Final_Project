@@ -75,3 +75,6 @@
   .registry-toolbar form { flex-basis: 100%; max-width: none; }
   .registry-table { min-width: 530px; }
 }
+
+.registry-contacts small { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.registry-equipment-help { margin-bottom: 12px; }

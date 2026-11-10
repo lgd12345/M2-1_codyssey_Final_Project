@@ -14,6 +14,7 @@ class MemoryRegistry:
     def __init__(self, seed=None):
         self._lock=RLock()
         self.companies={};self.contacts={};self.equipment={};self.history=[];self.batches={}
+        self.registrations=set()
         for c in (seed or {}).get('companies',[]):
             c=dict(c);email=c.pop('email');c.update(version=1)
             self.companies[c['id']]=c
@@ -46,13 +47,15 @@ class MemoryRegistry:
             if search.casefold() not in c['name'].casefold() and search.casefold() not in c['code'].casefold():continue
             es=[e for e in self.equipment.values() if e['company_id']==c['id'] and e['is_active']]
             items.append({**c,'equipment_count':len(es),'unconfirmed_count':sum(not e['is_confirmed'] for e in es),
+                          'registered_contacts':sum(v['company_id']==c['id'] and v['is_active'] and v['id'] in self.registrations for v in self.contacts.values()),
                           'active_contacts':sum(v['company_id']==c['id'] and v['is_active'] for v in self.contacts.values())})
         return {'items':deepcopy(items[(page-1)*20:page*20]),'page':page,'page_size':20,'total':len(items)}
 
     def detail(self, identity, page):
         c=self.company(identity);identity=str(identity)
         es=sorted([e for e in self.equipment.values() if e['company_id']==identity],key=lambda e:(e['model_name'],e['serial_number'] or '\uffff',e['id']))
-        return deepcopy({'company':c,'contacts':sorted([v for v in self.contacts.values() if v['company_id']==identity],key=lambda v:(v['is_placeholder'],v['email'])),
+        contacts=[{**v,'is_registered':v['id'] in self.registrations} for v in self.contacts.values() if v['company_id']==identity]
+        return deepcopy({'company':c,'contacts':sorted(contacts,key=lambda v:(v['is_placeholder'],v['email'])),
                          'equipment':es[(page-1)*20:page*20],'equipment_page':page,'page_size':20,
                          'equipment_summary':{'total':len(es),'active':sum(e['is_active'] for e in es),
                            'confirmed':sum(e['is_confirmed'] and e['is_active'] for e in es),

@@ -53,6 +53,8 @@ class Work(AccessWork):
         total=self.one('SELECT count(*) AS n FROM claim_access.company WHERE name ILIKE %s OR code ILIKE %s',params)['n']
         items=self.rows('''SELECT p.*,
             (SELECT count(*) FROM claim_access.contact c WHERE c.company_id=p.id AND c.is_active) AS active_contacts,
+            (SELECT count(*) FROM claim_access.contact c JOIN claim_access.registration r ON r.contact_id=c.id
+             WHERE c.company_id=p.id AND c.is_active) AS registered_contacts,
             (SELECT count(*) FROM claim_access.equipment e WHERE e.company_id=p.id AND e.is_active) AS equipment_count,
             (SELECT count(*) FROM claim_access.equipment e WHERE e.company_id=p.id AND e.is_active AND NOT e.is_confirmed) AS unconfirmed_count
             FROM claim_access.company p WHERE p.name ILIKE %s OR p.code ILIKE %s ORDER BY p.name,p.id LIMIT 20 OFFSET %s''',(*params,(page-1)*20))
@@ -60,7 +62,9 @@ class Work(AccessWork):
 
     def detail(self,identity,page):
         company=self.company(identity)
-        contacts=self.rows('SELECT * FROM claim_access.contact WHERE company_id=%s ORDER BY is_placeholder,email',(identity,))
+        contacts=self.rows('''SELECT c.*,EXISTS(
+            SELECT 1 FROM claim_access.registration r WHERE r.contact_id=c.id
+            ) AS is_registered FROM claim_access.contact c WHERE c.company_id=%s ORDER BY c.is_placeholder,c.email''',(identity,))
         summary=self.one('''SELECT count(*) AS total,count(*) FILTER(WHERE is_active) AS active,
             count(*) FILTER(WHERE is_active AND is_confirmed) AS confirmed,
             count(*) FILTER(WHERE is_active AND needs_review) AS needs_review FROM claim_access.equipment WHERE company_id=%s''',(identity,))

@@ -86,6 +86,39 @@ def test_contact_registration_confirmation_placeholder_and_cross_company(client)
     assert c.put(path+'/contacts/'+contact['id'],json={'is_active':True,'expected_version':2},headers=HEADERS).json()['code']=='PLACEHOLDER_CONTACT'
 
 
+def test_membership_comes_from_company_contact_registration_and_survives_deactivation(client):
+    c,_,value,company=client
+    path='/api/v1/companies/'+company['id']
+    contact=c.post(path+'/contacts',json={'email':'member@example.org','confirmed':True},headers=HEADERS).json()['contacts'][0]
+    assert contact['is_registered'] is False
+    value.repository.registrations.add(contact['id'])
+    other=value.create_company('OTHER','다른 회사',ACTOR)
+    other_contact=c.post(f"/api/v1/companies/{other['id']}/contacts",json={'email':'member@example.org','confirmed':True},headers=HEADERS).json()['contacts'][0]
+    assert other_contact['is_registered'] is False
+    assert c.get(path).json()['contacts'][0]['is_registered'] is True
+    items={item['id']:item for item in c.get('/api/v1/companies').json()['items']}
+    assert items[company['id']]['registered_contacts']==1 and items[company['id']]['active_contacts']==1
+    assert items[other['id']]['registered_contacts']==0
+    forged=c.put(path+'/contacts/'+contact['id'],json={'is_active':True,'expected_version':1,'is_registered':False},headers=HEADERS)
+    assert forged.status_code==422
+    changed=c.put(path+'/contacts/'+contact['id'],json={'is_active':False,'expected_version':1},headers=HEADERS).json()
+    assert changed['contacts'][0]['is_registered'] is True and changed['contacts'][0]['is_active'] is False
+    item=next(item for item in c.get('/api/v1/companies').json()['items'] if item['id']==company['id'])
+    assert item['registered_contacts']==0 and item['active_contacts']==0
+
+
+def test_production_membership_read_uses_contact_identity_without_mutating_registration():
+    connection=MagicMock();work=store.Work(connection)
+    work.company=Mock(return_value={'id':UUID(int=1)})
+    work.one=Mock(return_value={})
+    work.rows=Mock(return_value=[])
+    work.detail(UUID(int=1),1)
+    sql,params=work.rows.call_args_list[0].args
+    assert 'EXISTS(' in sql and 'claim_access.registration' in sql and 'r.contact_id=c.id' in sql
+    assert 'login_id' not in sql and params==(UUID(int=1),)
+    connection.execute.assert_not_called()
+
+
 def test_quantity_idempotence_stale_edits_and_equipment_scoping(client):
     c,_,value,company=client;path='/api/v1/companies/'+company['id']
     body={'model_name':' MODEL-A ','serial_number':None,'manufacturing_site':None,'is_confirmed':False,'quantity':3,'request_id':str(uuid4())}
