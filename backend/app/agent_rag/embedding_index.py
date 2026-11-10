@@ -7,6 +7,18 @@ from app.agent_rag.db import pgvector_literal
 from app.agent_rag.embedding import EmbeddingUnavailable, GeminiEmbedder
 
 
+# Everything that gets embedded: manual pages and past service cases share rag_embedding by content hash.
+_EMBEDDABLE = """(SELECT content_hash,content FROM rag_page WHERE content <> ''
+                   UNION ALL SELECT content_hash,content FROM rag_case WHERE content <> '')"""
+
+
+_SOURCES = {
+    "all": _EMBEDDABLE,
+    "pages": "(SELECT content_hash,content FROM rag_page WHERE content <> '')",
+    "cases": "(SELECT content_hash,content FROM rag_case WHERE content <> '')",
+}
+
+
 def batches(values: Sequence[Any], size: int = 64) -> Iterator[list[Any]]:
     if not 1 <= size <= GeminiEmbedder.MAX_BATCH_SIZE:
         raise ValueError("embedding batch size must be between 1 and 100")
@@ -30,7 +42,7 @@ def ensure_embedding_config(connection, embedder: GeminiEmbedder, *, activate: b
         )
         if activate:
             ready = connection.execute(
-                """SELECT count(*) FROM (SELECT DISTINCT content_hash FROM rag_page WHERE content <> '') p
+                f"""SELECT count(*) FROM (SELECT DISTINCT content_hash FROM {_EMBEDDABLE} u) p
                    WHERE NOT EXISTS (SELECT 1 FROM rag_embedding e WHERE e.config_id=%s
                                      AND e.content_hash=p.content_hash AND e.status='ready')""",
                 (config_id,),
@@ -43,16 +55,19 @@ def ensure_embedding_config(connection, embedder: GeminiEmbedder, *, activate: b
 
 
 def index_embeddings(connection, embedder: GeminiEmbedder, *, batch_size: int = 64,
-                     limit: int | None = None) -> dict[str, int]:
+                     limit: int | None = None, only: str = "all") -> dict[str, int]:
     """Embed pending contents. `limit` caps this run (e.g. a small probe); a later run resumes the rest."""
     if not 1 <= batch_size <= GeminiEmbedder.MAX_BATCH_SIZE:
         raise ValueError("embedding batch size must be between 1 and 100")
     if limit is not None and limit < 1:
         raise ValueError("limit must be a positive number")
+    if only not in _SOURCES:
+        raise ValueError("only must be one of: " + ", ".join(_SOURCES))
+    source = _SOURCES[only]
     config_id = ensure_embedding_config(connection, embedder)
     pending = connection.execute(
-        """SELECT p.content_hash,min(p.content) AS content
-           FROM rag_page p WHERE p.content <> ''
+        f"""SELECT p.content_hash,min(p.content) AS content
+           FROM {source} p
            GROUP BY p.content_hash
            HAVING NOT EXISTS (SELECT 1 FROM rag_embedding e WHERE e.config_id=%s
                               AND e.content_hash=p.content_hash AND e.status='ready')
@@ -100,8 +115,8 @@ def index_embeddings(connection, embedder: GeminiEmbedder, *, batch_size: int = 
                 )
         completed += len(hashes)
     remaining = connection.execute(
-        """SELECT count(DISTINCT p.content_hash) FROM rag_page p WHERE p.content <> ''
-           AND NOT EXISTS (SELECT 1 FROM rag_embedding e WHERE e.config_id=%s
+        f"""SELECT count(DISTINCT p.content_hash) FROM {source} p
+           WHERE NOT EXISTS (SELECT 1 FROM rag_embedding e WHERE e.config_id=%s
                            AND e.content_hash=p.content_hash AND e.status='ready')""",
         (config_id,),
     ).fetchone()[0]

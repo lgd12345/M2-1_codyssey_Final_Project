@@ -329,6 +329,9 @@ function Answer({ run }) {
       {run.citations?.length > 0 && (
         <div className="source-label"><strong>답변에 인용된 매뉴얼</strong><ul className="citations">{run.citations.map((c, i) =>
           <li key={i}>{c.title} · PDF {c.page}쪽{c.printed_page ? ` (인쇄 ${c.printed_page})` : ''}</li>)}</ul></div>)}
+      {run.case_citations?.length > 0 && (
+        <div className="source-label"><strong>답변에 인용된 과거 서비스 사례</strong><ul className="citations">{run.case_citations.map((c) =>
+          <li key={c.fsr_no}>{c.fsr_no}{c.machine ? ` · ${c.machine}` : ''}{c.registered_on ? ` · ${c.registered_on}` : ''}</li>)}</ul></div>)}
       {others.length > 0 && (
         <details><summary>에이전트가 연 원본 페이지 ({others.length})</summary>
           <div className="gallery">{others.map((a) =>

@@ -27,7 +27,8 @@ def test_migration_is_idempotent_and_creates_rag_tables():
     second = apply_migrations(url)
     assert set(first).issubset({"001_agent_rag", "002_embedding_endpoint_identity", "003_auth",
                                    "004_agent_runs", "005_conversation",
-                                   "006_conversational_status", "007_drop_document_kind"})
+                                   "006_conversational_status", "007_drop_document_kind",
+                                   "008_rag_case", "009_agent_run_case_citations"})
     assert second == []
     import psycopg
     with psycopg.connect(url) as connection:

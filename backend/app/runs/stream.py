@@ -124,14 +124,15 @@ async def start_stream(request: Request, user_id: UUID, factory: Callable[[], Ag
     question = await extract_question(request)
     chat_id = await chat_id_of(request)
 
-    def begin() -> tuple[UUID, list]:
+    def begin() -> tuple[UUID, list, list]:
         with database() as connection:
             earlier = service.verified_citations(connection, user_id, chat_id)
+            earlier_cases = service.verified_cases(connection, user_id, chat_id)
             run_id = service.create_run(connection, user_id, question, chat_id)
             service.mark_running(connection, run_id)
-            return run_id, earlier
+            return run_id, earlier, earlier_cases
 
-    run_id, earlier = await asyncio.to_thread(begin)  # ownership + one-active-run rule, before anything streams
+    run_id, earlier, earlier_cases = await asyncio.to_thread(begin)  # ownership + one-active-run rule, before anything streams
 
     async def fail(code: str) -> None:
         await asyncio.to_thread(_write, service.store_failure, run_id, code)
@@ -143,6 +144,8 @@ async def start_stream(request: Request, user_id: UUID, factory: Callable[[], Ag
         raise (AgentNotConfiguredError() if isinstance(error, AgentNotConfigured) else AgentUnavailable()) from None
     for item in earlier:  # evidence this server already validated for this user in this chat
         agent_session.tools.available_citations[(item["document_sha256"], item["page"])] = item
+    for item in earlier_cases:  # past service cases already validated in this chat
+        agent_session.tools.available_cases[item["fsr_no"]] = item
     try:
         adapter = await SafeAdapter.from_request(request, agent=agent_session.agent, sdk_version=7)
     except ValidationError:

@@ -86,6 +86,23 @@ def verified_citations(connection, user_id: UUID, conversation_id: str | None, l
     return list(seen.values())
 
 
+def verified_cases(connection, user_id: UUID, conversation_id: str | None, limit: int = 20) -> list[dict[str, Any]]:
+    """Service cases the server validated in this user's earlier *succeeded* turns of the same chat."""
+    if not conversation_id:
+        return []
+    rows = connection.execute(
+        """SELECT case_citations FROM agent_run WHERE user_id=%s AND conversation_id=%s AND status='succeeded'
+           ORDER BY created_at DESC LIMIT %s""", (user_id, conversation_id, limit)).fetchall()
+    seen: dict[str, dict[str, Any]] = {}
+    for (cases,) in rows:
+        for item in cases or []:
+            fsr_no = item.get("fsr_no")
+            if fsr_no and fsr_no not in seen:
+                seen[fsr_no] = {"fsr_no": fsr_no, "machine": item.get("machine"),
+                                "registered_on": item.get("registered_on")}
+    return list(seen.values())
+
+
 def mark_running(connection, run_id: UUID) -> None:
     connection.execute("UPDATE agent_run SET status='running', started_at=now() WHERE id=%s AND status='queued'",
                        (run_id,))
@@ -96,8 +113,9 @@ def store_success(connection, run_id: UUID, result: ManualAgentResult) -> None:
     with connection.transaction():
         connection.execute(
             """UPDATE agent_run SET status='succeeded', answer_status=%s, answer_markdown=%s, citations=%s,
-                      tool_calls=%s, retrieval_status=%s, finished_at=now() WHERE id=%s""",
-            (data["status"], data["answer_markdown"], _json(data["citations"]), _json(data["tool_calls"]),
+                      case_citations=%s, tool_calls=%s, retrieval_status=%s, finished_at=now() WHERE id=%s""",
+            (data["status"], data["answer_markdown"], _json(data["citations"]),
+             _json(data["case_citations"]), _json(data["tool_calls"]),
              _json(data["retrieval_status"]), run_id))
         for asset in result.assets:
             connection.execute(
@@ -120,7 +138,7 @@ def get_run(connection, user_id: UUID, run_id: UUID) -> dict[str, Any]:
     recover_orphans(connection)
     row = connection.execute(
         """SELECT id, question, status, answer_status, answer_markdown, citations, tool_calls,
-                  retrieval_status, error_code, created_at, finished_at
+                  retrieval_status, error_code, created_at, finished_at, case_citations
            FROM agent_run WHERE id=%s AND user_id=%s""", (run_id, user_id)).fetchone()
     if row is None:
         raise RunNotFound()
@@ -129,7 +147,7 @@ def get_run(connection, user_id: UUID, run_id: UUID) -> dict[str, Any]:
         (run_id,)).fetchall()
     return {
         "id": str(row[0]), "question": row[1], "status": row[2], "answer_status": row[3],
-        "answer_markdown": row[4], "citations": row[5], "tool_calls": row[6], "retrieval_status": row[7],
+        "answer_markdown": row[4], "citations": row[5], "case_citations": row[11], "tool_calls": row[6], "retrieval_status": row[7],
         "error_code": row[8], "created_at": _iso(row[9]), "finished_at": _iso(row[10]),
         "assets": [{"asset_id": a[0], "document_sha256": a[1], "pdf_page": a[2], "media_type": a[3],
                     "url": f"/api/v1/agent/runs/{row[0]}/assets/{a[0]}"} for a in assets],

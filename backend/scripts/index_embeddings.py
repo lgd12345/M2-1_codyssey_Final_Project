@@ -25,6 +25,8 @@ def main() -> int:
     parser.add_argument("--batch-size", type=int, default=64)
     parser.add_argument("--limit", type=int, default=None,
                         help="embed at most this many contents in this run (probe); run again to resume the rest")
+    parser.add_argument("--only", choices=("all", "pages", "cases"), default="all",
+                        help="restrict to manual pages or past service cases (default: both)")
     parser.add_argument("--activate", action="store_true", help="activate only after every eligible page is embedded")
     args = parser.parse_args()
     database_url = os.getenv(args.database_url_env, "").strip()
@@ -37,7 +39,8 @@ def main() -> int:
         error_sink=lambda event: record_embedding_error(event, database_url=database_url)
     )
     with psycopg.connect(database_url, connect_timeout=5) as connection:
-        result = index_embeddings(connection, embedder, batch_size=args.batch_size, limit=args.limit)
+        result = index_embeddings(connection, embedder, batch_size=args.batch_size, limit=args.limit,
+                                  only=args.only)
         if args.activate:
             if result["remaining"]:
                 parser.error("cannot activate: failed or pending embeddings remain")

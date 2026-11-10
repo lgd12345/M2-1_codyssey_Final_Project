@@ -6,6 +6,7 @@ import psycopg
 from pydantic_ai import BinaryContent, ToolReturn
 
 from app.agent_rag.assets import AssetRegistry
+from app.agent_rag.case_retrieval import search_cases
 from app.agent_rag.embedding import GeminiEmbedder
 from app.agent_rag.pdf_source import open_source_page
 from app.agent_rag.retrieval import lookup_identifier, search_manual
@@ -39,6 +40,7 @@ class ManualAgentTools:
         self.embedder = embedder
         self.assets = AssetRegistry()
         self.available_citations: dict[tuple[str, int], dict[str, Any]] = {}
+        self.available_cases: dict[str, dict[str, Any]] = {}
         self.tool_calls: list[dict[str, Any]] = []
 
     def _remember(self, source: dict[str, Any]) -> None:
@@ -69,6 +71,26 @@ class ManualAgentTools:
                 self._remember(source)
         self.tool_calls.append({"tool": "search_manual", "status": "ok", "arguments": arguments,
                                 "result_count": len(result["results"]),
+                                "search_status": result["search_status"]})
+        return result
+
+    def search_cases(self, query: str, machines: list[str] | None = None, top_k: int = 6) -> dict[str, Any]:
+        """Search past service cases (FSR): similar complaints with the resolution that was actually applied.
+
+        machines is optional and filters by the case machine code (e.g. VMCT-02); leave it empty when unsure.
+        """
+        arguments = {"query": query, "machines": machines, "top_k": top_k}
+        try:
+            result = search_cases(query, machines=machines, top_k=top_k,
+                                  embedder=self.embedder, database_url=self.settings.database_url)
+        except (psycopg.OperationalError, psycopg.InterfaceError):
+            return self._failure("search_cases", "database_unavailable", arguments=arguments)
+        for case in result["results"]:
+            self.available_cases[case["fsr_no"]] = {"fsr_no": case["fsr_no"], "machine": case["machine"],
+                                                    "registered_on": case["registered_on"]}
+        self.tool_calls.append({"tool": "search_cases", "status": "ok", "arguments": arguments,
+                                "result_count": len(result["results"]),
+                                "fsr_nos": [case["fsr_no"] for case in result["results"]],
                                 "search_status": result["search_status"]})
         return result
 

@@ -202,4 +202,4 @@ def test_pydantic_agent_runs_without_network_and_has_tools_registered():
     agent, _ = build_agent(settings, tools=tools, model=model)
     result = asyncio.run(agent.run("테스트 질문"))
     assert result.output.answer_markdown == "확인된 근거가 없습니다."
-    assert set(agent._function_toolset.tools) == {"search_manual", "lookup_identifier", "open_source"}
+    assert set(agent._function_toolset.tools) == {"search_cases", "search_manual", "lookup_identifier", "open_source"}

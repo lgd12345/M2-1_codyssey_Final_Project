@@ -28,6 +28,7 @@ def sample_result() -> ManualAgentResult:
                      "search_status": {"exact_identifier": "not_detected", "keyword": "ok"}},
                     {"tool": "open_source", "document_sha256": DIGEST, "pdf_page": 3}),
         status="answered",
+        case_citations=({"fsr_no": "FSR-00001", "machine": "VMCT-02", "registered_on": "2012-01-06"},),
     )
 
 
@@ -102,6 +103,8 @@ def test_run_completes_and_stores_answer_citations_tools_and_images(app_with_run
     assert detail["status"] == "succeeded" and detail["answer_status"] == "answered"
     assert detail["answer_markdown"].startswith("확인했습니다.")
     assert detail["citations"][0]["page"] == 3
+    assert detail["case_citations"] == [{"fsr_no": "FSR-00001", "machine": "VMCT-02",
+                                         "registered_on": "2012-01-06"}]
     assert [call["tool"] for call in detail["tool_calls"]] == ["search_manual", "open_source"]
     assert detail["retrieval_status"] == [{"exact_identifier": "not_detected", "keyword": "ok"}]
     asset = detail["assets"][0]
