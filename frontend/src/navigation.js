@@ -1,4 +1,4 @@
-const PAGES = new Set(['home', 'support', 'login', 'register', 'guest', 'workspace'])
+const PAGES = new Set(['home', 'support', 'login', 'register', 'guest', 'workspace', 'companies'])
 
 // Hash routes keep refresh/deep links compatible with the existing static server.
 export function pageFromHash(hash, current = 'home') {
@@ -9,7 +9,7 @@ export function pageFromHash(hash, current = 'home') {
 }
 
 export function needsSession(page) {
-  return page === 'login' || page === 'workspace'
+  return page === 'login' || page === 'workspace' || page === 'companies'
 }
 
 export function accountArea(user) {

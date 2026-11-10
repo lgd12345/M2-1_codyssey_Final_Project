@@ -3,11 +3,12 @@ from starlette.responses import JSONResponse
 
 class AccessBodyLimit:
     """Bound anonymous access JSON bodies before FastAPI parses/validates them."""
-    def __init__(self, app, limit=32768):
+    def __init__(self, app, limit=32768, prefix='/api/v1/access/', methods=('POST',)):
         self.app, self.limit = app, limit
+        self.prefix,self.methods=prefix,methods
 
     async def __call__(self, scope, receive, send):
-        if scope['type'] != 'http' or scope.get('method') != 'POST' or not scope['path'].startswith('/api/v1/access/'):
+        if scope['type'] != 'http' or scope.get('method') not in self.methods or not scope['path'].startswith(self.prefix):
             return await self.app(scope, receive, send)
         body = bytearray()
         while True:

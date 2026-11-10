@@ -10,6 +10,7 @@ import { HomePage, SiteFooter, SiteHeader, SupportPage } from './Site.jsx'
 import { accountArea, needsSession, pageFromHash } from './navigation.js'
 import { CustomerAccess } from './CustomerAccess.jsx'
 import { CustomerWorkspace } from './CustomerWorkspace.jsx'
+import { CompanyRegistry } from './CompanyRegistry.jsx'
 
 // Temporary chat screen for checking that the manual agent works and HOW it works.
 // It goes away once customer complaints are fed to the agent automatically.
@@ -68,7 +69,7 @@ export function App({ theme }) {
   }, [])
 
   useEffect(() => {
-    document.title = `${page === 'home' ? '공작기계 고객지원' : page === 'support' ? '고객센터' : sessionPage ? '로그인 · 매뉴얼 지원' : '서비스 이용 안내'} | MORRONO`
+    document.title = `${page === 'companies' ? '고객사 관리' : page === 'home' ? '공작기계 고객지원' : page === 'support' ? '고객센터' : sessionPage ? '로그인 · 매뉴얼 지원' : '서비스 이용 안내'} | MORRONO`
     if (window.location.hash === '#machines') document.getElementById('machines')?.scrollIntoView()
     else if (!firstPage.current) {
       window.scrollTo(0, 0)
@@ -107,7 +108,7 @@ export function App({ theme }) {
             <p className="muted">잠시만 기다려 주세요.</p>
           </section>
         ) : auth.authenticated ? (
-          accountArea(auth.user) === 'customer' ? <CustomerWorkspace auth={auth} onLogout={onLogout} /> : accountArea(auth.user) === 'operator' ? <Chat auth={auth} onLogout={onLogout} /> : <section className="status-card"><h1>이용 권한을 확인해 주세요</h1><p>이 계정의 서비스 권한을 확인할 수 없습니다.</p><button className="primary" onClick={onLogout}>로그인 화면으로</button></section>
+          accountArea(auth.user) === 'customer' ? <CustomerWorkspace auth={auth} onLogout={onLogout} /> : accountArea(auth.user) === 'operator' ? page === 'companies' ? <CompanyRegistry auth={auth} onLogout={onLogout} /> : <Chat auth={auth} onLogout={onLogout} /> : <section className="status-card"><h1>이용 권한을 확인해 주세요</h1><p>이 계정의 서비스 권한을 확인할 수 없습니다.</p><button className="primary" onClick={onLogout}>로그인 화면으로</button></section>
         ) : <Login onDone={(session) => { setAuth(session); window.location.hash = '/workspace' }} />}
       </main>
       <SiteFooter />
@@ -211,6 +212,7 @@ function Chat({ auth, onLogout }) {
     <div className="wrap">
       <header><h1>매뉴얼 질의</h1>
         <div className="chat-actions"><span className="muted">{auth.user.login_id}</span>
+          <a className="link" href="#/companies">고객사 관리</a>
           <button className="link" onClick={reset} disabled={busy}>새 대화</button>
           <button className="link" onClick={logout}>로그아웃</button></div></header>
       <p className="notice">매뉴얼 질의 확인용 화면입니다. 대화는 새로고침하면 사라지고, 실행 기록은 서버에 저장됩니다.</p>

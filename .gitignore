@@ -205,6 +205,7 @@ cython_debug/
 # .vscode/
 # Local credentials notes (never commit)
 account.txt
+/backend/private-data/
 
 # Local-only test corpus and source archives (never commit technical manuals)
 /backend/.pytest-tmp/
