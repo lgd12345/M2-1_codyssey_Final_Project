@@ -220,18 +220,34 @@ def test_profile_uses_authenticated_identity_and_cannot_be_switched_by_query(app
     assert response.status_code==200 and response.json()['company']['id']==str(UUID(int=10))
 
 
-def test_smtp_uses_verified_tls_and_does_not_retry(monkeypatch):
+def test_smtp_uses_verified_tls_and_does_not_retry(monkeypatch, capsys, caplog):
     from app.customer_access.mailer import send_code,deliver
     import aiosmtplib
     value=service();sender=AsyncMock(return_value=({},'ok'))
     monkeypatch.setattr(aiosmtplib,'send',sender)
-    asyncio.run(send_code(value.settings,'contact@example.org','123456',UUID(int=22)))
+    asyncio.run(send_code(value.settings,'contact@example.org','123456'))
     kwargs=sender.call_args.kwargs
     assert kwargs['use_tls'] and kwargs['validate_certs'] and kwargs['start_tls'] is False
-    assert kwargs['hostname']=='smtp.resend.com' and kwargs['port']==465 and kwargs['timeout']==10
+    assert kwargs['hostname']=='smtp.gmail.com' and kwargs['port']==465 and kwargs['timeout']==10
+    assert kwargs['username']==value.settings.smtp_username=='sender@example.org'
+    assert kwargs['password']==value.settings.smtp_password
     message=sender.call_args.args[0]
-    assert message['Resend-Idempotency-Key']=='customer-access/'+str(UUID(int=22))
+    assert message['From']=='sender@example.org' and message['To']=='contact@example.org'
+    assert '123456' in message.get_content() and message['Resend-Idempotency-Key'] is None
+    sender.assert_awaited_once()
     sender.reset_mock();sender.side_effect=RuntimeError('synthetic SMTP secret; must not be logged')
     value.sent=Mock()
     asyncio.run(deliver(value,UUID(int=22),'contact@example.org','123456'))
     sender.assert_awaited_once();value.sent.assert_called_once_with(UUID(int=22),False)
+    captured=capsys.readouterr()
+    assert not captured.out and not captured.err and not caplog.text
+
+
+def test_successful_smtp_submission_marks_challenge_sent_once(monkeypatch):
+    from app.customer_access.mailer import deliver
+    import aiosmtplib
+    value=service();value.sent=Mock()
+    sender=AsyncMock(return_value=({},'accepted'))
+    monkeypatch.setattr(aiosmtplib,'send',sender)
+    asyncio.run(deliver(value,UUID(int=22),'contact@example.org','123456'))
+    sender.assert_awaited_once();value.sent.assert_called_once_with(UUID(int=22),True)

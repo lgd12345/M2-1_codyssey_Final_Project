@@ -23,7 +23,8 @@ def test_incomplete_actual_policy_cannot_enable_collection(tmp_path,field,invali
     policy={**POLICY,field:invalid}
     path=tmp_path/'policy.json';path.write_text(json.dumps(policy),encoding='utf-8')
     env=dict(CUSTOMER_ACCESS_ENABLED='1',CUSTOMER_ACCESS_RELEASE_APPROVED='1',APP_COOKIE_SECURE='1',
-             DATABASE_URL='synthetic',CUSTOMER_ACCESS_SECRET='s'*40,CUSTOMER_SMTP_PASSWORD='synthetic',
+             DATABASE_URL='synthetic',CUSTOMER_ACCESS_SECRET='s'*40,CUSTOMER_SMTP_PASSWORD='s'*16,
+             CUSTOMER_SMTP_USERNAME='sender@example.org',
              CUSTOMER_MAIL_FROM='sender@example.org',CUSTOMER_ACCESS_POLICY_FILE=str(path))
     assert Settings.load(env) is None
 
@@ -31,7 +32,8 @@ def test_incomplete_actual_policy_cannot_enable_collection(tmp_path,field,invali
 def test_complete_policy_retains_refusal_notice_and_missing_legacy_field_stays_closed(tmp_path):
     path=tmp_path/'policy.json'
     env=dict(CUSTOMER_ACCESS_ENABLED='1',CUSTOMER_ACCESS_RELEASE_APPROVED='1',APP_COOKIE_SECURE='1',
-             DATABASE_URL='synthetic',CUSTOMER_ACCESS_SECRET='s'*40,CUSTOMER_SMTP_PASSWORD='synthetic',
+             DATABASE_URL='synthetic',CUSTOMER_ACCESS_SECRET='s'*40,CUSTOMER_SMTP_PASSWORD='s'*16,
+             CUSTOMER_SMTP_USERNAME='sender@example.org',
              CUSTOMER_MAIL_FROM='sender@example.org',CUSTOMER_ACCESS_POLICY_FILE=str(path))
     legacy={key:value for key,value in POLICY.items() if key!='refusal'}
     path.write_text(json.dumps(legacy),encoding='utf-8');assert Settings.load(env) is None
@@ -39,11 +41,12 @@ def test_complete_policy_retains_refusal_notice_and_missing_legacy_field_stays_c
     assert Settings.load(env).policy['refusal']==POLICY['refusal']
 
 
-@pytest.mark.parametrize('missing', ['CUSTOMER_ACCESS_RELEASE_APPROVED', 'APP_COOKIE_SECURE', 'DATABASE_URL', 'CUSTOMER_SMTP_PASSWORD', 'CUSTOMER_ACCESS_SECRET'])
+@pytest.mark.parametrize('missing', ['CUSTOMER_ACCESS_RELEASE_APPROVED', 'APP_COOKIE_SECURE', 'DATABASE_URL', 'CUSTOMER_SMTP_USERNAME', 'CUSTOMER_SMTP_PASSWORD', 'CUSTOMER_ACCESS_SECRET'])
 def test_missing_activation_requirement_stays_closed(tmp_path, missing):
     path = tmp_path/'policy.json'; path.write_text(json.dumps(POLICY), encoding='utf-8')
     env = dict(CUSTOMER_ACCESS_ENABLED='1', CUSTOMER_ACCESS_RELEASE_APPROVED='1', APP_COOKIE_SECURE='1',
-               DATABASE_URL='business', CUSTOMER_ACCESS_SECRET='s'*40, CUSTOMER_SMTP_PASSWORD='fake',
+               DATABASE_URL='business', CUSTOMER_ACCESS_SECRET='s'*40, CUSTOMER_SMTP_PASSWORD='s'*16,
+               CUSTOMER_SMTP_USERNAME='sender@example.org',
                CUSTOMER_ACCESS_POLICY_FILE=str(path), CUSTOMER_MAIL_FROM='sender@example.org')
     env.pop(missing)
     assert Settings.load(env) is None
@@ -53,10 +56,49 @@ def test_separate_auth_database_disables_registration_not_guest(tmp_path):
     path = tmp_path/'p.json'; path.write_text(json.dumps(POLICY), encoding='utf-8')
     env = dict(CUSTOMER_ACCESS_ENABLED='1', CUSTOMER_ACCESS_RELEASE_APPROVED='1', APP_COOKIE_SECURE='1', DATABASE_URL='business',
                RAG_DATABASE_URL='different-auth', CUSTOMER_REGISTRATION_ENABLED='1', CUSTOMER_ACCESS_SECRET='s'*40,
-               CUSTOMER_SMTP_PASSWORD='fake', CUSTOMER_MAIL_FROM='sender@example.org', CUSTOMER_ACCESS_POLICY_FILE=str(path))
+               CUSTOMER_SMTP_PASSWORD='s'*16, CUSTOMER_SMTP_USERNAME='sender@example.org',
+               CUSTOMER_MAIL_FROM='sender@example.org', CUSTOMER_ACCESS_POLICY_FILE=str(path))
     value = Settings.load(env)
     assert value and not value.registration
     path.write_text(json.dumps({**POLICY, 'version': 'v' * 121}), encoding='utf-8')
+    assert Settings.load(env) is None
+
+
+def gmail_environment(tmp_path):
+    path = tmp_path/'policy.json'
+    path.write_text(json.dumps(POLICY), encoding='utf-8')
+    return dict(CUSTOMER_ACCESS_ENABLED='1', CUSTOMER_ACCESS_RELEASE_APPROVED='1', APP_COOKIE_SECURE='1',
+                DATABASE_URL='synthetic', CUSTOMER_ACCESS_SECRET='s'*40,
+                CUSTOMER_SMTP_USERNAME='sender@example.org', CUSTOMER_SMTP_PASSWORD='abcdefghijklmnop',
+                CUSTOMER_ACCESS_POLICY_FILE=str(path))
+
+
+@pytest.mark.parametrize('sender', [None, '', '   ', ' Sender@EXAMPLE.ORG '])
+def test_gmail_from_defaults_to_authenticated_account_and_normalizes_display_spaces(tmp_path, sender):
+    env = gmail_environment(tmp_path)
+    env['CUSTOMER_SMTP_USERNAME'] = ' Sender@EXAMPLE.ORG '
+    env['CUSTOMER_SMTP_PASSWORD'] = 'abcd efgh ijkl mnop'
+    if sender is not None:
+        env['CUSTOMER_MAIL_FROM'] = sender
+    settings = Settings.load(env)
+    assert settings and settings.smtp_username == settings.mail_from == 'sender@example.org'
+    assert settings.smtp_password == 'abcdefghijklmnop'
+    assert settings.smtp_host == 'smtp.gmail.com' and settings.smtp_port == 465
+    assert settings.smtp_password not in repr(settings) and env['CUSTOMER_ACCESS_SECRET'] not in repr(settings)
+
+
+@pytest.mark.parametrize('field,value', [
+    ('CUSTOMER_SMTP_USERNAME', ''), ('CUSTOMER_SMTP_USERNAME', 'resend'),
+    ('CUSTOMER_SMTP_USERNAME', 'sender@example.org\r\nBcc:other@example.org'),
+    ('CUSTOMER_SMTP_PASSWORD', ''), ('CUSTOMER_SMTP_PASSWORD', 'short'),
+    ('CUSTOMER_SMTP_PASSWORD', 'a'*17), ('CUSTOMER_SMTP_PASSWORD', 'abcdefghijklmnop\n'),
+    ('CUSTOMER_SMTP_PASSWORD', 'abcd\tefghijklmnop'), ('CUSTOMER_SMTP_PASSWORD', '가'*16),
+    ('CUSTOMER_MAIL_FROM', 'different@example.org'),
+    ('CUSTOMER_MAIL_FROM', 'Name <sender@example.org>'),
+])
+def test_invalid_google_configuration_stays_closed(tmp_path, field, value):
+    env = gmail_environment(tmp_path)
+    env[field] = value
     assert Settings.load(env) is None
 
 

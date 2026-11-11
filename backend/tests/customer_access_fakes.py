@@ -89,8 +89,8 @@ class MemoryRepository:
 
 
 def service():
-    settings = Settings('synthetic-dsn', 'synthetic-secret-is-at-least-32-characters', 'synthetic-smtp-password',
-                        'sender@example.org', dict(POLICY), True)
+    settings = Settings('synthetic-dsn', 'synthetic-secret-is-at-least-32-characters', 'abcdefghijklmnop',
+                        'sender@example.org', dict(POLICY), True, smtp_username='sender@example.org')
     return AccessService(settings, MemoryRepository())
 
 

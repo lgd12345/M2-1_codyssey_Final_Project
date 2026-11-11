@@ -19,7 +19,7 @@
 2. 선택한 비운영 DB에서 아래 migration을 단일 실행하고 기존 로그인/운영진 접근·가입·중복/동시 요청·구버전 코드 호환성을 검증합니다. 실제 운영 적용은 별도 승인 범위입니다.
 3. 실제 회사코드·회사명·허용된 연락처를 관리자가 확인해 등록합니다. 회사코드만 알아서는 가입/문의가 허용되지 않습니다. 공용 메일함은 계정 공유 위험이 있으므로 개인별 업무 연락처를 사용합니다.
 4. 개인정보 목적·항목·보유기간·처리/전달 대상·문의/철회/삭제 경로를 확정합니다. 보유기간에 맞는 삭제·철회 운영 절차와 실행 책임, 백업/메일 사업자의 잔존 데이터 처리도 확인합니다. 코드에는 임의의 법적 안내값을 넣지 않았습니다. 만료 인증번호만 제한적으로 정리하며 문의/계정의 보유기간 삭제는 자동 구현되어 있지 않습니다.
-5. Resend의 검증된 발신 도메인과 전용 SMTP 자격 증명을 준비하고 서버에서 TLS·소량 발송·실제 수신함 도착을 검증합니다. 메일 공급자 장애 중에는 코드를 사용 가능 상태로 만들지 않습니다. 자동 재발송하지 않습니다.
+5. Google 발신 계정의 2단계 인증과 전용 앱 비밀번호를 준비하고 서버에서 TLS·소량 발송·실제 수신함 도착을 검증합니다. [Google SMTP 설정 안내](./GMAIL_SMTP.md)를 따릅니다. 메일 공급자 장애 중에는 코드를 사용 가능 상태로 만들지 않습니다. 자동 재발송하지 않습니다.
 6. 기존 HTTPS/프록시가 실제 클라이언트 주소를 신뢰된 경로로 전달하는지 확인합니다. 애플리케이션은 `request.client.host`만 사용하며 임의의 `X-Forwarded-For`를 직접 신뢰하지 않습니다. 프록시 주소만 보이면 요청 제한이 모든 사용자에게 합산될 수 있습니다. 확인 없이 프록시 신뢰 범위를 넓히지 않습니다.
 7. 런타임 DB 계정은 필요한 테이블/열의 최소 조회·삽입·갱신 권한과 만료 인증번호 정리 권한만 부여하고 DDL 권한은 별도 관리 계정에 둡니다. 장애/발송량 관측과 비활성화·코드 복귀 절차를 시험한 뒤 플래그를 켭니다.
 
@@ -56,7 +56,7 @@ python -m app.customer_access.manage --apply --expect-database 실제인증DB명
 
 `customer-access.env.example`은 모든 플래그가 `0`이고 자격 증명이 비어 있습니다. 실제 개인정보 안내 JSON 파일에는 비어 있지 않은 문자열 `version`, `purpose`, `items`, `retention`, `recipients`, `contact`, `refusal`가 필요합니다. 운영 파일을 커밋하지 않습니다.
 
-`CUSTOMER_ACCESS_ENABLED=1`, `CUSTOMER_ACCESS_RELEASE_APPROVED=1`, `APP_COOKIE_SECURE=1`, 명시적 `DATABASE_URL`, 32자 이상 무작위 전용 `CUSTOMER_ACCESS_SECRET`, `CUSTOMER_MAIL_FROM`, `CUSTOMER_SMTP_PASSWORD`, `CUSTOMER_ACCESS_POLICY_FILE`과 일치하는 migration 이력이 모두 있어야 서비스가 열립니다. 안내 버전은 120자 이내로 관리합니다.
+`CUSTOMER_ACCESS_ENABLED=1`, `CUSTOMER_ACCESS_RELEASE_APPROVED=1`, `APP_COOKIE_SECURE=1`, 명시적 `DATABASE_URL`, 32자 이상 무작위 전용 `CUSTOMER_ACCESS_SECRET`, `CUSTOMER_SMTP_USERNAME`(Google 계정 이메일), `CUSTOMER_SMTP_PASSWORD`(16자리 앱 비밀번호), `CUSTOMER_ACCESS_POLICY_FILE`과 일치하는 migration 이력이 모두 있어야 서비스가 열립니다. `CUSTOMER_MAIL_FROM`은 비워두면 발신 계정 이메일을 사용하고, 별도로 입력해도 같은 주소여야 합니다. 앱 비밀번호의 표시용 공백은 제거하지만 실제 Google 인증 성공 여부는 발송으로 별도 확인해야 합니다. 안내 버전은 120자 이내로 관리합니다.
 
 가입은 추가로 `CUSTOMER_REGISTRATION_ENABLED=1`과 **인증 DSN(`RAG_DATABASE_URL` 우선) 및 `DATABASE_URL`의 정확한 문자열 일치**, 역할·이메일 migration 이력이 필요합니다. 현재 구현은 한 DB 트랜잭션으로 계정·회사 소속을 함께 저장합니다. 실제 두 DB가 분리되어 있으면 공개 가입은 닫힙니다. 임의로 인증 DB를 바꾸거나 두 DB에 부분 저장하지 말고 별도 설계를 검토합니다. 비회원 문의만은 별도 업무 DB로 운영할 수 있습니다.
 

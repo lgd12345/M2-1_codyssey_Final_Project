@@ -57,8 +57,9 @@ class Settings:
     mail_from: str
     policy: dict
     registration: bool
-    smtp_host: str = 'smtp.resend.com'
+    smtp_host: str = 'smtp.gmail.com'
     smtp_port: int = 465
+    smtp_username: str = field(default='', repr=False)
 
     @classmethod
     def load(cls, env):
@@ -70,8 +71,16 @@ class Settings:
         try:
             db = env['DATABASE_URL'].strip()
             secret = env['CUSTOMER_ACCESS_SECRET']
-            password = env['CUSTOMER_SMTP_PASSWORD']
-            if not db or len(secret) < 32 or not password:
+            # Google displays app passwords in space-separated groups. Remove
+            # those display spaces only; reject line breaks and other whitespace.
+            password = env['CUSTOMER_SMTP_PASSWORD'].replace(' ', '')
+            if not db or len(secret) < 32 or not re.fullmatch(r'[!-~]{16}', password):
+                return None
+            username = email_address(env['CUSTOMER_SMTP_USERNAME'])
+            sender = email_address(env.get('CUSTOMER_MAIL_FROM', '').strip() or username)
+            # This integration sends as the authenticated account. Aliases and
+            # domain impersonation are not inferred from an arbitrary From value.
+            if sender != username:
                 return None
             policy = json.loads(Path(env['CUSTOMER_ACCESS_POLICY_FILE']).read_text(encoding='utf-8'))
             keys = ('version', 'purpose', 'items', 'retention', 'recipients', 'contact', 'refusal')
@@ -80,12 +89,11 @@ class Settings:
             policy = {key: policy[key].strip() for key in keys}
             if len(policy['version']) > 120:
                 return None
-            sender = email_address(env['CUSTOMER_MAIL_FROM'])
             # Registration is initially supported only on the same explicit DSN.
             # A different auth DB must not lead to a partial two-DB account write.
             auth_db = (env.get('RAG_DATABASE_URL', '') or db).strip()
             registration = env.get('CUSTOMER_REGISTRATION_ENABLED') == '1' and auth_db == db
-            return cls(db, secret, password, sender, policy, registration)
+            return cls(db, secret, password, sender, policy, registration, smtp_username=username)
         except (KeyError, ValueError, OSError, AccessError):
             return None
 
