@@ -25,7 +25,7 @@ const RUN_ERRORS = {
   agent_error: '답변을 처리하지 못했습니다. 문제가 계속되면 관리자에게 문의해 주세요.',
 }
 const API_ERRORS = {
-  INVALID_CREDENTIALS: '아이디 또는 비밀번호가 올바르지 않습니다.',
+  INVALID_CREDENTIALS: '이메일 또는 비밀번호가 올바르지 않습니다.',
   TOO_MANY_ATTEMPTS: '시도가 너무 많습니다. 10분 뒤 다시 시도하세요.',
   RUN_IN_PROGRESS: '이미 실행 중인 질문이 있습니다. 끝난 뒤 다시 시도하세요.',
   AGENT_NOT_CONFIGURED: '답변 서비스가 아직 준비되지 않았습니다. 관리자에게 문의해 주세요.',
@@ -154,16 +154,16 @@ function Login({ onDone }) {
       <form className="login" onSubmit={submit} aria-busy={busy}>
         <a className="back-link" href="#/support">← 고객센터</a>
         <h1 id="login-title">로그인</h1>
-        <p className="login-description muted">고객·운영진 계정으로 로그인하세요. 계정 권한에 맞는 서비스로 연결됩니다.</p>
+        <p className="login-description muted">가입하신 이메일로 로그인해 주세요.</p>
         <p className="ai-notice" role="note" aria-label="AI 생성 콘텐츠 안내">
           <strong>AI 생성 콘텐츠 안내</strong><br />
           로그인 후 제공되는 답변은 AI가 생성합니다. 내용이 부정확할 수 있으니 인용된 근거와 원본 매뉴얼을 함께 확인해 주세요.
         </p>
-        <label>이메일 또는 운영진 아이디<input name="login_id" value={loginId} onChange={(e) => setLoginId(e.target.value)} autoComplete="username" autoCapitalize="none" spellCheck={false} disabled={busy} required autoFocus /></label>
+        <label>이메일<input name="login_id" value={loginId} onChange={(e) => setLoginId(e.target.value)} autoComplete="username" autoCapitalize="none" spellCheck={false} disabled={busy} required autoFocus /></label>
         <label>비밀번호<input name="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="current-password" disabled={busy} required /></label>
         {error && <p className="error" role="alert">{error}</p>}
         <button type="submit" disabled={busy || !loginId || !password}>{busy ? '확인 중…' : '로그인'}</button>
-        <p className="login-helper muted">계정 이용이 어려우면 관리자에게 문의해 주세요.</p>
+        <p className="login-helper muted">로그인이 어려우면 고객센터로 문의해 주세요.</p>
         <div className="login-extra"><a href="#/register">회원가입 안내</a><a href="#/guest">비회원 문의 안내</a></div>
       </form>
     </section>
