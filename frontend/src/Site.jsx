@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react'
+import { accountArea } from './navigation.js'
 
 export function Icon({ name = 'arrow', ...props }) {
   const paths = {
@@ -17,34 +18,43 @@ export function Icon({ name = 'arrow', ...props }) {
 const themes = ['system', 'light', 'dark']
 const themeLabels = { system: '시스템 설정', light: '라이트', dark: '다크' }
 
-export function SiteHeader({ preference, theme, authenticated, page }) {
+export function SiteHeader({ preference, theme, session, pending = false, page, onSignOut, signOutBusy = false }) {
   const next = themes[(themes.indexOf(preference) + 1) % themes.length]
   const label = `화면 테마: ${themeLabels[preference]}. 다음 테마: ${themeLabels[next]}`
-  return <header className="app-header site-header">
-    <a className="site-brand" href="#/home" aria-label="MORRONO 공작기계 고객지원 홈">
+  const authenticated = session?.authenticated === true
+  const area = authenticated ? accountArea(session.user) : 'public'
+  const operator = area === 'operator'
+  return <header className={`app-header site-header ${authenticated ? 'workspace-header' : ''}`}>
+    <a className="site-brand" href={authenticated ? '#/workspace' : '#/home'} aria-label={operator ? 'MORRONO 운영진 업무 홈' : authenticated ? 'MORRONO 고객지원 홈' : 'MORRONO 공작기계 고객지원 홈'}>
       <span className="brand-symbol" aria-hidden="true"><i /><i /><i /><i /></span>
-      <span>MORRONO<small>MACHINE SUPPORT</small></span>
+      <span>MORRONO<small>{operator ? 'OPERATIONS' : authenticated ? 'CUSTOMER SERVICE' : 'MACHINE SUPPORT'}</small></span>
     </a>
-    <nav className="site-nav" aria-label="주 메뉴">
+    {operator ? <nav className="site-nav" aria-label="운영진 메뉴">
+      <a href="#/workspace" aria-current={page === 'workspace' ? 'page' : undefined}>매뉴얼</a>
+      <a href="#/companies" aria-current={page === 'companies' ? 'page' : undefined}>고객사 관리</a>
+    </nav> : area === 'customer' ? <nav className="site-nav" aria-label="고객 메뉴">
+      <a href="#/workspace" aria-current={page === 'workspace' ? 'page' : undefined}>고객지원</a>
+      <a href="#/support" aria-current={page === 'support' ? 'page' : undefined}>고객센터</a>
+    </nav> : !authenticated && !pending ? <nav className="site-nav" aria-label="주 메뉴">
       <a className="intro-link" href="#machines">공작기계 소개</a>
       <a href="#/support" aria-current={page === 'support' ? 'page' : undefined}>고객센터</a>
-    </nav>
+    </nav> : null}
     <div className="header-utilities">
-      <a className="header-login" href={authenticated ? '#/workspace' : '#/login'}>{authenticated ? '내 서비스' : '로그인'}<Icon name="diagonal" /></a>
+      {authenticated ? <><span className="header-account" title={session.user?.login_id}>{session.user?.login_id}</span><button className="header-signout" onClick={onSignOut} disabled={signOutBusy}>{signOutBusy ? '로그아웃 중…' : '로그아웃'}</button></> : pending ? <span className="header-session-status">확인 중</span> : <a className="header-login" href="#/login">로그인<Icon name="diagonal" /></a>}
       <span className="utility-divider" aria-hidden="true" />
       <button className="theme-toggle" aria-label={label} title={label} onClick={() => theme.setPreference(next)}><Icon name={preference === 'light' ? 'sun' : preference === 'dark' ? 'moon' : 'system'} /></button>
     </div>
   </header>
 }
 
-export function SiteFooter() {
+export function SiteFooter({ operator = false }) {
   return <footer className="site-footer">
-    <div><a className="footer-wordmark" href="#/home">MORRONO</a><span>공작기계 고객지원</span></div>
+    <div><a className="footer-wordmark" href={operator ? '#/workspace' : '#/home'}>MORRONO</a><span>{operator ? '운영진 업무 지원' : '공작기계 고객지원'}</span></div>
     <p>AI가 생성한 답변은 인용된 근거와 원본 매뉴얼을 함께 확인해 주세요.</p>
-    <details className="photo-credits"><summary>사진 출처</summary><div>
+    {!operator && <details className="photo-credits"><summary>사진 출처</summary><div>
       <p>공작기계 사진: <a href="https://unsplash.com/photos/O5rSp_U-Pa0" target="_blank" rel="noreferrer noopener">Jelifer Maniago</a> · <a href="https://unsplash.com/photos/sxtClAGwRck" target="_blank" rel="noreferrer noopener">aluminum Zheng ji</a> / Unsplash</p>
       <a href="https://unsplash.com/license" target="_blank" rel="noreferrer noopener">Unsplash License</a><span> · 소개를 위한 예시 사진입니다.</span>
-    </div></details>
+    </div></details>}
   </footer>
 }
 
@@ -76,14 +86,19 @@ export function HomePage() {
   </div>
 }
 
-export function SupportPage() {
+export function SupportPage({ signedIn = false }) {
   const [access, setAccess] = useState(null)
   useEffect(() => {
+    if (signedIn) return
     let active = true
     fetch('/api/v1/access/status', { credentials: 'same-origin', cache: 'no-store' })
       .then((response) => response.ok ? response.json() : null).then((value) => { if (active) setAccess(value) }).catch(() => {})
     return () => { active = false }
-  }, [])
+  }, [signedIn])
+  if (signedIn) return <section className="support-page section-container" aria-labelledby="support-title">
+    <p className="eyebrow">CUSTOMER SUPPORT</p><h1 id="support-title">무엇을 도와드릴까요?</h1><p className="page-description">고객 계정으로 로그인되어 있습니다.</p>
+    <div className="support-options signed-in"><a className="support-option" href="#/workspace"><Icon name="user" /><span className="option-kicker">CUSTOMER SERVICE</span><h2>고객지원</h2><p>회사 소속과 현재 이용 가능한<br />고객 서비스를 확인하세요.</p><span className="option-action">고객지원으로 이동<Icon /></span></a></div>
+  </section>
   return <section className="support-page section-container" aria-labelledby="support-title">
     <p className="eyebrow">CUSTOMER SUPPORT</p><h1 id="support-title">무엇을 도와드릴까요?</h1><p className="page-description">이용 방법을 선택해 주세요. 필요한 지원으로 이어드립니다.</p>
     <div className="support-options">

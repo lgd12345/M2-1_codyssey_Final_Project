@@ -54,7 +54,7 @@ class Work(AccessWork):
         items=self.rows('''SELECT p.*,
             (SELECT count(*) FROM claim_access.contact c WHERE c.company_id=p.id AND c.is_active) AS active_contacts,
             (SELECT count(*) FROM claim_access.contact c JOIN claim_access.registration r ON r.contact_id=c.id
-             WHERE c.company_id=p.id AND c.is_active) AS registered_contacts,
+             WHERE c.company_id=p.id) AS registered_contacts,
             (SELECT count(*) FROM claim_access.equipment e WHERE e.company_id=p.id AND e.is_active) AS equipment_count,
             (SELECT count(*) FROM claim_access.equipment e WHERE e.company_id=p.id AND e.is_active AND NOT e.is_confirmed) AS unconfirmed_count
             FROM claim_access.company p WHERE p.name ILIKE %s OR p.code ILIKE %s ORDER BY p.name,p.id LIMIT 20 OFFSET %s''',(*params,(page-1)*20))

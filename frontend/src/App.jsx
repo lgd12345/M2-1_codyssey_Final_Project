@@ -7,7 +7,7 @@ import { documentRow, summaryLine } from './documents.js'
 import { remarkPlugins } from './markdown.js'
 import { SAMPLES } from './samples.js'
 import { HomePage, SiteFooter, SiteHeader, SupportPage } from './Site.jsx'
-import { accountArea, needsSession, pageFromHash } from './navigation.js'
+import { accountArea, needsSession, pageFromHash, pageForSession } from './navigation.js'
 import { CustomerAccess } from './CustomerAccess.jsx'
 import { CustomerWorkspace } from './CustomerWorkspace.jsx'
 import { CompanyRegistry } from './CompanyRegistry.jsx'
@@ -41,7 +41,7 @@ async function call(path, { method = 'GET', body, csrf } = {}) {
   if (csrf && method !== 'GET') headers['X-CSRF-Token'] = csrf
   let response
   try {
-    response = await fetch(`/api/v1${path}`, { method, headers, body: body ? JSON.stringify(body) : undefined })
+    response = await fetch(`/api/v1${path}`, { method, headers, credentials: 'same-origin', cache: 'no-store', body: body ? JSON.stringify(body) : undefined })
   } catch { throw new ApiError('서버에 연결하지 못했습니다.') }
   if (response.status === 204) return null
   const data = await response.json().catch(() => null)
@@ -58,9 +58,22 @@ export function App({ theme }) {
   const [auth, setAuth] = useState(null)
   const [authError, setAuthError] = useState('')
   const [sessionAttempt, setSessionAttempt] = useState(0)
+  const [signOutBusy, setSignOutBusy] = useState(false)
+  const [signOutError, setSignOutError] = useState('')
+  const sessionGeneration = useRef(0)
   const firstPage = useRef(true)
-  const sessionPage = needsSession(page)
-  const onLogout = useCallback(() => { setAuth({ authenticated: false }); window.location.hash = '/login' }, [])
+  const screenPage = pageForSession(page, auth)
+  const sessionPage = needsSession(screenPage)
+  const area = auth?.authenticated ? accountArea(auth.user) : 'public'
+  const onLogout = useCallback(() => { sessionGeneration.current += 1; setAuth({ authenticated: false }); setAuthError(''); setSignOutError(''); window.location.hash = '/login' }, [])
+
+  async function signOut() {
+    if (signOutBusy) return
+    setSignOutBusy(true); setSignOutError('')
+    try { await call('/auth/logout', { method: 'POST', csrf: auth.csrf_token }); onLogout() }
+    catch (error) { if (error.status === 401) onLogout(); else setSignOutError(error.message) }
+    finally { setSignOutBusy(false) }
+  }
 
   useEffect(() => {
     const changePage = () => setPage((current) => pageFromHash(window.location.hash, current))
@@ -69,38 +82,45 @@ export function App({ theme }) {
   }, [])
 
   useEffect(() => {
-    document.title = `${page === 'companies' ? '고객사 관리' : page === 'home' ? '공작기계 고객지원' : page === 'support' ? '고객센터' : sessionPage ? '로그인 · 매뉴얼 지원' : '서비스 이용 안내'} | MORRONO`
+    const titles = { home: '공작기계 고객지원', support: '고객센터', companies: '고객사 관리', workspace: area === 'operator' ? '매뉴얼 질의' : '고객지원', login: '로그인', register: '고객 회원가입', guest: '비회원 문의' }
+    document.title = `${titles[screenPage]} | MORRONO`
     if (window.location.hash === '#machines') document.getElementById('machines')?.scrollIntoView()
     else if (!firstPage.current) {
       window.scrollTo(0, 0)
       document.getElementById('main-content')?.focus({ preventScroll: true })
     }
     firstPage.current = false
-  }, [page, sessionPage])
+  }, [screenPage, area])
 
   useEffect(() => {
-    if (!sessionPage) return
+    if (screenPage === page) return
+    window.history.replaceState(null, '', `#/${screenPage}`)
+    setPage(screenPage)
+  }, [screenPage, page])
+
+  useEffect(() => {
     let active = true
-    setAuth(null)
+    const generation = ++sessionGeneration.current
     setAuthError('')
-    call('/auth/me').then((session) => { if (active) setAuth(session) })
-      .catch((error) => { if (active) setAuthError(error.message) })
+    call('/auth/me').then((session) => { if (active && generation === sessionGeneration.current) setAuth(session) })
+      .catch((error) => { if (active && generation === sessionGeneration.current) setAuthError(error.message) })
     return () => { active = false }
   }, [sessionAttempt, sessionPage])
 
   return (
     <div className="app-shell">
       <a className="skip-link" href="#main-content">본문으로 이동</a>
-      <SiteHeader preference={preference} theme={theme} authenticated={auth?.authenticated} page={page} />
+      <SiteHeader preference={preference} theme={theme} session={auth} pending={sessionPage && !auth} page={screenPage} onSignOut={signOut} signOutBusy={signOutBusy} />
       <main id="main-content" className={`app-main ${sessionPage ? 'session-main' : 'public-main'}`} tabIndex={-1}>
+        {signOutError && <p className="workspace-signout-error error" role="alert">{signOutError}</p>}
         {!sessionPage ? (
-          page === 'support' ? <SupportPage /> : page === 'register' || page === 'guest' ? <CustomerAccess key={page} kind={page} /> : <HomePage />
+          screenPage === 'support' ? <SupportPage signedIn={auth?.authenticated} /> : screenPage === 'register' || screenPage === 'guest' ? <CustomerAccess key={screenPage} kind={screenPage} /> : <HomePage />
         ) : authError ? (
           <section className="status-card" aria-labelledby="session-error-title">
             <h1 id="session-error-title">연결을 확인해 주세요</h1>
             <p className="error" role="alert">{authError}</p>
             <p className="muted">로그인 상태를 확인하지 못했습니다. 연결 후 다시 시도해 주세요.</p>
-            <button className="primary" onClick={() => setSessionAttempt((attempt) => attempt + 1)}>다시 시도</button>
+            <button className="primary" onClick={() => { setAuth(null); setSessionAttempt((attempt) => attempt + 1) }}>다시 시도</button>
           </section>
         ) : !auth ? (
           <section className="status-card" aria-busy="true" role="status">
@@ -108,10 +128,10 @@ export function App({ theme }) {
             <p className="muted">잠시만 기다려 주세요.</p>
           </section>
         ) : auth.authenticated ? (
-          accountArea(auth.user) === 'customer' ? <CustomerWorkspace auth={auth} onLogout={onLogout} /> : accountArea(auth.user) === 'operator' ? page === 'companies' ? <CompanyRegistry auth={auth} onLogout={onLogout} /> : <Chat auth={auth} onLogout={onLogout} /> : <section className="status-card"><h1>이용 권한을 확인해 주세요</h1><p>이 계정의 서비스 권한을 확인할 수 없습니다.</p><button className="primary" onClick={onLogout}>로그인 화면으로</button></section>
-        ) : <Login onDone={(session) => { setAuth(session); window.location.hash = '/workspace' }} />}
+          area === 'customer' ? <CustomerWorkspace auth={auth} onLogout={onLogout} /> : area === 'operator' ? screenPage === 'companies' ? <CompanyRegistry auth={auth} onLogout={onLogout} /> : <Chat auth={auth} onLogout={onLogout} /> : <section className="status-card"><h1>이용 권한을 확인해 주세요</h1><p>이 계정의 서비스 권한을 확인할 수 없습니다.</p></section>
+        ) : <Login onDone={(session) => { sessionGeneration.current += 1; setAuthError(''); setAuth(session); window.location.hash = `/${pageForSession(page, session)}` }} />}
       </main>
-      <SiteFooter />
+      <SiteFooter operator={area === 'operator'} />
     </div>
   )
 }
@@ -204,17 +224,11 @@ function Chat({ auth, onLogout }) {
     sendMessage({ text: question })
   }
   function reset() { setMessages([]); setFinished({}) }
-  async function logout() {
-    try { await call('/auth/logout', { method: 'POST', csrf }) } finally { onLogout() }
-  }
 
   return (
     <div className="wrap">
       <header><h1>매뉴얼 질의</h1>
-        <div className="chat-actions"><span className="muted">{auth.user.login_id}</span>
-          <a className="link" href="#/companies">고객사 관리</a>
-          <button className="link" onClick={reset} disabled={busy}>새 대화</button>
-          <button className="link" onClick={logout}>로그아웃</button></div></header>
+        <div className="chat-actions"><button className="link" onClick={reset} disabled={busy}>새 대화</button></div></header>
       <p className="notice">매뉴얼 질의 확인용 화면입니다. 대화는 새로고침하면 사라지고, 실행 기록은 서버에 저장됩니다.</p>
 
       <Documents />

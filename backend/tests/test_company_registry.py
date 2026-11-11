@@ -104,7 +104,7 @@ def test_membership_comes_from_company_contact_registration_and_survives_deactiv
     changed=c.put(path+'/contacts/'+contact['id'],json={'is_active':False,'expected_version':1},headers=HEADERS).json()
     assert changed['contacts'][0]['is_registered'] is True and changed['contacts'][0]['is_active'] is False
     item=next(item for item in c.get('/api/v1/companies').json()['items'] if item['id']==company['id'])
-    assert item['registered_contacts']==0 and item['active_contacts']==0
+    assert item['registered_contacts']==1 and item['active_contacts']==0
 
 
 def test_production_membership_read_uses_contact_identity_without_mutating_registration():

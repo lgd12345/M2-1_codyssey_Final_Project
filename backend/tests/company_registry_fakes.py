@@ -47,7 +47,7 @@ class MemoryRegistry:
             if search.casefold() not in c['name'].casefold() and search.casefold() not in c['code'].casefold():continue
             es=[e for e in self.equipment.values() if e['company_id']==c['id'] and e['is_active']]
             items.append({**c,'equipment_count':len(es),'unconfirmed_count':sum(not e['is_confirmed'] for e in es),
-                          'registered_contacts':sum(v['company_id']==c['id'] and v['is_active'] and v['id'] in self.registrations for v in self.contacts.values()),
+                          'registered_contacts':sum(v['company_id']==c['id'] and v['id'] in self.registrations for v in self.contacts.values()),
                           'active_contacts':sum(v['company_id']==c['id'] and v['is_active'] for v in self.contacts.values())})
         return {'items':deepcopy(items[(page-1)*20:page*20]),'page':page,'page_size':20,'total':len(items)}
 

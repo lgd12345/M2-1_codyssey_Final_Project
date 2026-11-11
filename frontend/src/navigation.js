@@ -17,3 +17,11 @@ export function accountArea(user) {
   if (user?.role === 'admin' || user?.role === 'user') return 'operator'
   return 'blocked'
 }
+
+export function pageForSession(page, session) {
+  if (!session?.authenticated) return page
+  const area = accountArea(session.user)
+  if (area === 'operator') return page === 'companies' ? 'companies' : 'workspace'
+  if (area === 'customer') return ['login', 'register', 'guest', 'companies'].includes(page) ? 'workspace' : page
+  return 'workspace'
+}
