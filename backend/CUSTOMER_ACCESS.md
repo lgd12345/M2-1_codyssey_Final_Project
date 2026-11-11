@@ -54,7 +54,7 @@ python -m app.customer_access.manage --apply --expect-database 실제인증DB명
 
 ## 설정과 실패 시 동작
 
-`customer-access.env.example`은 모든 플래그가 `0`이고 자격 증명이 비어 있습니다. 실제 개인정보 안내 JSON 파일에는 비어 있지 않은 문자열 `version`, `purpose`, `items`, `retention`, `recipients`, `contact`가 필요합니다. 운영 파일을 커밋하지 않습니다.
+`customer-access.env.example`은 모든 플래그가 `0`이고 자격 증명이 비어 있습니다. 실제 개인정보 안내 JSON 파일에는 비어 있지 않은 문자열 `version`, `purpose`, `items`, `retention`, `recipients`, `contact`, `refusal`가 필요합니다. 운영 파일을 커밋하지 않습니다.
 
 `CUSTOMER_ACCESS_ENABLED=1`, `CUSTOMER_ACCESS_RELEASE_APPROVED=1`, `APP_COOKIE_SECURE=1`, 명시적 `DATABASE_URL`, 32자 이상 무작위 전용 `CUSTOMER_ACCESS_SECRET`, `CUSTOMER_MAIL_FROM`, `CUSTOMER_SMTP_PASSWORD`, `CUSTOMER_ACCESS_POLICY_FILE`과 일치하는 migration 이력이 모두 있어야 서비스가 열립니다. 안내 버전은 120자 이내로 관리합니다.
 
@@ -77,3 +77,7 @@ python -m app.customer_access.manage --apply --expect-database 실제인증DB명
 비회원 쿠키는 별도 경로의 Secure/HttpOnly/SameSite=Strict 쿠키이며 원본 인증 쿠키와 분리합니다. 쓰기에는 Origin 검사와 CSRF 검사가 적용되고 입력 길이·요청 본문 크기를 제한합니다. SQL은 값을 바인딩하고 비밀번호/인증번호/SMTP 오류 원문을 HTTP 오류에 반사하지 않습니다. 문의는 세션으로만 조회하며 외부 회사 ID·문의 ID를 신뢰하지 않습니다. 같은 문의의 재전송은 기존 결과를 반환하고 다른 내용으로 덮어쓰지 않습니다.
 
 로컬 단위/API 테스트와 실제 브라우저 시험은 합성 회사·계정·메모리 저장소·가짜 메일만 사용합니다. 실제 PostgreSQL DDL/권한·운영 계정 로그인·실메일 수신·서버 재시작 복구·삭제 운영의 검증은 별도로 남아 있습니다. 시험 통과를 근거로 운영 활성화를 선언하지 않습니다.
+
+## 동의 거부 고지 준비
+
+`refusal`에는 동의 거부권과 거부 시 제한되는 기능을 실제 운영 정책에 맞게 작성한다. 이 항목도 없거나 빈 값이면 활성화 설정이 있어도 고객 인증은 닫힌다. 기존 6개 항목의 정책 파일은 자동 보완하지 않는다. `customer-access.policy.example.json`은 전 항목이 빈 안전한 양식이며 그대로는 활성화할 수 없다. 실제 정책은 Git 밖에서 관리하고 고지 내용을 변경하면 새 정책 버전과 재동의 범위를 확인한다. 빈 문자열 검사는 문구의 법적/운영적 정확성 검증을 대체하지 않는다. 실제 보유기간·처리업체·철회/삭제 절차는 서비스 책임자가 확정해야 한다.

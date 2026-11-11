@@ -17,6 +17,28 @@ def test_default_activation_does_not_read_policy_or_connect():
     assert Settings.load(Forbidden()) is None
 
 
+@pytest.mark.parametrize('field',['version','purpose','items','retention','recipients','contact','refusal'])
+@pytest.mark.parametrize('invalid',[None,'','   '])
+def test_incomplete_actual_policy_cannot_enable_collection(tmp_path,field,invalid):
+    policy={**POLICY,field:invalid}
+    path=tmp_path/'policy.json';path.write_text(json.dumps(policy),encoding='utf-8')
+    env=dict(CUSTOMER_ACCESS_ENABLED='1',CUSTOMER_ACCESS_RELEASE_APPROVED='1',APP_COOKIE_SECURE='1',
+             DATABASE_URL='synthetic',CUSTOMER_ACCESS_SECRET='s'*40,CUSTOMER_SMTP_PASSWORD='synthetic',
+             CUSTOMER_MAIL_FROM='sender@example.org',CUSTOMER_ACCESS_POLICY_FILE=str(path))
+    assert Settings.load(env) is None
+
+
+def test_complete_policy_retains_refusal_notice_and_missing_legacy_field_stays_closed(tmp_path):
+    path=tmp_path/'policy.json'
+    env=dict(CUSTOMER_ACCESS_ENABLED='1',CUSTOMER_ACCESS_RELEASE_APPROVED='1',APP_COOKIE_SECURE='1',
+             DATABASE_URL='synthetic',CUSTOMER_ACCESS_SECRET='s'*40,CUSTOMER_SMTP_PASSWORD='synthetic',
+             CUSTOMER_MAIL_FROM='sender@example.org',CUSTOMER_ACCESS_POLICY_FILE=str(path))
+    legacy={key:value for key,value in POLICY.items() if key!='refusal'}
+    path.write_text(json.dumps(legacy),encoding='utf-8');assert Settings.load(env) is None
+    path.write_text(json.dumps(POLICY),encoding='utf-8')
+    assert Settings.load(env).policy['refusal']==POLICY['refusal']
+
+
 @pytest.mark.parametrize('missing', ['CUSTOMER_ACCESS_RELEASE_APPROVED', 'APP_COOKIE_SECURE', 'DATABASE_URL', 'CUSTOMER_SMTP_PASSWORD', 'CUSTOMER_ACCESS_SECRET'])
 def test_missing_activation_requirement_stays_closed(tmp_path, missing):
     path = tmp_path/'policy.json'; path.write_text(json.dumps(POLICY), encoding='utf-8')

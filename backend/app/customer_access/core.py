@@ -74,7 +74,7 @@ class Settings:
             if not db or len(secret) < 32 or not password:
                 return None
             policy = json.loads(Path(env['CUSTOMER_ACCESS_POLICY_FILE']).read_text(encoding='utf-8'))
-            keys = ('version', 'purpose', 'items', 'retention', 'recipients', 'contact')
+            keys = ('version', 'purpose', 'items', 'retention', 'recipients', 'contact', 'refusal')
             if not isinstance(policy, dict) or any(not isinstance(policy.get(k), str) or not policy[k].strip() for k in keys):
                 return None
             policy = {key: policy[key].strip() for key in keys}

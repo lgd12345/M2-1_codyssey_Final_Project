@@ -17,10 +17,10 @@ async function request(path, body, csrf) {
   return data
 }
 
-function Consent({ policy, value, onChange }) {
+export function Consent({ policy, value, onChange }) {
   return <div className="access-consent">
     <details><summary>개인정보 수집·이용 안내</summary><dl>
-      {[['purpose', '목적'], ['items', '항목'], ['retention', '보유기간'], ['recipients', '처리·전달 대상'], ['contact', '문의·철회·삭제 요청']].map(([key, label]) => <div key={key}><dt>{label}</dt><dd>{policy[key]}</dd></div>)}
+      {[['purpose', '목적'], ['items', '항목'], ['retention', '보유기간'], ['recipients', '처리·전달 대상'], ['contact', '문의·철회·삭제 요청'], ['refusal', '동의 거부권·거부 시 제한']].map(([key, label]) => <div key={key}><dt>{label}</dt><dd>{policy[key]}</dd></div>)}
       <div><dt>안내 버전</dt><dd>{policy.version}</dd></div>
     </dl></details>
     <label className="consent-check"><input type="checkbox" checked={value} onChange={(event) => onChange(event.target.checked)} />개인정보 수집·이용 안내를 확인하고 동의합니다.</label>

@@ -7,7 +7,8 @@ from uuid import UUID, uuid4
 from app.customer_access.core import AccessError, AccessService, Settings, already_registered
 
 POLICY = dict(version='synthetic-v1', purpose='합성 검증', items='합성 데이터', retention='테스트 종료까지',
-              recipients='외부 전달 없음', contact='합성 테스트 담당자')
+              recipients='외부 전달 없음', contact='합성 테스트 담당자',
+              refusal='합성 동의는 거부할 수 있으며 거부하면 이 시험의 가입·인증·문의 접수를 이용할 수 없습니다.')
 
 
 class MemoryRepository:
