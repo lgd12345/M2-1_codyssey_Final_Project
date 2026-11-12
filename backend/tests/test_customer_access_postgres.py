@@ -28,6 +28,7 @@ from app.customer_access.store import PostgresRepository
 from app.company_admin import manage as registry_manage
 from app.company_admin.core import RegistryError, RegistryService
 from app.company_admin.store import RegistryRepository
+from app.company_admin.readiness import inspect_readiness
 from customer_access_fakes import POLICY
 
 LOCAL_CLUSTER_MARKER = 'morrono-disposable-customer-access-verification-v1'
@@ -127,6 +128,69 @@ def test_read_only_management_and_wrong_target_cannot_create_schema(database):
     with pytest.raises(ValueError, match='target mismatch'):
         manage.run(management_args(database, expect_database='a-different-database'))
     assert database.scalar("SELECT to_regnamespace('claim_access') IS NULL")
+
+
+def test_operator_preflight_missing_schema_and_database_enforced_read_only(database, monkeypatch):
+    connect = psycopg.connect
+    probes = []
+    class ReadOnlyProbe:
+        def __init__(self, connection):
+            self.connection = connection
+        def __enter__(self):
+            self.connection.__enter__()
+            return self
+        def __exit__(self, *args):
+            return self.connection.__exit__(*args)
+        def transaction(self):
+            return self.connection.transaction()
+        def execute(self, query, *args):
+            if query == 'SHOW transaction_read_only':
+                # A real nested transaction verifies that even an accidental
+                # later DDL would be rejected by PostgreSQL, not just mocks.
+                with pytest.raises(psycopg.errors.ReadOnlySqlTransaction):
+                    with self.connection.transaction():
+                        self.connection.execute('CREATE TABLE public.preflight_must_not_write(id int)')
+                probes.append(True)
+            return self.connection.execute(query, *args)
+    with monkeypatch.context() as patch:
+        patch.setattr(psycopg, 'connect', lambda *args, **kwargs: ReadOnlyProbe(connect(*args, **kwargs)))
+        result = inspect_readiness({'DATABASE_URL':database.dsn})
+    status = result['database']
+    assert probes == [True]
+    assert status['connection'] == 'ok' and status['read_only'] is True
+    assert status['schema'] == status['required_tables'] == status['ledger'] == 'missing'
+    assert set(status['migrations'].values()) == {'missing'}
+    assert status['auth_table'] == 'public_visible'
+    assert database.scalar("SELECT to_regnamespace('claim_access') IS NULL")
+    assert database.scalar("SELECT to_regclass('public.preflight_must_not_write') IS NULL")
+
+
+def test_operator_preflight_detects_checksum_and_relation_drift(database):
+    apply(database)
+    before = database.scalar('SELECT array_agg(checksum ORDER BY version) FROM claim_access.schema_version')
+    result = inspect_readiness({'DATABASE_URL':database.dsn})['database']
+    assert result['connection'] == 'ok' and result['read_only'] is True
+    assert result['required_tables'] == 'present' and result['ledger'] == 'readable'
+    assert set(result['migrations'].values()) == {'matched'}
+    assert database.scalar('SELECT array_agg(checksum ORDER BY version) FROM claim_access.schema_version') == before
+    with database.connect() as connection:
+        connection.execute("UPDATE claim_access.schema_version SET checksum='tampered' WHERE version='003'")
+        connection.execute('DROP TABLE claim_access.equipment')
+    result = inspect_readiness({'DATABASE_URL':database.dsn})['database']
+    assert result['migrations']['003'] == 'mismatch'
+    assert result['required_tables'] == 'missing'
+
+
+def test_operator_preflight_does_not_select_from_ledger_view(database):
+    apply(database)
+    with database.connect() as connection:
+        connection.execute('ALTER TABLE claim_access.schema_version RENAME TO actual_version')
+        connection.execute('CREATE VIEW claim_access.schema_version AS SELECT * FROM claim_access.actual_version')
+    result = inspect_readiness({'DATABASE_URL':database.dsn})['database']
+    assert result['connection'] == 'ok' and result['read_only'] is True
+    assert result['required_tables'] == 'unsupported_relation'
+    assert result['ledger'] == 'unverified'
+    assert set(result['migrations'].values()) == {'unverified'}
 
 
 def test_real_migrations_repeat_safely_and_preserve_existing_operator(database):
@@ -277,6 +341,25 @@ def test_runtime_dml_role_can_serve_customers_but_cannot_change_schema_or_ledger
         value.access = AccessService(replace(value.access.settings, database_url=runtime_dsn), PostgresRepository(runtime_dsn))
         value.registry = RegistryService(RegistryRepository(runtime_dsn))
         assert value.access.repository.ready(True) and value.registry.repository.ready()
+        preflight = inspect_readiness({'DATABASE_URL':runtime_dsn})['database']
+        assert preflight['read_only'] and preflight['ledger'] == 'readable'
+        assert set(preflight['migrations'].values()) == {'matched'}
+        with value.db.connect() as connection:
+            connection.execute('ALTER TABLE claim_access.schema_version ENABLE ROW LEVEL SECURITY')
+        preflight = inspect_readiness({'DATABASE_URL':runtime_dsn})['database']
+        assert preflight['ledger'] == 'unverified'
+        assert set(preflight['migrations'].values()) == {'unverified'}
+        with value.db.connect() as connection:
+            connection.execute('ALTER TABLE claim_access.schema_version DISABLE ROW LEVEL SECURITY')
+        # A metadata permission failure must stay unknown, not schema missing.
+        with value.db.connect() as connection:
+            connection.execute(sql.SQL('REVOKE SELECT ON claim_access.schema_version FROM {}').format(sql.Identifier(role)))
+        preflight = inspect_readiness({'DATABASE_URL':runtime_dsn})['database']
+        assert preflight['connection'] == 'ok' and preflight['schema'] == 'present'
+        assert preflight['ledger'] == 'unreadable'
+        assert set(preflight['migrations'].values()) == {'unverified'}
+        with value.db.connect() as connection:
+            connection.execute(sql.SQL('GRANT SELECT ON claim_access.schema_version TO {}').format(sql.Identifier(role)))
         proof, number, _ = issued(value)
         assert value.access.register(proof, number, PASSWORD, POLICY['version'], True)['state'] == 'registered'
         with psycopg.connect(runtime_dsn) as connection:

@@ -12,6 +12,7 @@ from app.auth.deps import require_operator,require_operator_csrf,check_origin
 from app.auth.service import AuthError,BadOrigin,SessionInfo
 from app.company_admin.core import RegistryError,RegistryService
 from app.company_admin.store import RegistryRepository
+from app.company_admin.readiness import inspect_readiness
 
 
 class SafeRoute(APIRoute):
@@ -87,6 +88,11 @@ class EquipmentUpdate(EquipmentFields):
 @router.get('/status')
 def status(_session=Depends(require_operator),value=Depends(configured_service)):
     return {'available':value is not None,'demo':bool(value and value.demo)}
+
+
+@router.get('/readiness',include_in_schema=False)
+def readiness(_session=Depends(require_operator)):
+    return inspect_readiness(os.environ)
 
 
 @router.get('')
