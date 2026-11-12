@@ -13,6 +13,7 @@ from app.db_inspection import router as db_inspection_router
 from app.customer_access.routes import router as customer_access_router
 from app.customer_access.limits import AccessBodyLimit
 from app.company_admin.routes import router as company_admin_router
+from app.company_admin.install_routes import router as company_installation_router
 from app.runs.routes import router as runs_router
 
 logger = logging.getLogger(__name__)
@@ -32,6 +33,7 @@ app.include_router(runs_router)
 app.include_router(documents_router)
 app.include_router(db_inspection_router)
 app.include_router(customer_access_router)
+app.include_router(company_installation_router)
 app.include_router(company_admin_router)
 
 
