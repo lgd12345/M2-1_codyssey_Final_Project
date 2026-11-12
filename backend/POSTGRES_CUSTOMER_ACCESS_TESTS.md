@@ -8,6 +8,8 @@
 
 2026-11-12에는 [운영진 사전 점검](./OPERATOR_DB_PREFLIGHT.md) 시험을 추가했다. 실제 읽기 전용 트랜잭션에서 DDL 거절, 없는 스키마 확인 후 불변, 필수 테이블 누락·이력 체크섬 불일치, 이력 뷰 조회 거절을 검증한다. 최소 권한 역할 시험에서도 이력 조회 권한 부족과 RLS 적용을 스키마 없음으로 오판하지 않는지 확인한다. 원래 11개를 포함해 총 14개이며 과거 엔진 검증 건수와 구분한다.
 
+같은 날 [실제 백업/복원 시험](./tests/test_customer_access_backup.py) 3개를 추가해 총 **17개 통과·실패/건너뜀 0개**를 확인했다. 공식 `pg_dump` custom archive를 새 빈 UUID DB로 `pg_restore --single-transaction --exit-on-error` 복원한다. 적용 전 기존 로그인/세션, 적용 후 인증·고객 테이블 전체 합성 행의 지문/시퀀스, 가입 소속·문의·설비 재요청·감사 쓰기 보존, 충돌 시 부분 적용 롤백, 백업 이후 변경의 미포함과 원본 DB 불변을 검증한다. 단일 DB 백업에 전역 역할·외부 파일이 포함된다고 주장하지 않는다. [운영 적용 절차](./PRODUCTION_ACTIVATION.md)는 이 한계와 실제 서버의 남은 조건을 구분한다.
+
 별도 런타임 역할은 `NOSUPERUSER NOCREATEDB NOCREATEROLE`로 만들고 필요한 DML·열·시퀀스 권한만 부여한다. 이 역할로 가입·로그인·등록 연락처 추가·비회원 문의가 동작하고, 테이블 생성/삭제 및 migration 이력 변경이 거절되는 것을 확인한다. 실제 운영 역할의 권한을 변경하는 테스트는 아니다.
 
 ## 재현 방법
@@ -29,6 +31,14 @@ COMMENT ON DATABASE morrono_customer_access_test_admin
 ```text
 python -m pytest --noconftest tests/test_customer_access_postgres.py -q
 ```
+
+백업 시험까지 실행하려면 같은 검증 클러스터에 맞는 **공식 PostgreSQL** 클라이언트 실행 파일 디렉터리를 `CUSTOMER_ACCESS_TEST_PG_BIN`으로 지정한다. Windows는 `pg_dump.exe`/`pg_restore.exe`, POSIX는 `pg_dump`/`pg_restore`를 찾는다. PATH의 다른 프로그램을 대신 사용하지 않는다. 명시한 디렉터리가 없으면 백업 3개는 skip이므로 전체 검증 통과로 세지 않는다.
+
+```text
+python -m pytest --noconftest tests/test_customer_access_postgres.py tests/test_customer_access_backup.py -q
+```
+
+백업 시험의 전용 DSN에는 검증용 user/password를 명시한다. 암호는 테스트가 만든 일회용 pgpass 파일로 자식 프로세스에 제공하고 명령 인수/출력에 넣지 않으며 호출 후 파일을 삭제한다. 상속된 PG* 라우팅/옵션을 제거하고 검증한 loopback/hostaddr·생성한 DB명만 사용한다. 모든 dump·이력은 합성 자료이며 pytest 임시 폴더에만 생성한다. 운영 백업의 보안/보관 절차를 이 테스트 파일 권한 처리로 대체하지 않는다. 이 시험은 기존 marker 검증 fixture를 재사용하고 원본 시험 DB와 새 빈 복원 DB만 정리한다.
 
 ## 운영 권한 확인 시 주의할 실제 요구
 
