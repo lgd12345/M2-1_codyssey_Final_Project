@@ -15,8 +15,6 @@
 | `database.migrations` | `001`~`004`의 이력 누락(`missing`), 현재 배포 파일 체크섬 일치(`matched`), 불일치(`mismatch`), 확인 불가(`unverified`). 이력 누락이 과거 SQL 미실행을 증명하지는 않음. |
 | `auth_configuration` | `same_connection_settings`는 현재 회원가입 코드가 요구하는 공백 제거 후 DSN 문자열 일치 조건. `different_connection_settings`는 문자열이 다름. 물리 DB 동일/분리 판정이 아님. 설정 누락도 구분. |
 | `feature_flags` | 현재 요청 플래그의 참/거짓일 뿐 실제 기능 사용 가능 여부나 운영 승인 상태가 아님. 기존 `/companies/status`, `/access/status`를 유지함. |
-| `database.permission_checks` | 현재 업무 DB 연결의 `CREATE` DB 권한과 기존 public.app_user 소유 역할의 권한이 현재 역할에 상속되어 있는지를 참/거짓으로만 확인. `null`은 미확인. 웹 계정의 admin/user 역할과 별개이며 실제 DDL 실행 성공·전체 migration 권한을 보장하지 않음. |
-| `server_settings_present` | SMTP 계정/암호·인증 비밀값·정책 경로가 현재 서버 환경에 비어 있지 않은지만 반환. 파일/값/길이/해시를 반환하지 않고 파일도 읽지 않음. 존재만으로 설정의 유효성이나 메일 도착·정책 준비를 보장하지 않음. |
 
 오류는 확인된 사실만 남기고 미검사 항목을 `unverified`로 유지한다. 권한 부족이나 시간 초과를 “스키마 없음”으로 바꾸지 않는다. 실제 활성화는 별도 판단이다. 모든 값이 정상이어도 열·제약·인덱스의 전체 변경 여부, 런타임 DML 권한, 기존 데이터, 백업/복구, 서버 SMTP, 개인정보 정책·삭제 운영을 증명하지 않는다. `write_checks_performed`는 항상 `false`다. 실제 적용에는 기존 명시적 관리 명령과 대상/권한/복구 검증이 필요하다.
 

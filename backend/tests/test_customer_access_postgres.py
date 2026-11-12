@@ -161,7 +161,6 @@ def test_operator_preflight_missing_schema_and_database_enforced_read_only(datab
     assert status['schema'] == status['required_tables'] == status['ledger'] == 'missing'
     assert set(status['migrations'].values()) == {'missing'}
     assert status['auth_table'] == 'public_visible'
-    assert status['permission_checks'] == {'database_create':True, 'auth_table_owner':True}
     assert database.scalar("SELECT to_regnamespace('claim_access') IS NULL")
     assert database.scalar("SELECT to_regclass('public.preflight_must_not_write') IS NULL")
 
@@ -344,7 +343,6 @@ def test_runtime_dml_role_can_serve_customers_but_cannot_change_schema_or_ledger
         assert value.access.repository.ready(True) and value.registry.repository.ready()
         preflight = inspect_readiness({'DATABASE_URL':runtime_dsn})['database']
         assert preflight['read_only'] and preflight['ledger'] == 'readable'
-        assert preflight['permission_checks'] == {'database_create':False, 'auth_table_owner':False}
         assert set(preflight['migrations'].values()) == {'matched'}
         with value.db.connect() as connection:
             connection.execute('ALTER TABLE claim_access.schema_version ENABLE ROW LEVEL SECURITY')

@@ -24,8 +24,7 @@ _RELATIONS_SQL = """
     LIMIT 10
 """
 _AUTH_SQL = """
-    SELECT c.relkind, c.oid=pg_catalog.to_regclass('app_user'),
-           pg_catalog.pg_has_role(c.relowner, 'USAGE')
+    SELECT c.relkind, c.oid=pg_catalog.to_regclass('app_user')
     FROM pg_catalog.pg_class c
     JOIN pg_catalog.pg_namespace n ON n.oid=c.relnamespace
     WHERE n.nspname='public' AND c.relname='app_user'
@@ -41,7 +40,6 @@ def _database(dsn):
         'auth_table': 'unverified',
         'ledger': 'unverified',
         'migrations': dict.fromkeys(_MIGRATIONS, 'unverified'),
-        'permission_checks': {'database_create': None, 'auth_table_owner': None},
     }
     if not dsn:
         return result
@@ -56,11 +54,9 @@ def _database(dsn):
                     return result
                 result['read_only'] = True
                 present = connection.execute(
-                    "SELECT EXISTS (SELECT 1 FROM pg_catalog.pg_namespace WHERE nspname='claim_access'), "
-                    "pg_catalog.has_database_privilege(pg_catalog.current_database(), 'CREATE')"
-                ).fetchone()
-                result['schema'] = 'present' if present[0] else 'missing'
-                result['permission_checks']['database_create'] = present[1]
+                    "SELECT EXISTS (SELECT 1 FROM pg_catalog.pg_namespace WHERE nspname='claim_access')"
+                ).fetchone()[0]
+                result['schema'] = 'present' if present else 'missing'
                 rows = connection.execute(_RELATIONS_SQL, (list(_TABLES),)).fetchall()
                 tables = {name: (kind, rls) for name, kind, rls in rows}
                 result['required_tables'] = (
@@ -73,7 +69,6 @@ def _database(dsn):
                     'missing' if auth is None else
                     'public_visible' if auth[0] in ('r', 'p') and auth[1] else 'unverified'
                 )
-                result['permission_checks']['auth_table_owner'] = auth[2] if auth is not None else None
                 ledger = tables.get('schema_version')
                 if ledger is None:
                     result['ledger'] = 'missing'
@@ -125,16 +120,6 @@ def inspect_readiness(env: Mapping[str, str]):
             'customer_access': env.get('CUSTOMER_ACCESS_ENABLED') == '1',
             'customer_registration': env.get('CUSTOMER_REGISTRATION_ENABLED') == '1',
             'secure_cookie': env.get('APP_COOKIE_SECURE') == '1',
-        },
-        # Presence only: never return values, lengths, file paths or hashes.
-        # Nonempty settings are not proof of valid SMTP or policy content.
-        'server_settings_present': {
-            name: bool(env.get(variable, '').strip()) for name, variable in (
-                ('smtp_username', 'CUSTOMER_SMTP_USERNAME'),
-                ('smtp_password', 'CUSTOMER_SMTP_PASSWORD'),
-                ('verification_secret', 'CUSTOMER_ACCESS_SECRET'),
-                ('policy_file', 'CUSTOMER_ACCESS_POLICY_FILE'),
-            )
         },
         'write_checks_performed': False,
     }
