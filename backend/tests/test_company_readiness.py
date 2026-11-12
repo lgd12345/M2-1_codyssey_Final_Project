@@ -73,6 +73,18 @@ def test_missing_configuration_never_connects(database_guard):
     assert result['database']['connection'] == 'not_configured'
     assert result['database']['schema'] == 'unverified'
     assert set(result['database']['migrations'].values()) == {'unverified'}
+    assert set(result['database']['permission_checks'].values()) == {None}
+    assert not any(result['server_settings_present'].values())
+    database_guard.assert_not_called()
+
+
+def test_server_settings_report_only_presence_and_never_read_files(database_guard, monkeypatch):
+    monkeypatch.setattr('pathlib.Path.read_text', Mock(side_effect=AssertionError('No policy or credential file reads')))
+    values = {'CUSTOMER_SMTP_USERNAME':'private@example.org','CUSTOMER_SMTP_PASSWORD':'synthetic-private-password',
+              'CUSTOMER_ACCESS_SECRET':'synthetic-private-secret','CUSTOMER_ACCESS_POLICY_FILE':'/private/policy.json'}
+    result = readiness.inspect_readiness(values)
+    assert all(result['server_settings_present'].values())
+    assert all(value not in str(result) for value in values.values())
     database_guard.assert_not_called()
 
 
