@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from collections import deque
 from typing import Any, Iterable, Iterator, Sequence
 
 from app.agent_rag.db import pgvector_literal
@@ -66,7 +67,7 @@ def index_embeddings(connection, embedder: GeminiEmbedder, *, batch_size: int = 
     source = _SOURCES[only]
     config_id = ensure_embedding_config(connection, embedder)
     pending = connection.execute(
-        f"""SELECT p.content_hash,min(p.content) AS content
+        f"""SELECT p.content_hash
            FROM {source} p
            GROUP BY p.content_hash
            HAVING NOT EXISTS (SELECT 1 FROM rag_embedding e WHERE e.config_id=%s
@@ -79,9 +80,19 @@ def index_embeddings(connection, embedder: GeminiEmbedder, *, batch_size: int = 
     # Never hold a database transaction while making a remote embedding request.
     connection.commit()
     completed = failed = 0
-    for batch in batches(pending, batch_size):
+    queue = deque(batches(pending, batch_size))
+    while queue:
+        batch = queue.popleft()
         hashes = [str(row[0]) for row in batch]
-        texts = [str(row[1]) for row in batch]
+        # Only this batch's text is read; loading every pending page up front cost seconds per run.
+        content_by_hash = dict(connection.execute(
+            f"""SELECT p.content_hash,COALESCE(o.content,min(p.content))
+                FROM {source} p LEFT JOIN rag_embedding_input_override o
+                  ON o.config_id=%s AND o.content_hash=p.content_hash
+                WHERE p.content_hash=ANY(%s) GROUP BY p.content_hash,o.content""",
+            (config_id, hashes)).fetchall())
+        connection.commit()
+        texts = [str(content_by_hash[digest]) for digest in hashes]
         with connection.transaction():
             for digest in hashes:
                 connection.execute(
@@ -96,6 +107,12 @@ def index_embeddings(connection, embedder: GeminiEmbedder, *, batch_size: int = 
             if len(vectors) != len(hashes):
                 raise EmbeddingUnavailable("invalid_response")
         except EmbeddingUnavailable as exc:
+            # Invalid input in one item must not block the rest of a batch. Never split quota/server errors.
+            if exc.http_status == 400 and len(batch) > 1:
+                middle = len(batch) // 2
+                queue.appendleft(batch[middle:])
+                queue.appendleft(batch[:middle])
+                continue
             with connection.transaction():
                 connection.execute(
                     """UPDATE rag_embedding SET status='failed',embedding=NULL,
@@ -108,7 +125,7 @@ def index_embeddings(connection, embedder: GeminiEmbedder, *, batch_size: int = 
         with connection.transaction():
             for digest, vector in zip(hashes, vectors, strict=True):
                 connection.execute(
-                    """UPDATE rag_embedding SET status='ready',embedding=%s::vector(3072),
+                    """UPDATE rag_embedding SET status='ready',embedding=%s::vector,
                        attempts=attempts+%s,last_error_category=NULL,updated_at=now()
                        WHERE config_id=%s AND content_hash=%s""",
                     (pgvector_literal(vector), max(1, embedder.last_retry_attempts + 1), config_id, digest),

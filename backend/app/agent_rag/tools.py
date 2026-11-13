@@ -11,6 +11,7 @@ from app.agent_rag.embedding import GeminiEmbedder
 from app.agent_rag.pdf_source import open_source_page
 from app.agent_rag.retrieval import lookup_identifier, search_manual
 from app.agent_rag.settings import AgentSettings
+from app.agent_rag.tables import table_evidence
 
 
 VALID_KINDS = ["part_no", "drawing_no", "pmc_address", "alarm_number"]
@@ -147,6 +148,7 @@ class ManualAgentTools:
                           "pdf_page": page.pdf_page, "printed_page": page.printed_page,
                           "page_class": page.page_class, "text_origin": "original_pdf_rendered",
                           "converted_text_origin": "ocr_or_text_extraction", "verification": page.verification, "converted_text": page.converted_text,
+                          "table_evidence": table_evidence(page.converted_text),
                           "pdf_text_layer": page.pdf_text, "asset_id": page.asset_id,
                           "image_media_type": "image/png"},
             content=[BinaryContent(data=page.image_png, media_type="image/png")],

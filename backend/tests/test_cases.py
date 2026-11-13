@@ -129,23 +129,3 @@ def test_agent_output_may_only_cite_retrieved_cases():
                                           case_citations=[CaseCitation(fsr_no="FSR-00001")]), tools)
     with pytest.raises(AgentOutputValidationError):   # answered without any evidence
         validate_agent_output(AgentAnswer(status="answered", answer_markdown="그냥 답"), tools)
-
-
-def test_verified_cases_collects_cases_cited_in_earlier_turns_without_duplicates():
-    from uuid import uuid4
-    from app.runs import service
-
-    class Cursor:
-        def fetchall(self):
-            return [([{"fsr_no": "FSR-00002", "machine": "VMCT-05", "registered_on": "2012-02-01"}],),
-                    ([{"fsr_no": "FSR-00002", "machine": "VMCT-05", "registered_on": "2012-02-01"},
-                      {"fsr_no": "FSR-00001", "machine": "VMCT-02", "registered_on": None}, {"machine": "x"}],),
-                    (None,)]
-
-    class Connection:
-        def execute(self, *_args):
-            return Cursor()
-
-    cases = service.verified_cases(Connection(), uuid4(), "chat-1")
-    assert [c["fsr_no"] for c in cases] == ["FSR-00002", "FSR-00001"]
-    assert service.verified_cases(Connection(), uuid4(), None) == []

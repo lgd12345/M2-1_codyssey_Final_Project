@@ -43,6 +43,8 @@ class GeminiEmbedder:
 
     MAX_BATCH_SIZE = 100
     DEFAULT_DIMENSION = 3072
+    PROVIDER = "gemini"
+    INPUT_FORMAT = "raw-v1"
 
     def __init__(self, base_url: str, api_key: str, model: str, *, dimension: int = DEFAULT_DIMENSION,
                  timeout: float = 30.0, retries: int = 5, backoff_seconds: float = 1.0,
@@ -80,8 +82,8 @@ class GeminiEmbedder:
 
     @property
     def identity(self) -> dict[str, str | int]:
-        return {"provider": "gemini", "model": self.model, "dimension": self.dimension,
-                "endpoint": self.endpoint, "input_format": "raw-v1"}
+        return {"provider": self.PROVIDER, "model": self.model, "dimension": self.dimension,
+                "endpoint": self.endpoint, "input_format": self.INPUT_FORMAT}
 
     @property
     def config_id(self) -> str:
@@ -123,7 +125,7 @@ class GeminiEmbedder:
         if self.error_sink is None:
             return
         try:
-            self.error_sink({"provider": "gemini", "model": self.model, "operation": operation,
+            self.error_sink({"provider": self.PROVIDER, "model": self.model, "operation": operation,
                              "http_status": status, "retry_after_seconds": retry_after,
                              "input_count": count, "category": category})
         except Exception:
@@ -201,6 +203,41 @@ class GeminiEmbedder:
 
     def embed_query(self, text: str) -> list[float]:
         return self._post([text], operation="QUERY")[0]
+
+
+class QwenEmbedder(GeminiEmbedder):
+    """Qwen3 embeddings: raw documents and a retrieval instruction on queries only.
+
+    Keep the input format in the config identity: instruction changes require re-indexing.
+    """
+
+    DEFAULT_DIMENSION = 1024
+    PROVIDER = "qwen"
+    INPUT_FORMAT = "qwen3-retrieval-v1"
+    QUERY_INSTRUCTION = "Given a machine tool service complaint or technical question, retrieve relevant service cases and manual passages."
+
+    @classmethod
+    def from_env(cls, *, error_sink=None):
+        base = os.getenv("QWEN_EMBEDDING_BASE_URL", "").strip()
+        model = os.getenv("QWEN_EMBEDDING_MODEL", "qwen3-embedding-0.6b").strip()
+        if not base or not model:
+            raise ValueError("QWEN_EMBEDDING_BASE_URL and QWEN_EMBEDDING_MODEL must be configured")
+        return cls(base, os.getenv("QWEN_EMBEDDING_API_KEY", ""), model,
+                   dimension=int(os.getenv("QWEN_EMBEDDING_DIMENSION", str(cls.DEFAULT_DIMENSION))),
+                   timeout=float(os.getenv("QWEN_EMBEDDING_TIMEOUT_SECONDS", "240")),
+                   retries=int(os.getenv("QWEN_EMBEDDING_MAX_RETRIES", "2")),
+                   backoff_seconds=3, max_backoff_seconds=30, error_sink=error_sink)
+
+    def embed_query(self, text: str) -> list[float]:
+        return self._post([f"Instruct: {self.QUERY_INSTRUCTION}\nQuery: {text}"], operation="QUERY")[0]
+
+
+def configured_embedder(*, provider: str | None = None, error_sink=None) -> GeminiEmbedder:
+    provider = (provider or os.getenv("RAG_EMBEDDING_PROVIDER", "gemini")).strip().lower()
+    if provider not in {"gemini", "qwen"}:
+        raise ValueError("embedding provider must be gemini or qwen")
+    cls = QwenEmbedder if provider == "qwen" else GeminiEmbedder
+    return cls.from_env(error_sink=error_sink)
 
 
 class _RequestFailure(Exception):

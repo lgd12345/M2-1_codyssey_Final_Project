@@ -6,6 +6,8 @@ import re
 import unicodedata
 from typing import Iterable
 
+from app.agent_rag.tables import parse_tables
+
 
 _PMC_ADDRESS = re.compile(r"(?<![A-Z0-9.])(?:[A-Z]{1,4}\d{3,5}\.\d{1,2})(?![A-Z0-9]|\.\d)", re.IGNORECASE)
 _CODE_TOKEN = re.compile(r"[A-Z0-9._/-]+", re.IGNORECASE)
@@ -115,40 +117,27 @@ def extract_query_identifiers(query: str) -> list[Identifier]:
 
 
 def _table_part_numbers(text: str) -> Iterable[str]:
-    lines = text.splitlines()
-    part_column: int | None = None
-    for index, line in enumerate(lines):
-        if "|" not in line:
-            part_column = None
-            continue
-        cells = [cell.strip() for cell in line.strip().strip("|").split("|")]
-        normalized = [re.sub(r"\s+", " ", cell).casefold() for cell in cells]
-        if any(cell in {"part no.", "part no", "part number", "part no./drawing no."} for cell in normalized):
-            part_column = next(i for i, cell in enumerate(normalized) if cell.startswith("part no") or cell == "part number")
-            continue
-        if part_column is None or all(re.fullmatch(r":?-{2,}:?", cell) for cell in cells):
-            continue
-        if len(cells) <= part_column:
-            continue
-        # Parts-list rows use a numeric row number in the first column. Do not treat prose/table values as IDs.
-        if cells and cells[0].isdigit():
-            yield cells[part_column]
+    names = {"part no.", "part no", "part number", "part no./drawing no."}
+    for table in parse_tables(text):
+        columns = [i for i, cell in enumerate(table.headers)
+                   if re.sub(r"\s+", " ", cell).casefold() in names]
+        if len(columns) != 1:
+            continue  # Ambiguous headers must not assign an identifier to the wrong column.
+        for row in table.rows:
+            if len(row) == len(table.headers) and row[0].isdigit():
+                yield row[columns[0]]
 
 
 def _table_drawing_numbers(text: str) -> Iterable[str]:
     """Values of a table's DWG column (NAME | DWG tables on parts-drawing pages)."""
-    dwg_column: int | None = None
-    for line in text.splitlines():
-        if "|" not in line:
-            dwg_column = None
+    for table in parse_tables(text):
+        columns = [i for i, cell in enumerate(table.headers)
+                   if re.sub(r"\s+", " ", cell).casefold().startswith(("dwg", "drawing no"))]
+        if len(columns) != 1:
             continue
-        cells = [cell.strip() for cell in line.strip().strip("|").split("|")]
-        header = [re.sub(r"\s+", " ", cell).casefold() for cell in cells]
-        if any(cell.startswith(("dwg", "drawing no")) for cell in header):
-            dwg_column = next(i for i, cell in enumerate(header) if cell.startswith(("dwg", "drawing no")))
-            continue
-        if dwg_column is not None and len(cells) > dwg_column and not all(re.fullmatch(r":?-{2,}:?", c) for c in cells):
-            yield cells[dwg_column]
+        for row in table.rows:
+            if len(row) == len(table.headers):
+                yield row[columns[0]]
 
 
 def extract_identifiers(text: str) -> list[Identifier]:

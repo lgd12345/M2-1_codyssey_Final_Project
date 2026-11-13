@@ -11,6 +11,7 @@ from uuid import uuid4
 from app.agent_rag.db import connect_database, pgvector_literal
 from app.agent_rag.embedding import EmbeddingUnavailable, GeminiEmbedder
 from app.agent_rag.preprocess import extract_query_identifiers, lexical_query, normalize_text
+from app.agent_rag.tables import table_evidence
 
 RRF_K = 60
 _IDENTIFIER_NORMALIZE = re.compile(r"\s+")
@@ -80,7 +81,8 @@ def lookup_identifier(value: str, *, kind: str | None = None, connection=None,
                             "document_sha256": digest, "title": title, "pdf_page": page,
                             "printed_page": printed, "page_class": page_class,
                             "verification": verification, "text_origin": "ocr_or_text_extraction",
-                            "content": content, "machine": machine, "manufacturer": manufacturer})
+                            "content": content, "machine": machine, "manufacturer": manufacturer,
+                            "table_evidence": table_evidence(content, query=value)})
         return {"found": bool(matches), "value": normalized, "matches": matches}
     finally:
         if own_connection:
@@ -123,7 +125,7 @@ def _fetch_rows(connection, *, machines: Sequence[str] | None,
         vector_rows = connection.execute(
             """SELECT p.id,p.content_hash,p.content,p.pdf_page,p.printed_page,p.page_class,p.verification,
                       p.source_sha256,d.title,a.machine,a.manufacturer,
-                      e.embedding <=> %s::vector(3072) AS distance
+                      e.embedding <=> %s::vector AS distance
                FROM rag_page p JOIN rag_document d USING(source_sha256)
                JOIN rag_embedding e ON e.content_hash=p.content_hash AND e.config_id=%s AND e.status='ready'
                LEFT JOIN LATERAL (SELECT min(machine) AS machine,min(manufacturer) AS manufacturer
@@ -174,7 +176,7 @@ def _query_vector(connection, embedder: GeminiEmbedder, query: str) -> list[floa
     vector = embedder.embed_query(query)
     connection.execute(
         """INSERT INTO rag_query_embedding_cache(cache_key,config_id,embedding,expires_at)
-           VALUES (%s,%s,%s::vector(3072),now()+interval '24 hours')
+           VALUES (%s,%s,%s::vector,now()+interval '24 hours')
            ON CONFLICT(cache_key) DO UPDATE SET embedding=EXCLUDED.embedding,
              expires_at=EXCLUDED.expires_at,created_at=now()""",
         (cache_key, embedder.config_id, pgvector_literal(vector)),
@@ -306,6 +308,7 @@ def search_manual(query: str, *, machines: Sequence[str] | None = None,
                 continue
             results.append({"content_hash": candidate.content_hash, "content": pages[0]["content"],
                             "score": candidate.score, "ranks": candidate.ranks,
+                            "table_evidence": table_evidence(pages[0]["content"], query=query),
                             "sources": pages})
         return {"query": query, "results": results,
                 "search_status": {"exact_identifier": "matched" if legs["exact"] else

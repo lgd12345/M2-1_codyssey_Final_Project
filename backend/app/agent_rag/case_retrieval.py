@@ -102,7 +102,7 @@ def search_cases(query: str, *, machines: Sequence[str] | None = None, top_k: in
                     legs["vector"] = connection.execute(
                         f"SELECT {_COLUMNS} FROM rag_case c "
                         "JOIN rag_embedding e ON e.content_hash=c.content_hash AND e.config_id=%s AND e.status='ready' "
-                        f"WHERE {_MACHINE} ORDER BY e.embedding <=> %s::vector(3072),c.id LIMIT %s",
+                        f"WHERE {_MACHINE} ORDER BY e.embedding <=> %s::vector,c.id LIMIT %s",
                         (str(active[0]), machine_args, machine_args, pgvector_literal(vector), limit)).fetchall()
                     vector_status = {"status": "ok", "model": embedder.model,
                                      "retry_attempts": embedder.last_retry_attempts}

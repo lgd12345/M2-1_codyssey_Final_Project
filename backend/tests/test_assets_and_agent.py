@@ -1,6 +1,7 @@
 import asyncio
 
 import pytest
+from pydantic import ValidationError
 from pydantic_ai import Agent
 from pydantic_ai.models.test import TestModel
 
@@ -89,16 +90,15 @@ def test_open_source_tool_returns_image_content_and_registers_the_asset(monkeypa
     assert tools.tool_calls[-1]["tool"] == "open_source"
 
 
-def test_prompt_defines_all_three_answer_statuses():
-    for status in ("answered", "insufficient_evidence", "conversational"):
+def test_prompt_defines_analysis_statuses_without_chat_only_status():
+    for status in ("answered", "insufficient_evidence"):
         assert status in SYSTEM_INSTRUCTIONS
+    assert "conversational" not in SYSTEM_INSTRUCTIONS
 
 
-def test_conversational_output_needs_no_citation_but_is_reported_as_such():
-    settings = AgentSettings("", "", "", 60, "", __import__("pathlib").Path("cache"), 150)
-    result = validate_agent_output(AgentAnswer(status="conversational", answer_markdown="안녕하세요!"),
-                                   ManualAgentTools(settings))
-    assert result.to_dict()["status"] == "conversational" and result.citations == ()
+def test_chat_only_output_status_is_not_an_analysis_result():
+    with pytest.raises(ValidationError):
+        AgentAnswer(status="conversational", answer_markdown="안녕하세요!")
 
 
 def test_agent_has_no_default_model_request_limit(monkeypatch):
