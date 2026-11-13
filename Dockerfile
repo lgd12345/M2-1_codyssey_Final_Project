@@ -14,6 +14,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY backend/app ./app
 COPY --from=frontend-build /frontend/dist ./static
 
-ENV STATIC_DIR=/app/static
+ENV STATIC_DIR=/app/static \
+    APP_COOKIE_SECURE=1 \
+    COMPANY_ADMIN_ENABLED=1
 EXPOSE 8000
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
