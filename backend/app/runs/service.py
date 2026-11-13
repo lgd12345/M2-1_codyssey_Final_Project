@@ -58,49 +58,15 @@ def recover_orphans(connection) -> None:
            WHERE status IN ('queued','running') AND worker_id IS DISTINCT FROM %s""", (PROCESS_ID,))
 
 
-def create_run(connection, user_id: UUID, question: str, conversation_id: str | None = None) -> UUID:
+def create_run(connection, user_id: UUID, question: str) -> UUID:
     recover_orphans(connection)
     try:
         with connection.transaction():
             return connection.execute(
-                "INSERT INTO agent_run(user_id, question, worker_id, conversation_id) VALUES (%s,%s,%s,%s) RETURNING id",
-                (user_id, question, PROCESS_ID, conversation_id)).fetchone()[0]
+                "INSERT INTO agent_run(user_id, question, worker_id) VALUES (%s,%s,%s) RETURNING id",
+                (user_id, question, PROCESS_ID)).fetchone()[0]
     except psycopg.errors.UniqueViolation:
         raise RunInProgress() from None
-
-
-def verified_citations(connection, user_id: UUID, conversation_id: str | None, limit: int = 20) -> list[dict[str, Any]]:
-    """Sources the server validated in this user's earlier *succeeded* turns of the same chat."""
-    if not conversation_id:
-        return []
-    rows = connection.execute(
-        """SELECT citations FROM agent_run WHERE user_id=%s AND conversation_id=%s AND status='succeeded'
-           ORDER BY created_at DESC LIMIT %s""", (user_id, conversation_id, limit)).fetchall()
-    seen: dict[tuple[str, int], dict[str, Any]] = {}
-    for (citations,) in rows:
-        for item in citations or []:
-            key = (item.get("document_sha256"), item.get("page"))
-            if all(key) and key not in seen:
-                seen[key] = {"document_sha256": key[0], "page": key[1],
-                             "printed_page": item.get("printed_page"), "title": str(item.get("title", ""))}
-    return list(seen.values())
-
-
-def verified_cases(connection, user_id: UUID, conversation_id: str | None, limit: int = 20) -> list[dict[str, Any]]:
-    """Service cases the server validated in this user's earlier *succeeded* turns of the same chat."""
-    if not conversation_id:
-        return []
-    rows = connection.execute(
-        """SELECT case_citations FROM agent_run WHERE user_id=%s AND conversation_id=%s AND status='succeeded'
-           ORDER BY created_at DESC LIMIT %s""", (user_id, conversation_id, limit)).fetchall()
-    seen: dict[str, dict[str, Any]] = {}
-    for (cases,) in rows:
-        for item in cases or []:
-            fsr_no = item.get("fsr_no")
-            if fsr_no and fsr_no not in seen:
-                seen[fsr_no] = {"fsr_no": fsr_no, "machine": item.get("machine"),
-                                "registered_on": item.get("registered_on")}
-    return list(seen.values())
 
 
 def mark_running(connection, run_id: UUID) -> None:

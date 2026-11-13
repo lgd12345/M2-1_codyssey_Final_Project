@@ -1,6 +1,12 @@
 # 서비스 접수 화면 목업 + 백엔드 매뉴얼 에이전트
 
-React/Vite 화면과 FastAPI API를 하나의 이미지로 빌드합니다. FastAPI가 정적 화면과 `/api`를 8000 포트에서 제공합니다. 프런트는 **로그인 + 에이전트 동작 확인용 임시 화면**입니다(질문 실행, 답변·출처·원본 이미지, 도구 호출 순서와 검색 상태 표시). 최종 목적은 고객 민원을 에이전트에 전달해 해결 초안을 만드는 것이며, 그 구조가 되면 이 화면은 제거합니다.
+React/Vite 화면과 FastAPI API를 하나의 이미지로 빌드합니다. FastAPI가 정적 화면과 `/api`를 8000 포트에서 제공합니다. **현재 mock 화면이 제품 범위의 기준**입니다: 공개 홈·고객센터·로그인, 고객 요청 목록·접수·상세, 운영진 대기열·분석·승인, 부서 업무 목록·상세·결과.
+
+시연용 샘플 데이터·키워드 시나리오·자동 분석 타이머·프런트 전용 업무 reducer는 제거했습니다. 인증과 서비스 요청 접수·목록·상세는 실제 API/DB를 사용합니다. AI 분석·승인·부서 처리·메시지·첨부는 아직 미연결이며 화면에서 비활성화하거나 미연결 상태를 표시합니다. 기능 경계는 [화면 기준 개발 범위](docs/screen-scope.md)를 참고하세요.
+
+실제 요청 기능에는 `012_service_requests` 마이그레이션과 계정의 고객사 소속·장비 데이터가 필요합니다. 앱 시작 시 적용하거나 샘플을 자동 생성하지 않습니다. 스키마가 없으면 `REQUESTS_NOT_READY`(503)를 반환합니다.
+
+별도 승인 후 현재 로컬 앱의 `RAG_DATABASE_URL` 대상인 `service_poc_test`에 **012만 적용**하고, 기존 고객사를 재사용해 `user` 소속과 명시적인 **E2E 검증용 장비**를 연결했습니다. `admin`/`user` 실제 계정으로 로컬 브라우저 인수 E2E를 통과했으며 테스트 요청과 임시 타사 자료는 정리했습니다. 실제 장비 명부를 자동 이관하거나 가짜 실장비 정보를 넣은 것은 아닙니다. 일반 TDD 회귀는 계속 격리 DB에서 실행합니다.
 
 ## 통합 이미지 빌드 및 실행
 
@@ -9,20 +15,26 @@ docker build -t demo-app .
 docker run --rm --network YOUR_DB_NETWORK --env-file backend/.env -p 8000:8000 demo-app
 ```
 
-컨테이너에서 DB 호스트에 접근할 수 있는 Docker 네트워크에 연결해야 `/api/db-status`가 동작합니다. DB에 연결되지 않아도 웹 화면과 `/api/health`는 실행됩니다. 앱 시작 시 스키마를 만들거나 변경하지 않습니다.
+로그인과 에이전트 실행을 사용하려면 컨테이너에서 인증·RAG DB 호스트에 접근할 수 있어야 합니다. `/api/health`와 정적 파일 제공은 DB 연결 없이 실행됩니다. 로그인 상태 조회에는 DB 연결이 필요합니다. 앱 시작 시 스키마를 만들거나 변경하지 않습니다.
 
 - 화면: http://localhost:8000/
 - API 문서: http://localhost:8000/docs
 - API 상태: http://localhost:8000/api/health
-- PostgreSQL 및 pgvector 상태: http://localhost:8000/api/db-status
 
-데이터베이스 스키마 변경은 명시적인 마이그레이션 CLI에서만 수행합니다. `/api/db-status`는 PostgreSQL의 `vector` 확장 존재 여부만 확인합니다. 정적 파일 경로는 `STATIC_DIR` 환경변수로 변경할 수 있습니다.
+데이터베이스 스키마 변경은 명시적인 마이그레이션 CLI에서만 수행합니다. 웹 DB 진단·설치 API는 제공하지 않습니다. 정적 파일 경로는 `STATIC_DIR` 환경변수로 변경할 수 있습니다.
 
 ## 로컬 프런트엔드 개발
 
 `frontend/`에서 `npm ci` 후 `npm run dev`를 실행할 수 있습니다. 이때 Vite의 `/api` 프록시 기본 대상은 `http://localhost:8000`이며 `VITE_API_PROXY_TARGET`으로 변경할 수 있습니다. 로컬 Compose 파일은 제공하지 않습니다.
 
-## 백엔드 매뉴얼 에이전트 (UI 미포함)
+## 서비스 요청 TDD
+
+- 실제 접수 API: `GET /api/v1/service-requests/context`, `POST /api/v1/service-requests`, `GET /api/v1/service-requests`, `GET /api/v1/service-requests/{identity}`
+- 고객은 서버에 등록된 자기 회사의 장비·요청만 접근하고, 운영진은 전체 요청을 조회합니다. 회사·계정·접수 번호·시각을 클라이언트가 지정할 수 없습니다.
+- 최소 회사·소속·장비 테이블은 접수 데이터 기반이며 관리 CRUD 화면/API를 다시 추가하지 않습니다.
+- 상세 검증 방법: [TDD 검증 지침](docs/tdd.md). 실제 로그인·API·DB를 거치는 로컬 Playwright E2E가 포함됩니다.
+
+## 백엔드 매뉴얼 에이전트 (요청 분석 연동 전)
 
 에이전트는 PostgreSQL + pgvector + `pg_trgm`을 사용합니다. 변환 페이지 텍스트를 키워드/벡터로 검색하고, 필요한 페이지를 원본 PDF에서 온디맨드 렌더링해 도구 결과로 돌려줍니다. LLM 및 Gemini 임베딩 프록시 값은 `backend/.env`에 두며, 키 이름은 `backend/.env.example`에 있습니다. 비밀값은 커밋하지 마세요.
 
@@ -49,18 +61,19 @@ python -m venv .venv
 .venv/Scripts/python scripts/create_user.py --login-id alice            # --role admin 도 가능
 ```
 
+현재 화면의 운영진은 `admin`, 발급 고객 계정은 `user`입니다. 기존 `customer` 계정의 로그인 호환성은 유지하며, 고객 역할은 에이전트 API에 접근할 수 없습니다.
+
 로그인하면 서버 세션을 `HttpOnly` 쿠키로 유지하고(7일, DB에는 토큰 해시만 저장), 쓰기 요청은 `X-CSRF-Token` 헤더와 같은 출처 검사를 통과해야 합니다. 로그인 실패는 접속지 10분 5회·아이디 10분 10회로 제한됩니다. HTTPS로 공개할 때는 `APP_COOKIE_SECURE=1`을 설정하세요. 사용자당 동시에 실행할 수 있는 에이전트는 1개이며 실행 기록·이미지는 소유자만 조회합니다. 서버를 재시작하면 실행 중이던 기록은 `interrupted`로 표시됩니다(단일 프로세스 기준).
 
 | 엔드포인트 | 설명 |
 |---|---|
 | `GET /api/v1/auth/me` | 로그인 상태와 CSRF 토큰 |
 | `POST /api/v1/auth/login`, `/logout` | 로그인·로그아웃 |
-| `POST /api/v1/agent/stream` | 대화형 실행(AI SDK 스트림). 도구 호출이 실시간으로 나오고, 최종 답변은 서버 검증 후 `GET /runs/{id}`로 확인. 응답 헤더 `X-Run-Id` |
 | `POST /api/v1/agent/runs` | 질문 실행 시작(202, 백그라운드·비스트리밍) |
 | `GET /api/v1/agent/runs`, `/runs/{id}` | 내 실행 목록·상세(답변·출처·도구·이미지) |
 | `GET /api/v1/agent/runs/{id}/assets/{asset_id}` | 에이전트가 연 원본 페이지 이미지 |
 
-프런트 임시 화면은 `@ai-sdk/react`(`useChat`)로 대화하며, 스트림의 `final_result`는 검증 전 값이라 화면에 쓰지 않습니다. 오류는 고정 코드로만 전달하고, 연결이 끊기면 실행 기록을 `interrupted`로 마감합니다. PydanticAI는 UI 어댑터 보안 수정이 포함된 2.64.0으로 고정했습니다.
+위 에이전트 API는 분석 기반 재사용을 위해 유지한 비스트리밍 실행·결과·이미지 API이며, 현재 mock 화면에서 호출하지 않습니다. 이전 독립 채팅 UI와 AI SDK 스트리밍 어댑터는 제거했습니다. 오류는 고정 코드로만 전달합니다. PydanticAI 버전은 2.64.0을 유지합니다.
 
 회귀 테스트는 `scripts/test_isolated.py`를 권장합니다. `pytest tests`를 직접 실행하면 `TEST_DATABASE_URL`의 RAG 자료를 초기화하므로 코퍼스/임베딩을 보관한 DB를 대상으로 실행하지 마세요. 격리 실행기는 별도 임시 DB를 사용하고 테스트 출력의 접속 문자열·비밀번호·키를 마스킹합니다.
 

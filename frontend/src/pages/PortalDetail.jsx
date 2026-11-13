@@ -1,25 +1,10 @@
 import React, { useState } from 'react'
-import { customerStatus } from '../mock/store.js'
-import { Modal, formatDate, formatTime, nowIso } from '../ui.jsx'
+import { customerStatus } from '../domain/workflow.js'
+import { customerEvents } from '../domain/actions.js'
+import { Modal, formatDate, formatTime } from '../ui.jsx'
 
 const TONE = { 접수됨: 'neutral', '확인 중': 'blue', '정보 요청': 'yellow', '처리 중': 'blue', 완료: 'green' }
 const TABS = [['history', '이력'], ['guides', '기술 가이드'], ['contact', '연락처']]
-
-// 고객에게 보이는 이력만 추린다. 분석·반려·내부 메모·부서 내부 처리는 보이지 않는다.
-function customerEvents(item) {
-  const fromHistory = item.history.flatMap((h, i) => {
-    const t = h.text
-    const text = t === '접수' ? '서비스 요청이 접수되었습니다.'
-      : t.includes('승인 ·') ? '담당 부서에서 처리를 시작했습니다.'
-      : t.endsWith(' 종결') ? '서비스 요청이 완료되었습니다.'
-      : t === '고객 콜백 요청' ? '콜백을 요청했습니다.'
-      : t === '고객 종결 요청' ? '종결을 요청했습니다.' : null
-    return text ? [{ id: `h${i}`, at: h.at, who: '시스템', text }] : []
-  })
-  const fromComments = item.comments.filter((c) => c.kind !== 'internal')
-    .map((c) => ({ id: c.id, at: c.at, who: c.kind === 'customer' ? '나' : `서비스 담당자 ${c.by}`, text: c.text, message: true }))
-  return [...fromHistory, ...fromComments].sort((a, b) => (a.at < b.at ? 1 : a.at > b.at ? -1 : 0))
-}
 
 // TRUMPF 서비스 케이스 상세: 요청 번호·접수자·접수일·기계·설명, 정보 추가 / 콜백 요청 / 종결 요청,
 // 기술 가이드·이력·연락처 탭. 이 화면에는 AI 분석, 내부 메모, 부서 초안이 나오지 않는다.
@@ -30,12 +15,13 @@ export function PortalDetail({ item, dispatch }) {
   if (!item) return <section className="center-card"><h1>서비스 요청을 찾을 수 없습니다</h1><a href="#/portal">내 서비스 요청으로</a></section>
 
   const status = customerStatus(item)
-  const done = item.status === '종결'
-  const guides = item.analysis ? item.analysis.evidence.filter((e) => e.kind === 'manual') : []
+  const done = status === '완료'
+  const unavailable = !dispatch || done
+  const guides = item.guides ?? []
   const lastAsk = [...item.comments].reverse().find((c) => c.kind === 'public')
   const events = customerEvents(item)
   const closeModal = () => { setModal(null); setText('') }
-  const send = (type, extra) => { dispatch({ type, id: item.id, at: nowIso(), ...extra }); closeModal() }
+  const send = (type, extra) => { dispatch({ type, id: item.id, ...extra }); closeModal() }
 
   return (
     <article className="portal-detail" aria-labelledby="pd-title">
@@ -53,9 +39,9 @@ export function PortalDetail({ item, dispatch }) {
           <p className="pd-desc"><strong>설명</strong><br />{item.intake.symptom}</p>
         </div>
         <div className="pd-actions">
-          <button disabled={done} onClick={() => setModal('info')}>정보 추가</button>
-          <button disabled={done} onClick={() => setModal('callback')}>콜백 요청</button>
-          <button disabled={done} onClick={() => setModal('close')}>종결 요청</button>
+          <button disabled={unavailable} onClick={() => setModal('info')}>정보 추가</button>
+          <button disabled={unavailable} onClick={() => setModal('callback')}>콜백 요청</button>
+          <button disabled={unavailable} onClick={() => setModal('close')}>종결 요청</button>
         </div>
       </div>
 
@@ -63,7 +49,7 @@ export function PortalDetail({ item, dispatch }) {
         <div className="notice warn" role="status">
           <strong>서비스 담당자가 추가 정보를 요청했습니다.</strong>
           <p>{lastAsk.text}</p>
-          <button className="primary" onClick={() => setModal('info')}>정보 추가</button>
+          <button className="primary" disabled={unavailable} onClick={() => setModal('info')}>정보 추가</button>
         </div>
       )}
       {done && <div className="notice ok" role="status"><strong>이 서비스 요청은 완료되었습니다.</strong>{item.resolution?.note && <p>{item.resolution.note}</p>}</div>}
@@ -92,7 +78,7 @@ export function PortalDetail({ item, dispatch }) {
             {guides.length === 0 ? <p className="muted">입력하신 내용에 해당하는 기술 가이드가 아직 없습니다.</p> : (
               <>
                 <p className="muted small">접수한 증상과 오류 번호를 기준으로 스스로 확인해 볼 수 있는 자료입니다.</p>
-                <ul className="guides">{guides.map((g) => <li key={g.id}><div><strong>{g.title}</strong><small>{g.source}</small></div><span className="linkish">PDF 보기</span></li>)}</ul>
+                <ul className="guides">{guides.map((g) => <li key={g.id}><div><strong>{g.title}</strong><small>{g.source}</small></div><span className="muted">PDF 열람 미연결</span></li>)}</ul>
               </>
             )}
           </>

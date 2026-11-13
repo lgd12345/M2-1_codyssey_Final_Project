@@ -5,6 +5,8 @@
 backend/private-data/
 **/node_modules
 **/dist
+**/test-results
+**/playwright-report
 **/__pycache__
 **/*.pyc
 **/.venv

@@ -154,6 +154,7 @@ activemq-data/
 .env
 .envrc
 .venv
+.venv_wsl/
 env/
 venv/
 ENV/
@@ -209,6 +210,8 @@ account.txt
 
 # Local-only test corpus and source archives (never commit technical manuals)
 /backend/.pytest-tmp/
+/frontend/test-results/
+/frontend/playwright-report/
 /backend/data/test_corpus/
 /backend/data/render_cache/
 /backend/data/agent_runs/

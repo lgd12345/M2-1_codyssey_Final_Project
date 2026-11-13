@@ -68,9 +68,9 @@ def app_with_runner(db):
     app.dependency_overrides.clear()
 
 
-def session(app, db, login_id="alice"):
+def session(app, db, login_id="alice", role="admin"):
     from app.auth.service import create_user
-    create_user(db, login_id, PASSWORD)
+    create_user(db, login_id, PASSWORD, role=role)
     db.commit()
     client = TestClient(app)
     csrf = client.post("/api/v1/auth/login", json={"login_id": login_id, "password": PASSWORD},
@@ -90,6 +90,16 @@ def test_anonymous_and_csrf_less_requests_are_rejected(app_with_runner, db):
     client = session(app, db)
     del client.headers["X-CSRF-Token"]
     assert start(client).status_code == 403
+
+
+def test_user_role_is_a_customer_and_cannot_use_the_agent(app_with_runner, db):
+    app, state = app_with_runner
+    customer = session(app, db, "bob", role="user")
+    denied = start(customer)
+    assert denied.status_code == 403
+    assert denied.json()["code"] == "OPERATOR_REQUIRED"
+    assert customer.get("/api/v1/agent/runs").status_code == 403
+    assert "runner" in state  # the agent was never invoked
 
 
 def test_run_completes_and_stores_answer_citations_tools_and_images(app_with_runner, db):

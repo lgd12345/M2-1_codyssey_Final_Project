@@ -1,6 +1,5 @@
 import React, { useState } from 'react'
-import { ANALYSIS_STEPS } from '../mock/data.js'
-import { nowIso } from '../ui.jsx'
+import { analysisRunNotice, canStartAnalysis, isAnalysisRunning } from '../domain/workflow.js'
 
 // 위치는 Jira의 "Agent sessions"(Uses AI. Verify results.), 내용 구성은 Siemens Maintenance Copilot의
 // 4개 메뉴(Troubleshooting steps / Check maintenance history / Find recommended spare parts / Access repair manual)를 따른다.
@@ -11,54 +10,38 @@ const TABS = [
   { key: 'manual', label: '매뉴얼 열람' },
 ]
 
-export function AnalysisSection({ item, dispatch, me }) {
+export function AnalysisSection({ item, dispatch, me, onAnalyze, analyzing, error }) {
   const [tab, setTab] = useState('steps')
-  const [vote, setVote] = useState('')
   const [open, setOpen] = useState(null)
   const a = item.analysis
-
   return (
     <section className="block" aria-labelledby="ai-title">
       <div className="block-head">
         <h2 id="ai-title"><span className="spark" aria-hidden="true">✦</span> AI 분석</h2>
-        <span className="muted small" title="AI가 만든 결과는 부정확할 수 있습니다. 출처와 함께 확인해 주세요.">ⓘ AI를 사용합니다. 결과를 확인해 주세요.</span>
+        <span className="muted small">ⓘ AI를 사용합니다. 결과를 확인해 주세요.</span>
       </div>
-
-      {item.status === '분석 중' ? (
-        <div className="ai-box" role="status" aria-live="polite">
-          <ol className="timeline">
-            {ANALYSIS_STEPS.map((s, i) => (
-              <li key={s.key} className={i < item.stepsDone ? 'done' : i === item.stepsDone ? 'running' : ''}><span className="dot" aria-hidden="true" />{s.title}{i === item.stepsDone ? ' …' : ''}</li>
-            ))}
-          </ol>
+      <div className="ai-box">
+        <div className="quick" role="tablist" aria-label="AI 분석 메뉴">
+          {TABS.map(t => <button key={t.key} role="tab" aria-selected={tab === t.key} className={tab === t.key ? 'quick-btn active' : 'quick-btn'} onClick={() => setTab(t.key)}>{t.label}</button>)}
         </div>
-      ) : (
-        <div className="ai-box">
-          {a.caseSearch === 'unavailable' && <p className="notice warn" role="note"><strong>과거 사례 검색 미연결</strong> 과거 FSR을 확인하지 못해, 이 분석은 매뉴얼 근거만 사용했습니다.</p>}
+        {!a ? <Pending item={item} onAnalyze={onAnalyze} analyzing={analyzing} error={error} /> : <>
+          {a.status === 'insufficient_evidence' && <p className="notice warn" role="note">관련 근거가 부족해 원인 후보와 권장 사항을 제시하지 않았습니다.</p>}
+          {a.caseSearch === 'unavailable' && <p className="notice warn" role="note">과거 사례 검색 결과를 확인하지 못했습니다.</p>}
           <p className="summary-text">{a.summary}</p>
-          <details className="process"><summary>분석 과정 보기</summary>
-            <ol className="timeline compact">{ANALYSIS_STEPS.map((s) => <li key={s.key} className="done"><span className="dot" aria-hidden="true" /><strong>{s.title}</strong><small>{a.stepResults[s.key]}</small></li>)}</ol>
-          </details>
-
-          <div className="quick" role="tablist" aria-label="AI 분석 메뉴">
-            {TABS.map((t) => <button key={t.key} role="tab" aria-selected={tab === t.key} className={tab === t.key ? 'quick-btn active' : 'quick-btn'} onClick={() => setTab(t.key)}>{t.label}</button>)}
-          </div>
-
           <div className="ai-answer" role="tabpanel">
             {tab === 'steps' && <Steps a={a} />}
             {tab === 'history' && <History a={a} open={open} setOpen={setOpen} />}
             {tab === 'parts' && <Parts a={a} />}
             {tab === 'manual' && <Manual a={a} open={open} setOpen={setOpen} />}
           </div>
-
           <div className="ai-foot">
-            <span className="ai-chip">✦ AI 생성 <span title="시연용 가상 분석입니다.">ⓘ</span></span>
-            <button className="ghost small" onClick={() => dispatch({ type: 'ADD_COMMENT', id: item.id, kind: 'internal', by: me, at: nowIso(), text: `[AI 분석 · ${TABS.find((t) => t.key === tab).label}] ${a.summary}` })}>내부 메모로 복사</button>
-            <button className={vote === 'up' ? 'ghost small on' : 'ghost small'} aria-pressed={vote === 'up'} aria-label="도움이 됨" onClick={() => setVote(vote === 'up' ? '' : 'up')}>👍</button>
-            <button className={vote === 'down' ? 'ghost small on' : 'ghost small'} aria-pressed={vote === 'down'} aria-label="도움이 안 됨" onClick={() => setVote(vote === 'down' ? '' : 'down')}>👎</button>
+            <span className="ai-chip">✦ AI 생성</span>
+            <button className="ghost small" disabled={!dispatch} onClick={() => dispatch({ type: 'ADD_COMMENT', id: item.id, kind: 'internal', text: a.summary })}>내부 메모로 복사</button>
+            <button className="ghost small" disabled title="평가 저장 기능 미연결" aria-label="도움이 됨">👍</button>
+            <button className="ghost small" disabled title="평가 저장 기능 미연결" aria-label="도움이 안 됨">👎</button>
           </div>
-        </div>
-      )}
+        </>}
+      </div>
     </section>
   )
 }
@@ -129,5 +112,20 @@ function EvidenceRow({ e, open, setOpen }) {
       </button>
       {isOpen && <div className="evidence-body"><pre>{e.excerpt}</pre><p className="note">적용 시 주의: {e.note}</p></div>}
     </li>
+  )
+}
+
+function Pending({ item, onAnalyze, analyzing, error }) {
+  const running = isAnalysisRunning(item)
+  const notice = analysisRunNotice(item.analysisRun)
+  return (
+    <div className="analysis-pending">
+      <p className="muted" role="status">{running ? '분석 중입니다. 매뉴얼과 과거 사례를 검색하고 있으며 완료되면 이 화면에 표시됩니다.' : '아직 분석 결과가 없습니다.'}</p>
+      {notice && <p className="error" role="alert">{notice}</p>}
+      {error && <p className="error" role="alert">{error}</p>}
+      {canStartAnalysis(item) && onAnalyze && (
+        <button className="primary" disabled={analyzing} onClick={() => onAnalyze(item.id)}>{analyzing ? '분석 요청 중…' : item.analysisRun?.status === 'failed' ? '분석 다시 시도' : 'AI 분석 시작'}</button>
+      )}
+    </div>
   )
 }

@@ -67,9 +67,9 @@ class OperatorRequired(AuthError):
 
 
 def require_operator(session: SessionInfo = Depends(require_user)) -> SessionInfo:
-    # Legacy admin/user accounts are issued by the existing management CLI.
-    # Public registration can issue only the separate customer role.
-    if session.user.role not in ('admin', 'user'):
+    # Operators are admin accounts only. The user role is a customer account and must never reach
+    # the agent/LLM or the operator APIs (cost and data protection for the public deployment).
+    if session.user.role != 'admin':
         raise OperatorRequired()
     return session
 

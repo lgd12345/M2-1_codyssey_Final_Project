@@ -1,14 +1,14 @@
 import React, { useMemo, useState } from 'react'
 import { caseHref } from '../navigation.js'
-import { STATUSES, statusCounts } from '../mock/store.js'
-import { CALL_REASONS } from '../mock/meta.js'
+import { STATUSES, statusCounts } from '../domain/workflow.js'
+import { CALL_REASONS } from '../domain/catalog.js'
 import { Lozenge, formatDate } from '../ui.jsx'
 import { NewCaseModal } from './NewCaseModal.jsx'
 
 const unique = (items) => [...new Set(items)]
 
 // Jira의 큐 사이드바(건수 포함)와 TRUMPF "My service cases"(기간·필터·결과 표)를 합친 목록.
-export function CaseList({ cases, dispatch, modalOpen, nextId }) {
+export function CaseList({ cases, onCreate, equipment, modalOpen }) {
   const [queue, setQueue] = useState('전체')
   const [search, setSearch] = useState('')
   const [filters, setFilters] = useState({ machine: '', creator: '', type: '', from: '', to: '' })
@@ -51,8 +51,9 @@ export function CaseList({ cases, dispatch, modalOpen, nextId }) {
       </aside>
 
       <section className="queue-main" aria-labelledby="list-title">
-        <div className="page-head">
-          <div><h1 id="list-title">서비스 요청</h1><p className="muted">접수된 요청을 AI가 분석했습니다. 품질 담당자가 검토하고 승인하면 부서로 전달됩니다.</p></div>
+        <div className="page-head row">
+          <div><p className="page-eyebrow">CLAIM OPERATIONS</p><h1 id="list-title" className="page-title">서비스 요청</h1><p className="page-lead">접수된 요청을 분석하고 검토·승인해 부서로 전달합니다.</p></div>
+          <a className="button primary" href="#/cases/new">새 요청</a>
         </div>
 
         <div className="filters">
@@ -94,7 +95,7 @@ export function CaseList({ cases, dispatch, modalOpen, nextId }) {
         </div>
       </section>
 
-      {modalOpen && <NewCaseModal dispatch={dispatch} nextId={nextId} />}
+      {modalOpen && <NewCaseModal onCreate={onCreate} equipment={equipment} />}
     </div>
   )
 }

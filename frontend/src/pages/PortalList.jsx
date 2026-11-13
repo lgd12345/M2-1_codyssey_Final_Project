@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react'
 import { portalHref } from '../navigation.js'
-import { customerStatus } from '../mock/store.js'
-import { CALL_REASONS } from '../mock/meta.js'
+import { customerStatus } from '../domain/workflow.js'
+import { CALL_REASONS } from '../domain/catalog.js'
 import { formatDate } from '../ui.jsx'
 import { NewCaseModal } from './NewCaseModal.jsx'
 
@@ -13,7 +13,7 @@ const COLUMNS = [
 
 // TRUMPF "My service cases": 안내문, 새 요청 버튼, 기간(From/To), 상태·기계·접수자·유형 필터, 적용된 필터,
 // 결과 표(열 제목으로 정렬, 행 오른쪽 화살표로 상세). 고객에게는 내부 상태 대신 진행 단계만 보여 준다.
-export function PortalList({ cases, company, dispatch, modalOpen, nextId }) {
+export function PortalList({ cases, company, onCreate, equipment, modalOpen }) {
   const [filters, setFilters] = useState({ status: '', machine: '', creator: '', type: '', from: '', to: '' })
   const [sort, setSort] = useState({ key: 'createdAt', dir: 'desc' })
   const set = (key) => (e) => setFilters({ ...filters, [key]: e.target.value })
@@ -34,9 +34,10 @@ export function PortalList({ cases, company, dispatch, modalOpen, nextId }) {
   return (
     <section className="portal" aria-labelledby="portal-title">
       <div className="portal-hero">
-        <h1 id="portal-title">내 서비스 요청</h1>
-        <p className="muted">{company}의 서비스 요청을 한곳에서 확인합니다. 접수한 요청은 담당 서비스 엔지니어에게 바로 전달되고, 진행 상황은 이 화면에서 확인할 수 있습니다. 회사의 모든 직원이 같은 요청을 볼 수 있습니다.</p>
-        <a className="button create-case" href="#/portal/new">새 서비스 요청</a>
+        <p className="page-eyebrow">CUSTOMER SERVICE</p>
+        <h1 id="portal-title" className="page-title">내 서비스 요청</h1>
+        <p className="page-lead">{company ? `${company}의 서비스 요청을 한곳에서 확인합니다. 회사의 모든 직원이 같은 요청을 볼 수 있습니다.` : '고객사 소속이 등록되지 않았습니다. 관리자에게 문의해 주세요.'}</p>
+        <a className="button primary" href="#/portal/new">새 서비스 요청</a>
       </div>
 
       <div className="filters">
@@ -79,7 +80,7 @@ export function PortalList({ cases, company, dispatch, modalOpen, nextId }) {
         <p className="table-foot muted small">총 {shown.length}건</p>
       </div>
 
-      {modalOpen && <NewCaseModal dispatch={dispatch} nextId={nextId} portal company={company} />}
+      {modalOpen && <NewCaseModal onCreate={onCreate} equipment={equipment} portal />}
     </section>
   )
 }

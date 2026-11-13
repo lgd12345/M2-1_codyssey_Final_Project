@@ -1,6 +1,6 @@
-import React, { useState } from 'react'
-import { DEPARTMENTS } from '../mock/data.js'
-import { isEdited, isEditable } from '../mock/store.js'
+import React, { useEffect, useRef, useState } from 'react'
+import { DEPARTMENTS } from '../domain/catalog.js'
+import { isEdited, isEditable } from '../domain/workflow.js'
 import { Lozenge } from '../ui.jsx'
 
 const meta = (key) => DEPARTMENTS.find((d) => d.key === key)
@@ -8,8 +8,8 @@ const meta = (key) => DEPARTMENTS.find((d) => d.key === key)
 // Jira의 "Link work item → Create linked work item". 다른 팀이 처리할 별도 업무를 원본 요청에 연결한다.
 // 승인 전에는 AI가 제안한 연결 업무(아직 전달되지 않음), 승인 후에는 생성된 연결 업무를 보여 준다.
 export function DeptSection({ item, dispatch }) {
-  if (item.status === '분석 중') {
-    return <section className="block"><div className="block-head"><h2>연결 업무</h2></div><p className="muted">분석이 끝나면 전달할 부서와 초안이 제안됩니다. 승인 전에는 어떤 부서에도 전달되지 않습니다.</p></section>
+  if (!item.analysis) {
+    return <section className="block"><div className="block-head"><h2>연결 업무</h2></div><p className="muted">아직 분석 결과와 부서별 초안이 없습니다. 분석이 끝나고 승인하기 전에는 업무가 생성되지 않습니다.</p></section>
   }
   if (item.linked.length > 0) return <Linked item={item} />
   return <Proposed item={item} dispatch={dispatch} />
@@ -36,14 +36,36 @@ function Linked({ item }) {
   )
 }
 
+// Typing stays local and is saved shortly after the last keystroke or when the field loses focus.
+// The server applies actions in click order, so an approval always sees the saved draft.
+const SAVE_DELAY_MS = 600
+function DraftEditor({ itemId, department, editable, dispatch }) {
+  const [text, setText] = useState(department.draft)
+  const timer = useRef(null)
+  useEffect(() => { setText(department.draft) }, [department.draft])
+  useEffect(() => () => clearTimeout(timer.current), [])
+  const save = (value) => {
+    clearTimeout(timer.current)
+    if (editable && value !== department.draft) dispatch({ type: 'EDIT_DRAFT', id: itemId, key: department.key, text: value })
+  }
+  return (
+    <>
+      <textarea className="draft" rows={6} value={text} readOnly={!editable} aria-label={`${meta(department.key).name} 초안`}
+        onChange={(e) => { setText(e.target.value); clearTimeout(timer.current); const value = e.target.value; timer.current = setTimeout(() => save(value), SAVE_DELAY_MS) }}
+        onBlur={() => save(text)} />
+      {text.trim() === '' && <span className="error small">초안이 비어 있습니다.</span>}
+    </>
+  )
+}
+
 function Proposed({ item, dispatch }) {
-  const editable = isEditable(item)
+  const editable = Boolean(dispatch) && isEditable(item)
   const [collapsed, setCollapsed] = useState([])
   const toggle = (key) => setCollapsed(collapsed.includes(key) ? collapsed.filter((k) => k !== key) : [...collapsed, key])
   return (
     <section className="block" aria-labelledby="linked-title">
       <div className="block-head"><h2 id="linked-title">연결 업무 제안</h2><span className="tag pending">승인 전 · 아직 전달되지 않음</span></div>
-      <p className="muted small">AI가 추천한 부서입니다. 부서를 추가하거나 제외하고 초안을 수정할 수 있습니다.{!editable && ' 반려된 건은 재분석 후에 다시 제안됩니다.'}</p>
+      <p className="muted small">AI가 추천한 부서입니다. 아직 승인되지 않았고 어느 부서에도 전달되지 않았습니다.{!editable && ' 이 상태에서는 부서와 초안을 수정할 수 없습니다.'}</p>
       <ul className="proposals">
         {item.departments.map((d) => {
           const isOpen = d.selected && !collapsed.includes(d.key)
@@ -62,9 +84,8 @@ function Proposed({ item, dispatch }) {
               </div>
               {d.selected && isOpen && (
                 <div className="proposal-body">
-                  <textarea className="draft" rows={6} value={d.draft} readOnly={!editable} aria-label={`${meta(d.key).name} 초안`} onChange={(e) => dispatch({ type: 'EDIT_DRAFT', id: item.id, key: d.key, text: e.target.value })} />
+                  <DraftEditor itemId={item.id} department={d} editable={editable} dispatch={dispatch} />
                   <div className="draft-foot">
-                    {d.draft.trim() === '' && <span className="error small">초안이 비어 있습니다.</span>}
                     {editable && isEdited(d) && <button className="ghost small" onClick={() => dispatch({ type: 'RESET_DRAFT', id: item.id, key: d.key })}>AI 원본으로 되돌리기</button>}
                   </div>
                 </div>

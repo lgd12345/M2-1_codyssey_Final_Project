@@ -1,10 +1,9 @@
 import React, { useState } from 'react'
-import { Avatar, formatTime, nowIso } from '../ui.jsx'
+import { Avatar, formatTime } from '../ui.jsx'
 
 // Jira의 Activity: 전체/댓글/이력 보기, "Add internal note / Reply to customer" 입력줄,
 // 내부 메모는 노란 배경과 자물쇠 표시, 입력 영역의 Suggest reply·상황별 알약(contextual pills).
 const SHOW = [{ key: 'all', label: '전체' }, { key: 'comments', label: '댓글' }, { key: 'history', label: '이력' }]
-const CUSTOMER_SAMPLE = '주축 쪽에서 저속으로 돌릴 때 갈리는 소리가 납니다.'
 
 export function Activity({ item, dispatch, me }) {
   const [show, setShow] = useState('all')
@@ -18,7 +17,7 @@ export function Activity({ item, dispatch, me }) {
   ].filter(Boolean) : []
 
   function send() {
-    dispatch({ type: 'ADD_COMMENT', id: item.id, kind: mode, text, by: me, at: nowIso() })
+    dispatch({ type: 'ADD_COMMENT', id: item.id, kind: mode, text })
     setText(''); setMode(null)
   }
 
@@ -39,26 +38,19 @@ export function Activity({ item, dispatch, me }) {
       <div className="comment-bar">
         <Avatar name={me} />
         {mode === null ? (
-          <div className="bar-closed"><button className="linkish" onClick={() => setMode('internal')}>내부 메모 추가</button><span aria-hidden="true">/</span><button className="linkish" onClick={() => setMode('public')}>고객에게 답변</button></div>
+          <div className="bar-closed"><button className="linkish" disabled={!dispatch} onClick={() => setMode('internal')}>내부 메모 추가</button><span aria-hidden="true">/</span><button className="linkish" disabled={!dispatch} onClick={() => setMode('public')}>고객에게 답변</button></div>
         ) : (
           <div className="editor">
-            <p className="muted small">{mode === 'internal' ? '내부 메모: 우리 팀만 볼 수 있습니다.' : '고객에게 답변: 접수자에게 전달됩니다. (시연: 실제 전송 없음)'}</p>
+            <p className="muted small">{mode === 'internal' ? '내부 메모: 우리 팀만 볼 수 있습니다.' : '고객에게 답변: 접수자에게 전달됩니다.'}</p>
             <textarea rows={4} value={text} autoFocus onChange={(e) => setText(e.target.value)} aria-label={mode === 'internal' ? '내부 메모' : '고객 답변'} />
             <div className="editor-tools">
-              {mode === 'public' && a && <button className="pill" onClick={() => setText(`안녕하세요. 접수하신 건을 확인했습니다.\n${a.summary}\n담당자가 곧 연락드리겠습니다.`)}>✦ 답변 제안</button>}
               {pills.map((p) => <button key={p.label} className="pill" onClick={() => setText(p.text)}>{p.label}</button>)}
             </div>
-            <div className="actions"><button className="ghost" onClick={() => { setMode(null); setText('') }}>취소</button><button className="primary" disabled={!text.trim()} onClick={send}>저장</button></div>
+            <div className="actions"><button className="ghost" onClick={() => { setMode(null); setText('') }}>취소</button><button className="primary" disabled={!dispatch || !text.trim()} onClick={send}>저장</button></div>
           </div>
         )}
       </div>
 
-      {item.status === '추가 정보 필요' && (
-        <div className="demo-box">
-          <p className="small"><strong>시연용</strong> 고객이 추가 정보를 답한 상황을 만들어 재분석 흐름을 볼 수 있습니다.</p>
-          <button className="ghost small" onClick={() => dispatch({ type: 'CUSTOMER_REPLY', id: item.id, text: CUSTOMER_SAMPLE, at: nowIso() })}>고객 답변 받기 → 재분석</button>
-        </div>
-      )}
 
       <ul className="activity">
         {entries.map((e) => e.entry === 'history' ? (

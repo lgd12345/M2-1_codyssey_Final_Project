@@ -1,12 +1,12 @@
 import React, { useState } from 'react'
-import { workItems } from '../mock/store.js'
-import { Avatar, Lozenge, formatDate, formatTime, nowIso } from '../ui.jsx'
+import { workItems } from '../domain/workflow.js'
+import { Avatar, Lozenge, formatDate, formatTime } from '../ui.jsx'
 
 const TONE = { 전달됨: 'blue', '진행 중': 'yellow', 완료: 'green' }
 
 // 연결 업무를 받은 팀이 보는 화면(Jira linked work item). 승인된 지시 내용과 원본 요청을 읽고,
 // 처리를 시작해 결과를 입력하면 원본 요청에서 이 업무가 완료로 보인다.
-export function WorkDetail({ cases, workKey, deptKey, actor, dispatch }) {
+export function WorkDetail({ cases, workKey, deptKey, dispatch }) {
   const [summary, setSummary] = useState('')
   const [hours, setHours] = useState('')
   const w = workItems(cases, deptKey).find((x) => x.workKey === workKey)
@@ -15,8 +15,8 @@ export function WorkDetail({ cases, workKey, deptKey, actor, dispatch }) {
   const parent = cases.find((c) => c.id === w.caseId)
   const siblings = parent.linked.filter((l) => l.workKey !== workKey)
   const events = parent.history.filter((h) => h.text.includes(workKey) || h.text.includes('승인 ·'))
-  const start = () => dispatch({ type: 'WORK_START', id: w.caseId, workKey, by: actor, at: nowIso() })
-  const complete = () => dispatch({ type: 'WORK_COMPLETE', id: w.caseId, workKey, by: actor, at: nowIso(), result: { summary, hours } })
+  const start = () => dispatch({ type: 'WORK_START', id: w.caseId, workKey })
+  const complete = () => dispatch({ type: 'WORK_COMPLETE', id: w.caseId, workKey, result: { summary, hours } })
   const asset = parent.intake.asset
 
   return (
@@ -56,7 +56,7 @@ export function WorkDetail({ cases, workKey, deptKey, actor, dispatch }) {
               <div>
                 <label>조치 내용 *<textarea rows={5} value={summary} onChange={(e) => setSummary(e.target.value)} placeholder="무엇을 확인하고 어떻게 조치했는지 적어 주세요." /></label>
                 <label className="narrow-field">작업 시간(시간)<input value={hours} onChange={(e) => setHours(e.target.value)} inputMode="decimal" /></label>
-                <button className="primary" disabled={!summary.trim()} onClick={complete}>처리 완료</button>
+                <button className="primary" disabled={!dispatch || !summary.trim()} onClick={complete}>처리 완료</button>
               </div>
             ) : <p className="muted">처리를 시작하면 결과를 입력할 수 있습니다.</p>}
           </section>
@@ -70,12 +70,12 @@ export function WorkDetail({ cases, workKey, deptKey, actor, dispatch }) {
           <div className="status-menu">
             <span className={`status-btn status-${TONE[w.status] === 'green' ? 'green' : TONE[w.status] === 'yellow' ? 'yellow' : 'blue'}`}>{w.status}</span>
           </div>
-          {w.status === '전달됨' && <div className="side-panel approval"><h3>처리를 시작하세요</h3><p className="small">지시 내용을 확인한 뒤 처리를 시작하면 담당자로 지정됩니다.</p><button className="primary" onClick={start}>처리 시작</button></div>}
+          {w.status === '전달됨' && <div className="side-panel approval"><h3>처리를 시작하세요</h3><p className="small">지시 내용을 확인한 뒤 처리를 시작하면 담당자로 지정됩니다.</p><button className="primary" disabled={!dispatch} onClick={start}>처리 시작</button></div>}
           <div className="side-panel details">
             <h3>세부 정보</h3>
             <dl className="detail-list">
               <div><dt>담당자</dt><dd>{w.assignee ? <><Avatar name={w.assignee} /> {w.assignee}</> : <>
-                <span className="muted">미지정</span> <button className="linkish" onClick={() => dispatch({ type: 'WORK_ASSIGN', id: w.caseId, workKey, to: actor })}>나에게 지정</button></>}</dd></div>
+                <span className="muted">미지정</span> <button className="linkish" disabled={!dispatch} onClick={() => dispatch({ type: 'WORK_ASSIGN', id: w.caseId, workKey })}>나에게 지정</button></>}</dd></div>
               <div><dt>원본 상태</dt><dd><Lozenge status={parent.status} /></dd></div>
               <div><dt>받은 날</dt><dd>{formatDate(w.createdAt)}</dd></div>
               <div><dt>진행 시작</dt><dd>{w.startedAt ? formatTime(w.startedAt) : '-'}</dd></div>
