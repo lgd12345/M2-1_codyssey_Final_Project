@@ -9,6 +9,7 @@ import unicodedata
 from uuid import UUID
 
 import psycopg
+from email_validator import EmailNotValidError, validate_email
 from pwdlib import PasswordHash
 from pwdlib.hashers.argon2 import Argon2Hasher
 
@@ -18,7 +19,7 @@ SESSION_INTERVAL = "7 days"
 THROTTLE_INTERVAL = "10 minutes"
 MAX_FAILURES_PER_CLIENT = 5
 MAX_FAILURES_PER_LOGIN = 10
-ROLES = ("admin", "user")
+ROLES = ("admin", "user", "customer")
 
 _LOGIN_ID = re.compile(r"^[a-z0-9._@-]{3,64}$")
 _HASHER = PasswordHash((Argon2Hasher(),))
@@ -92,7 +93,16 @@ class SessionInfo:
 
 
 def normalize_login_id(value: str) -> str:
-    return unicodedata.normalize("NFKC", value or "").strip().casefold()
+    value = (value or '').strip()
+    # IDNA must run before Unicode casefold (e.g. faß.de != fass.de).
+    return _email_login(value) or unicodedata.normalize("NFKC", value).casefold()
+
+
+def _email_login(value: str) -> str | None:
+    try:
+        return validate_email(value, check_deliverability=False, allow_smtputf8=False).ascii_email.casefold()
+    except EmailNotValidError:
+        return None
 
 
 def _token_hash(token: str) -> str:
@@ -108,9 +118,9 @@ def _dummy() -> str:
 
 def create_user(connection, login_id: str, password: str, *, role: str = "user") -> AuthUser:
     if role not in ROLES:
-        raise ValueError("role must be admin or user")
+        raise ValueError("unsupported account role")
     normalized = normalize_login_id(login_id)
-    if not _LOGIN_ID.fullmatch(normalized):
+    if (role == 'customer' and not _email_login(normalized)) or (role != 'customer' and not _LOGIN_ID.fullmatch(normalized)):
         raise InvalidLoginId()
     if not MIN_PASSWORD_LENGTH <= len(password) <= MAX_PASSWORD_LENGTH or password.casefold() == normalized:
         raise WeakPassword()
@@ -126,8 +136,12 @@ def create_user(connection, login_id: str, password: str, *, role: str = "user")
 
 
 def _failure_key(login_id: str) -> str:
-    # Attacker-controlled text must never grow storage: keep only well-formed ids, truncated.
-    return normalize_login_id(login_id)[:64] if _LOGIN_ID.fullmatch(normalize_login_id(login_id)) else "?"
+    normalized = normalize_login_id(login_id)
+    if _LOGIN_ID.fullmatch(normalized):
+        return normalized
+    # Preserve the existing <=64 character failure table without truncating long
+    # email identities into the same throttle bucket. No email/DNS network lookup.
+    return 'e:' + hashlib.sha256(normalized.encode()).hexdigest()[:62] if _email_login(normalized) else '?'
 
 
 def authenticate(connection, login_id: str, password: str, client: str) -> AuthUser:
@@ -148,7 +162,7 @@ def authenticate(connection, login_id: str, password: str, client: str) -> AuthU
         (normalize_login_id(login_id),)).fetchone() if key != "?" else None
     stored = row[3] if row else _dummy()
     valid = _HASHER.verify(password[:MAX_PASSWORD_LENGTH], stored)
-    if not (row and valid and row[4]):
+    if not (row and valid and len(password) <= MAX_PASSWORD_LENGTH and row[4]):
         connection.execute("INSERT INTO app_login_failure(login_id, client) VALUES (%s,%s)", (key, client))
         raise InvalidCredentials()
     connection.execute("UPDATE app_user SET last_login_at = now() WHERE id=%s", (row[0],))

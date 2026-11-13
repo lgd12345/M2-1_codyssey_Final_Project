@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends
 
-from app.auth.deps import database, require_user
+from app.auth.deps import database, require_operator
 from app.auth.service import SessionInfo
 
 router = APIRouter(prefix="/api/v1/documents", tags=["documents"])
@@ -21,7 +21,7 @@ FROM rag_document d ORDER BY d.title, d.source_sha256
 
 
 @router.get("")
-def list_documents(_session: SessionInfo = Depends(require_user)):
+def list_documents(_session: SessionInfo = Depends(require_operator)):
     with database() as connection:
         rows = connection.execute(LIST_SQL).fetchall()
         active = connection.execute("SELECT EXISTS (SELECT 1 FROM rag_embedding_config WHERE active)").fetchone()[0]

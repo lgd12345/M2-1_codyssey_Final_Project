@@ -6,10 +6,10 @@ import os
 from urllib.parse import urlsplit
 
 import psycopg
-from fastapi import Header, Request
+from fastapi import Depends, Header, Request
 
 from app.auth.service import (
-    BadCsrf, BadOrigin, LoginRequired, SessionInfo, csrf_matches, get_session,
+    AuthError, BadCsrf, BadOrigin, LoginRequired, SessionInfo, csrf_matches, get_session,
 )
 
 COOKIE_NAME = "manual_session"
@@ -59,3 +59,20 @@ def require_csrf(request: Request, x_csrf_token: str | None = Header(default=Non
     if not csrf_matches(session.csrf_token, x_csrf_token):
         raise BadCsrf()
     return session
+
+
+class OperatorRequired(AuthError):
+    status_code, code = 403, 'OPERATOR_REQUIRED'
+    message = '운영진만 이용할 수 있는 기능입니다.'
+
+
+def require_operator(session: SessionInfo = Depends(require_user)) -> SessionInfo:
+    # Legacy admin/user accounts are issued by the existing management CLI.
+    # Public registration can issue only the separate customer role.
+    if session.user.role not in ('admin', 'user'):
+        raise OperatorRequired()
+    return session
+
+
+def require_operator_csrf(session: SessionInfo = Depends(require_csrf)) -> SessionInfo:
+    return require_operator(session)

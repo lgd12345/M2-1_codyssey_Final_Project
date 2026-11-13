@@ -6,8 +6,11 @@ import { answerLabel, describeStep, historyText, resolveImage, toolSteps } from 
 import { documentRow, summaryLine } from './documents.js'
 import { remarkPlugins } from './markdown.js'
 import { SAMPLES } from './samples.js'
-import { AccessGuide, HomePage, SiteFooter, SiteHeader, SupportPage } from './Site.jsx'
-import { needsSession, pageFromHash } from './navigation.js'
+import { HomePage, SiteFooter, SiteHeader, SupportPage } from './Site.jsx'
+import { accountArea, needsSession, pageFromHash, pageForSession } from './navigation.js'
+import { CustomerAccess } from './CustomerAccess.jsx'
+import { CustomerWorkspace } from './CustomerWorkspace.jsx'
+import { CompanyRegistry } from './CompanyRegistry.jsx'
 
 // Temporary chat screen for checking that the manual agent works and HOW it works.
 // It goes away once customer complaints are fed to the agent automatically.
@@ -22,7 +25,7 @@ const RUN_ERRORS = {
   agent_error: '답변을 처리하지 못했습니다. 문제가 계속되면 관리자에게 문의해 주세요.',
 }
 const API_ERRORS = {
-  INVALID_CREDENTIALS: '아이디 또는 비밀번호가 올바르지 않습니다.',
+  INVALID_CREDENTIALS: '이메일 또는 비밀번호가 올바르지 않습니다.',
   TOO_MANY_ATTEMPTS: '시도가 너무 많습니다. 10분 뒤 다시 시도하세요.',
   RUN_IN_PROGRESS: '이미 실행 중인 질문이 있습니다. 끝난 뒤 다시 시도하세요.',
   AGENT_NOT_CONFIGURED: '답변 서비스가 아직 준비되지 않았습니다. 관리자에게 문의해 주세요.',
@@ -38,7 +41,7 @@ async function call(path, { method = 'GET', body, csrf } = {}) {
   if (csrf && method !== 'GET') headers['X-CSRF-Token'] = csrf
   let response
   try {
-    response = await fetch(`/api/v1${path}`, { method, headers, body: body ? JSON.stringify(body) : undefined })
+    response = await fetch(`/api/v1${path}`, { method, headers, credentials: 'same-origin', cache: 'no-store', body: body ? JSON.stringify(body) : undefined })
   } catch { throw new ApiError('서버에 연결하지 못했습니다.') }
   if (response.status === 204) return null
   const data = await response.json().catch(() => null)
@@ -55,9 +58,22 @@ export function App({ theme }) {
   const [auth, setAuth] = useState(null)
   const [authError, setAuthError] = useState('')
   const [sessionAttempt, setSessionAttempt] = useState(0)
+  const [signOutBusy, setSignOutBusy] = useState(false)
+  const [signOutError, setSignOutError] = useState('')
+  const sessionGeneration = useRef(0)
   const firstPage = useRef(true)
-  const sessionPage = needsSession(page)
-  const onLogout = useCallback(() => { setAuth({ authenticated: false }); window.location.hash = '/login' }, [])
+  const screenPage = pageForSession(page, auth)
+  const sessionPage = needsSession(screenPage)
+  const area = auth?.authenticated ? accountArea(auth.user) : 'public'
+  const onLogout = useCallback(() => { sessionGeneration.current += 1; setAuth({ authenticated: false }); setAuthError(''); setSignOutError(''); window.location.hash = '/login' }, [])
+
+  async function signOut() {
+    if (signOutBusy) return
+    setSignOutBusy(true); setSignOutError('')
+    try { await call('/auth/logout', { method: 'POST', csrf: auth.csrf_token }); onLogout() }
+    catch (error) { if (error.status === 401) onLogout(); else setSignOutError(error.message) }
+    finally { setSignOutBusy(false) }
+  }
 
   useEffect(() => {
     const changePage = () => setPage((current) => pageFromHash(window.location.hash, current))
@@ -66,47 +82,56 @@ export function App({ theme }) {
   }, [])
 
   useEffect(() => {
-    document.title = `${page === 'home' ? '공작기계 고객지원' : page === 'support' ? '고객센터' : sessionPage ? '로그인 · 매뉴얼 지원' : '서비스 이용 안내'} | MORRONO`
+    const titles = { home: '공작기계 고객지원', support: '고객센터', companies: '고객사 관리', workspace: area === 'operator' ? '매뉴얼 질의' : '고객지원', login: '로그인', register: '고객 회원가입', guest: '비회원 문의' }
+    document.title = `${titles[screenPage]} | MORRONO`
     if (window.location.hash === '#machines') document.getElementById('machines')?.scrollIntoView()
     else if (!firstPage.current) {
       window.scrollTo(0, 0)
       document.getElementById('main-content')?.focus({ preventScroll: true })
     }
     firstPage.current = false
-  }, [page, sessionPage])
+  }, [screenPage, area])
 
   useEffect(() => {
-    if (!sessionPage) return
+    if (screenPage === page) return
+    window.history.replaceState(null, '', `#/${screenPage}`)
+    setPage(screenPage)
+  }, [screenPage, page])
+
+  useEffect(() => {
     let active = true
-    setAuth(null)
+    const generation = ++sessionGeneration.current
     setAuthError('')
-    call('/auth/me').then((session) => { if (active) setAuth(session) })
-      .catch((error) => { if (active) setAuthError(error.message) })
+    call('/auth/me').then((session) => { if (active && generation === sessionGeneration.current) setAuth(session) })
+      .catch((error) => { if (active && generation === sessionGeneration.current) setAuthError(error.message) })
     return () => { active = false }
   }, [sessionAttempt, sessionPage])
 
   return (
     <div className="app-shell">
       <a className="skip-link" href="#main-content">본문으로 이동</a>
-      <SiteHeader preference={preference} theme={theme} authenticated={auth?.authenticated} page={page} />
+      <SiteHeader preference={preference} theme={theme} session={auth} pending={sessionPage && !auth} page={screenPage} onSignOut={signOut} signOutBusy={signOutBusy} />
       <main id="main-content" className={`app-main ${sessionPage ? 'session-main' : 'public-main'}`} tabIndex={-1}>
+        {signOutError && <p className="workspace-signout-error error" role="alert">{signOutError}</p>}
         {!sessionPage ? (
-          page === 'support' ? <SupportPage /> : page === 'register' || page === 'guest' ? <AccessGuide kind={page} /> : <HomePage />
+          screenPage === 'support' ? <SupportPage signedIn={auth?.authenticated} /> : screenPage === 'register' || screenPage === 'guest' ? <CustomerAccess key={screenPage} kind={screenPage} /> : <HomePage />
         ) : authError ? (
           <section className="status-card" aria-labelledby="session-error-title">
             <h1 id="session-error-title">연결을 확인해 주세요</h1>
             <p className="error" role="alert">{authError}</p>
             <p className="muted">로그인 상태를 확인하지 못했습니다. 연결 후 다시 시도해 주세요.</p>
-            <button className="primary" onClick={() => setSessionAttempt((attempt) => attempt + 1)}>다시 시도</button>
+            <button className="primary" onClick={() => { setAuth(null); setSessionAttempt((attempt) => attempt + 1) }}>다시 시도</button>
           </section>
         ) : !auth ? (
           <section className="status-card" aria-busy="true" role="status">
             <h1>로그인 상태 확인 중</h1>
             <p className="muted">잠시만 기다려 주세요.</p>
           </section>
-        ) : auth.authenticated ? <Chat auth={auth} onLogout={onLogout} /> : <Login onDone={(session) => { setAuth(session); window.location.hash = '/workspace' }} />}
+        ) : auth.authenticated ? (
+          area === 'customer' ? <CustomerWorkspace auth={auth} onLogout={onLogout} /> : area === 'operator' ? screenPage === 'companies' ? <CompanyRegistry auth={auth} onLogout={onLogout} /> : <Chat auth={auth} onLogout={onLogout} /> : <section className="status-card"><h1>이용 권한을 확인해 주세요</h1><p>이 계정의 서비스 권한을 확인할 수 없습니다.</p></section>
+        ) : <Login onDone={(session) => { sessionGeneration.current += 1; setAuthError(''); setAuth(session); window.location.hash = `/${pageForSession(page, session)}` }} />}
       </main>
-      <SiteFooter />
+      <SiteFooter operator={area === 'operator'} />
     </div>
   )
 }
@@ -129,16 +154,16 @@ function Login({ onDone }) {
       <form className="login" onSubmit={submit} aria-busy={busy}>
         <a className="back-link" href="#/support">← 고객센터</a>
         <h1 id="login-title">로그인</h1>
-        <p className="login-description muted">등록된 계정으로 매뉴얼과 답변을 확인하세요.</p>
+        <p className="login-description muted">가입하신 이메일로 로그인해 주세요.</p>
         <p className="ai-notice" role="note" aria-label="AI 생성 콘텐츠 안내">
           <strong>AI 생성 콘텐츠 안내</strong><br />
           로그인 후 제공되는 답변은 AI가 생성합니다. 내용이 부정확할 수 있으니 인용된 근거와 원본 매뉴얼을 함께 확인해 주세요.
         </p>
-        <label>아이디<input name="login_id" value={loginId} onChange={(e) => setLoginId(e.target.value)} autoComplete="username" autoCapitalize="none" spellCheck={false} disabled={busy} required autoFocus /></label>
+        <label>이메일<input name="login_id" value={loginId} onChange={(e) => setLoginId(e.target.value)} autoComplete="username" autoCapitalize="none" spellCheck={false} disabled={busy} required autoFocus /></label>
         <label>비밀번호<input name="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="current-password" disabled={busy} required /></label>
         {error && <p className="error" role="alert">{error}</p>}
         <button type="submit" disabled={busy || !loginId || !password}>{busy ? '확인 중…' : '로그인'}</button>
-        <p className="login-helper muted">계정 이용이 어려우면 관리자에게 문의해 주세요.</p>
+        <p className="login-helper muted">로그인이 어려우면 고객센터로 문의해 주세요.</p>
         <div className="login-extra"><a href="#/register">회원가입 안내</a><a href="#/guest">비회원 문의 안내</a></div>
       </form>
     </section>
@@ -199,16 +224,11 @@ function Chat({ auth, onLogout }) {
     sendMessage({ text: question })
   }
   function reset() { setMessages([]); setFinished({}) }
-  async function logout() {
-    try { await call('/auth/logout', { method: 'POST', csrf }) } finally { onLogout() }
-  }
 
   return (
     <div className="wrap">
       <header><h1>매뉴얼 질의</h1>
-        <div className="chat-actions"><span className="muted">{auth.user.login_id}</span>
-          <button className="link" onClick={reset} disabled={busy}>새 대화</button>
-          <button className="link" onClick={logout}>로그아웃</button></div></header>
+        <div className="chat-actions"><button className="link" onClick={reset} disabled={busy}>새 대화</button></div></header>
       <p className="notice">매뉴얼 질의 확인용 화면입니다. 대화는 새로고침하면 사라지고, 실행 기록은 서버에 저장됩니다.</p>
 
       <Documents />
