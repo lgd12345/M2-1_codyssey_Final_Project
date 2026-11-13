@@ -74,6 +74,19 @@ def import_seed(connection,data):
     return {'companies_added':new_companies,'equipment_added':new_equipment}
 
 
+def apply_schema(connection):
+    """Fixed 001/004 SQL on the caller's explicitly selected transaction."""
+    connection.execute('SELECT pg_advisory_xact_lock(338176981015)')
+    connection.execute('CREATE SCHEMA IF NOT EXISTS claim_access')
+    connection.execute('CREATE TABLE IF NOT EXISTS claim_access.schema_version(version TEXT PRIMARY KEY,checksum TEXT NOT NULL,applied_at TIMESTAMPTZ NOT NULL DEFAULT now())')
+    for version,path,checksum in [('001',MIGRATION,migration_checksum()),('004',REGISTRY_MIGRATION,registry_checksum())]:
+        row=connection.execute('SELECT checksum FROM claim_access.schema_version WHERE version=%s',(version,)).fetchone()
+        if row and row[0]!=checksum:raise ValueError('Migration checksum mismatch')
+        if not row:
+            connection.execute(path.read_text(encoding='utf-8'))
+            connection.execute('INSERT INTO claim_access.schema_version(version,checksum) VALUES (%s,%s)',(version,checksum))
+
+
 def run(args):
     if (args.apply or args.seed_file) and not args.expect_database:raise ValueError('Exact database name required')
     if args.seed_file and not args.apply:raise ValueError('Seed requires explicit apply')
@@ -87,15 +100,7 @@ def run(args):
         if args.expect_database and actual!=args.expect_database:raise ValueError('Wrong target database')
         if not args.apply:
             return {'mode':'read_only','version_table_present':c.execute("SELECT to_regclass('claim_access.schema_version') IS NOT NULL").fetchone()[0]}
-        c.execute('SELECT pg_advisory_xact_lock(338176981015)')
-        c.execute('CREATE SCHEMA IF NOT EXISTS claim_access')
-        c.execute('CREATE TABLE IF NOT EXISTS claim_access.schema_version(version TEXT PRIMARY KEY,checksum TEXT NOT NULL,applied_at TIMESTAMPTZ NOT NULL DEFAULT now())')
-        for version,path,checksum in [('001',MIGRATION,migration_checksum()),('004',REGISTRY_MIGRATION,registry_checksum())]:
-            row=c.execute('SELECT checksum FROM claim_access.schema_version WHERE version=%s',(version,)).fetchone()
-            if row and row[0]!=checksum:raise ValueError('Migration checksum mismatch')
-            if not row:
-                c.execute(path.read_text(encoding='utf-8'))
-                c.execute('INSERT INTO claim_access.schema_version(version,checksum) VALUES (%s,%s)',(version,checksum))
+        apply_schema(c)
         result=import_seed(c,seed) if seed else {}
         return {'mode':'applied','version':'004',**result}
 

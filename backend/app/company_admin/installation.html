@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>관리 데이터 준비 | MORRONO</title>
+<style>
+:root{color-scheme:light dark;font-family:system-ui,sans-serif;background:#f4f6f8;color:#182332}
+body{margin:0;padding:clamp(20px,5vw,64px) 20px}main{max-width:640px;margin:auto;padding:clamp(22px,4vw,40px);background:#fff;border:1px solid #dce2e8;border-radius:16px}
+.brand{font-size:12px;letter-spacing:.16em;color:#526579}h1{font-size:26px;margin:14px 0}p{line-height:1.7}.muted{color:#526579;font-size:14px}
+label{display:block;margin-top:22px;font-weight:600}input[type=password]{box-sizing:border-box;width:100%;margin-top:8px;padding:12px;border:1px solid #9baaba;border-radius:8px;font:inherit}
+.confirm{display:flex;gap:10px;font-size:14px;line-height:1.6;align-items:flex-start}.confirm input{margin-top:4px;flex-shrink:0}.actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:24px}
+button{padding:12px 18px;border:1px solid #8999aa;border-radius:8px;font:inherit;cursor:pointer;background:transparent;color:inherit}button[type=submit]{background:#244b71;color:#fff;border-color:#244b71}button:disabled{opacity:.45;cursor:not-allowed}
+input:focus-visible,button:focus-visible,a:focus-visible{outline:3px solid #47a7ce;outline-offset:3px}pre{white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.7;font:inherit;font-size:14px}a{color:#295a8a}hr{border:0;border-top:1px solid #dce2e8;margin:24px 0}
+@media(prefers-color-scheme:dark){:root{background:#10161e;color:#e3eaf2}main{background:#17212d;border-color:#344658}.muted,.brand{color:#b1c2d3}input[type=password]{background:#101923;color:#e3eaf2}a{color:#91c6f7}hr{border-color:#344658}}
+</style>
+</head>
+<body><main>
+<div class="brand">MORRONO · 운영진 작업</div>
+<h1>고객사 관리 데이터 준비</h1>
+<p>고객사·등록 이메일·설비 관리에 필요한 새 구조 <strong>001·004</strong>만 생성합니다. 기존 로그인 계정과 메일 설정은 변경하지 않습니다.</p>
+<p id="status" role="status">대상과 설치 승인을 확인하고 있습니다…</p>
+<p id="target" class="muted"></p>
+<form id="install-form">
+<label for="approval">일회 승인 코드</label>
+<input id="approval" type="password" autocomplete="off" spellcheck="false" minlength="43" maxlength="128" required>
+<label class="confirm"><input id="confirmed" type="checkbox" required><span>확인한 대상에 001·004만 적용하며, 기존 계정과 메일 설정은 변경하지 않는 것을 확인했습니다.</span></label>
+<div class="actions"><button id="apply" type="submit" disabled>001·004 적용</button><button id="refresh" type="button">상태 다시 확인</button></div>
+</form>
+<pre id="result" aria-live="polite"></pre>
+<hr><p class="muted">이 작업은 기능 활성화나 고객 데이터 등록을 수행하지 않습니다. 연결 오류가 발생하면 상태부터 다시 확인해 주세요.</p>
+<a href="/#/workspace">운영진 업무 화면으로</a>
+</main>
+<script>
+(() => {
+  const form=document.getElementById('install-form'),code=document.getElementById('approval'),confirmed=document.getElementById('confirmed'),button=document.getElementById('apply'),refresh=document.getElementById('refresh'),status=document.getElementById('status'),target=document.getElementById('target'),result=document.getElementById('result');
+  let plan=null,busy=false;
+  function enable(){button.disabled=busy||!plan||plan.state!=='ready'||!confirmed.checked||code.value.length<43;refresh.disabled=busy;}
+  async function check(){
+    plan=null;enable();
+    try{
+      const response=await fetch('/api/v1/companies/installation/status',{credentials:'same-origin',cache:'no-store'}),data=await response.json();
+      if(!response.ok)throw new Error('승인 또는 연결 확인에 실패했습니다.');
+      plan=data;status.textContent=data.state==='ready'?'새 고객사 관리 구조를 적용할 준비가 됐습니다.':data.state==='installed'?'001·004 적용이 완료됐습니다.':'기존 구조 또는 권한이 예상과 달라 적용할 수 없습니다.';
+      target.textContent='대상 확인값: '+data.target_fingerprint+' · 승인 만료: '+new Date(data.expires_at).toLocaleString('ko-KR');
+    }catch{status.textContent='승인 또는 연결 확인에 실패했습니다. 작업을 진행하지 않습니다.';target.textContent='';}
+    enable();
+  }
+  form.addEventListener('submit',async event=>{
+    event.preventDefault();if(button.disabled)return;busy=true;enable();result.textContent='적용 결과를 확인하고 있습니다…';
+    try{
+      const me=await fetch('/api/v1/auth/me',{credentials:'same-origin',cache:'no-store'}),auth=await me.json();
+      if(!me.ok||!auth.authenticated||!auth.csrf_token)throw new Error();
+      const response=await fetch('/api/v1/companies/installation/apply',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json','X-CSRF-Token':auth.csrf_token},body:JSON.stringify({approval_code:code.value,target_fingerprint:plan.target_fingerprint,release_id:plan.release_id,confirmed:confirmed.checked}),signal:AbortSignal.timeout(20000)});
+      const data=await response.json();code.value='';
+      if(!response.ok){result.textContent=data.detail||'작업이 거절됐습니다. 상태를 다시 확인해 주세요.';}
+      else{result.textContent='001·004 적용 확인 완료. 기존 계정 변경 없음 · 메일 발송 없음.';}
+    }catch{code.value='';result.textContent='결과를 확인하지 못했습니다. 반복 실행 전에 상태를 다시 확인해 주세요.';}
+    finally{busy=false;confirmed.checked=false;await check();}
+  });
+  code.addEventListener('input',enable);confirmed.addEventListener('change',enable);refresh.addEventListener('click',check);check();
+})();
+</script>
+</body></html>

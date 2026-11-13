@@ -4,11 +4,59 @@ from dataclasses import replace
 import json
 from uuid import UUID
 from unittest.mock import Mock
+from pathlib import Path
+import shlex
 
 import pytest
 
 from app.customer_access.core import AccessError, Settings, company_code, email_address
 from customer_access_fakes import POLICY, issue, service
+
+
+def deployed_environment():
+    root = Path(__file__).resolve().parents[2]
+    docker = (root/'Dockerfile').read_text(encoding='utf-8')
+    block = docker.split('ENV ',1)[1].split('EXPOSE ',1)[0].replace('\\\n',' ')
+    env = dict(item.split('=',1) for item in shlex.split(block))
+    assert env['CUSTOMER_ACCESS_POLICY_FILE']=='/app/app/customer_access/policy.json'
+    env['CUSTOMER_ACCESS_POLICY_FILE']=str(root/'backend/app/customer_access/policy.json')
+    env['DATABASE_URL']='synthetic-never-connect'
+    return env
+
+
+@pytest.mark.parametrize('missing',['CUSTOMER_SMTP_PASSWORD','CUSTOMER_ACCESS_SECRET',None])
+def test_packaged_production_configuration_needs_both_private_keys(missing):
+    env=deployed_environment()
+    env.update(CUSTOMER_SMTP_PASSWORD='abcdefghijklmnop',CUSTOMER_ACCESS_SECRET='synthetic-test-secret-'*3)
+    if missing:
+        env.pop(missing)
+        assert Settings.load(env) is None
+    else:
+        settings=Settings.load(env)
+        assert settings and settings.registration
+        assert settings.smtp_username==settings.mail_from=='hellopopoberry@gmail.com'
+        assert 'MORRONO 서비스 운영자' in settings.policy['contact']
+        assert 'hellopopoberry@gmail.com' in settings.policy['contact']
+        assert settings.policy['version']=='morrono-customer-2026-11-13-v1'
+
+
+def test_private_env_preparation_generates_internal_key_and_never_overwrites(tmp_path):
+    from app.customer_access.prepare_env import prepare
+    from dotenv import dotenv_values
+    template=Path(__file__).resolve().parents[1]/'customer-access.env.example'
+    destination=tmp_path/'private-data/customer-access.env'
+    prepare(destination,template)
+    first=destination.read_bytes()
+    values=dotenv_values(destination)
+    assert len(values['CUSTOMER_ACCESS_SECRET'])>=32
+    assert values['CUSTOMER_SMTP_PASSWORD']==''
+    assert values['CUSTOMER_SMTP_USERNAME']=='hellopopoberry@gmail.com'
+    with pytest.raises(FileExistsError):
+        prepare(destination,template)
+    assert destination.read_bytes()==first
+    other=tmp_path/'other-private/customer-access.env'
+    prepare(other,template)
+    assert dotenv_values(other)['CUSTOMER_ACCESS_SECRET']!=values['CUSTOMER_ACCESS_SECRET']
 
 
 def test_default_activation_does_not_read_policy_or_connect():
