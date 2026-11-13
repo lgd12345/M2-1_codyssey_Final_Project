@@ -7,6 +7,7 @@ import pytest
 
 from app.auth.service import create_user,create_session,authenticate,get_session,SessionInfo
 from app.company_admin import install_core as core
+from app.company_admin import customer_install
 from app.company_admin.store import RegistryRepository
 from test_customer_access_postgres import database,no_external_mail,ADMIN_ENV,PASSWORD
 from test_company_installation import grant_for
@@ -85,3 +86,49 @@ def test_failure_after_ddl_rolls_back_new_schema_and_preserves_existing_user(ins
     assert database.scalar("SELECT to_regnamespace('claim_access') IS NULL")
     with database.connect() as connection:
         assert connection.execute('SELECT id,login_id,password_hash,role,is_active,created_at,last_login_at FROM public.app_user').fetchall()==before
+
+
+def customer_setup(installer):
+    database,session,grant,token,before=installer
+    plan=core.inspect_installation(database.dsn,grant,session)
+    core.apply_installation(database.dsn,grant,session,plan['target_fingerprint'])
+    grant={**grant,'action':customer_install.ACTION,'migration_checksums':customer_install.checksums()}
+    return database,session,grant,token,before
+
+
+def test_customer_constraints_commit_once_preserve_operator_and_session(installer):
+    database,session,grant,token,before=customer_setup(installer)
+    plan=customer_install.inspect_installation(database.dsn,grant,session)
+    assert plan['state']=='ready'
+    result=customer_install.apply_installation(database.dsn,grant,session,plan['target_fingerprint'])
+    assert result['state']=='installed' and result['existing_accounts_changed'] is False
+    assert database.scalar('SELECT array_agg(version ORDER BY version) FROM claim_access.schema_version')==['001','002','003','004']
+    with database.connect() as connection:
+        assert connection.execute('SELECT id,login_id,password_hash,role,is_active,created_at,last_login_at FROM public.app_user').fetchall()==before
+        assert get_session(connection,token).user.id==session.user.id
+        assert authenticate(connection,'legacy.installer',PASSWORD,'127.0.0.1').role=='user'
+        create_user(connection,'customer+verified@example.com',PASSWORD,role='customer')
+    assert customer_install.apply_installation(database.dsn,grant,session,plan['target_fingerprint'])['state']=='installed'
+    other=deepcopy(grant);other['release_id']='f'*32
+    assert customer_install.inspect_installation(database.dsn,other,session)['state']=='blocked'
+
+
+def test_customer_constraint_failure_rolls_back_both_versions(installer,monkeypatch):
+    database,session,grant,_,_=customer_setup(installer)
+    plan=customer_install.inspect_installation(database.dsn,grant,session)
+    original=customer_install.inspect_connection
+    def fail_verification(connection,grant,session):
+        result=original(connection,grant,session)
+        if result['state']=='installed':
+            raise RuntimeError('Synthetic verification failure')
+        return result
+    monkeypatch.setattr(customer_install,'inspect_connection',fail_verification)
+    with pytest.raises(RuntimeError,match='Synthetic verification failure'):
+        customer_install.apply_installation(database.dsn,grant,session,plan['target_fingerprint'])
+    assert database.scalar('SELECT array_agg(version ORDER BY version) FROM claim_access.schema_version')==['001','004']
+    assert original_connection_state(database,grant,session)=='ready'
+
+
+def original_connection_state(database,grant,session):
+    with database.connect() as connection:
+        return customer_install.inspect_connection(connection,grant,session)['state']

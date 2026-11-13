@@ -31,13 +31,19 @@ def grant_for(session=SESSION):
         'origin':'https://testserver','migration_checksums':core.checksums()}
 
 
-@pytest.fixture
-def fixture(monkeypatch,tmp_path):
+@pytest.fixture(params=['registry','customer'])
+def fixture(monkeypatch,tmp_path,request):
+    from app.company_admin import customer_install,customer_install_routes
+    engine,transport = (core,routes) if request.param=='registry' else (customer_install,customer_install_routes)
+    # The same hostile inputs must be rejected by both bounded operations.
+    global PATH
+    PATH = '/api/v1/companies/'+('installation' if request.param=='registry' else 'customer-installation')
     connector=Mock(side_effect=AssertionError('No real database in route tests'))
     monkeypatch.setattr(psycopg,'connect',connector)
     manifest=tmp_path/'installation-grant.json'
-    grant=grant_for();manifest.write_text(json.dumps(grant),encoding='utf-8')
-    monkeypatch.setattr(core,'GRANT_FILE',manifest)
+    grant=grant_for();grant.update(action=engine.ACTION,migration_checksums=engine.checksums())
+    manifest.write_text(json.dumps(grant),encoding='utf-8')
+    monkeypatch.setattr(engine,'GRANT_FILE',manifest)
     monkeypatch.setenv('DATABASE_URL','synthetic-dsn-do-not-connect')
     monkeypatch.delenv('RAG_DATABASE_URL',raising=False)
     identity={'session':SESSION}
@@ -45,10 +51,10 @@ def fixture(monkeypatch,tmp_path):
     status=Mock(return_value={'state':'ready','target_fingerprint':'b'*64,'release_id':grant['release_id'],
                              'expires_at':grant['expires_at'],'versions':['001','004']})
     apply=Mock(return_value={'state':'installed','schema_created':True,'existing_accounts_changed':False,'mail_sent':False})
-    monkeypatch.setattr(core,'inspect_installation',status)
-    monkeypatch.setattr(core,'apply_installation',apply)
+    monkeypatch.setattr(engine,'inspect_installation',status)
+    monkeypatch.setattr(engine,'apply_installation',apply)
     app=FastAPI();app.add_middleware(AccessBodyLimit,prefix='/api/v1/companies',methods=('POST','PUT'))
-    app.include_router(routes.router);app.include_router(company_router)
+    app.include_router(transport.router);app.include_router(company_router)
     with TestClient(app,base_url='https://testserver') as client:
         yield client,identity,manifest,grant,status,apply
     connector.assert_not_called()
@@ -122,7 +128,7 @@ def test_no_input_sql_dsn_or_reflected_secret(fixture,changes):
 def test_page_status_apply_and_private_headers(fixture):
     client,_,_,_,reader,writer=fixture
     page=client.get(PATH)
-    assert page.status_code==200 and '고객사 관리 데이터 준비' in page.text
+    assert page.status_code==200 and '데이터 준비' in page.text
     assert APPROVAL not in page.text and 'synthetic-csrf' not in page.text
     assert "frame-ancestors 'none'" in page.headers['content-security-policy']
     assert "'sha256-" in page.headers['content-security-policy']

@@ -37,18 +37,21 @@ def checksums():
     return {'001':migration_checksum(), '004':registry_checksum()}
 
 
-def read_grant(session, host, now=None):
+def read_grant(session, host, now=None, *, grant_file=None, action=None, expected_checksums=None):
     """Only a reviewed source grant can authorize this identity for <= one hour."""
     now = now or datetime.now(timezone.utc)
+    grant_file = GRANT_FILE if grant_file is None else grant_file
+    action = ACTION if action is None else action
+    expected_checksums = checksums() if expected_checksums is None else expected_checksums
     try:
-        if GRANT_FILE.stat().st_size > 4096:
+        if grant_file.stat().st_size > 4096:
             raise ValueError
-        grant = json.loads(GRANT_FILE.read_text(encoding='utf-8'))
+        grant = json.loads(grant_file.read_text(encoding='utf-8'))
         required = {'version','action','release_id','subject_sha256','approval_sha256',
                     'issued_at','expires_at','origin','migration_checksums'}
         if not isinstance(grant,dict) or set(grant)!=required or type(grant['version']) is not int or grant['version']!=1:
             raise ValueError
-        if grant['action']!=ACTION or grant['migration_checksums']!=checksums():
+        if grant['action']!=action or grant['migration_checksums']!=expected_checksums:
             raise ValueError
         for name,size in [('release_id',32),('subject_sha256',64),('approval_sha256',64)]:
             if not isinstance(grant[name],str) or not re.fullmatch('[0-9a-f]{'+str(size)+'}',grant[name]):
