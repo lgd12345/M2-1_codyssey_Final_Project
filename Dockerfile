@@ -12,10 +12,17 @@ WORKDIR /app
 COPY backend/requirements.txt ./requirements.txt
 RUN pip install --no-cache-dir -r requirements.txt
 COPY backend/app ./app
+COPY backend/customer-access.env.example ./customer-access.env.example
 COPY --from=frontend-build /frontend/dist ./static
 
 ENV STATIC_DIR=/app/static \
     APP_COOKIE_SECURE=1 \
-    COMPANY_ADMIN_ENABLED=1
+    COMPANY_ADMIN_ENABLED=1 \
+    CUSTOMER_ACCESS_ENABLED=1 \
+    CUSTOMER_ACCESS_RELEASE_APPROVED=1 \
+    CUSTOMER_REGISTRATION_ENABLED=1 \
+    CUSTOMER_SMTP_USERNAME=hellopopoberry@gmail.com \
+    CUSTOMER_MAIL_FROM=hellopopoberry@gmail.com \
+    CUSTOMER_ACCESS_POLICY_FILE=/app/app/customer_access/policy.json
 EXPOSE 8000
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
