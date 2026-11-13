@@ -27,6 +27,17 @@ docker run --rm --network YOUR_DB_NETWORK --env-file backend/.env -p 8000:8000 d
 
 `frontend/`에서 `npm ci` 후 `npm run dev`를 실행할 수 있습니다. 이때 Vite의 `/api` 프록시 기본 대상은 `http://localhost:8000`이며 `VITE_API_PROXY_TARGET`으로 변경할 수 있습니다. 로컬 Compose 파일은 제공하지 않습니다.
 
+## 마이그레이션 적용
+
+앱은 RAG_DATABASE_URL(없으면 DATABASE_URL)을 사용합니다. 스키마는 앱 시작 시 자동으로 바뀌지 않고 명시적으로 적용합니다.
+
+```sh
+cd backend
+python scripts/migrate.py --env-name RAG_DATABASE_URL --allow-non-test   # 앱이 실제로 쓰는 DB
+```
+
+--allow-non-test 없이는 RAG_DATABASE_URL·DATABASE_URL에 적용하지 않습니다. 적용 전에 어떤 DB인지(SELECT current_database())와 미적용 버전을 확인하세요. .env에서 두 URL이 서로 다른 DB를 가리킬 수 있습니다.
+
 ## 서비스 요청 TDD
 
 - 실제 접수 API: `GET /api/v1/service-requests/context`, `POST /api/v1/service-requests`, `GET /api/v1/service-requests`, `GET /api/v1/service-requests/{identity}`

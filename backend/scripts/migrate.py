@@ -40,9 +40,9 @@ def apply_migrations(database_url: str, *, migrations_dir: str | Path = MIGRATIO
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Apply the manual-agent database migrations.")
-    parser.add_argument("--env-name", choices=("TEST_DATABASE_URL", "DATABASE_URL"), default="TEST_DATABASE_URL")
+    parser.add_argument("--env-name", choices=("TEST_DATABASE_URL", "RAG_DATABASE_URL", "DATABASE_URL"), default="TEST_DATABASE_URL")
     parser.add_argument("--allow-non-test", action="store_true",
-                        help="required when applying DATABASE_URL; prevents accidental dev/prod migration")
+                        help="required for RAG_DATABASE_URL (the database the running app uses) or DATABASE_URL; prevents accidental dev/prod migration")
     args = parser.parse_args()
     database_url = os.getenv(args.env_name, "").strip()
     if not database_url:
@@ -50,8 +50,8 @@ def main() -> int:
     database_name = urlsplit(database_url).path.rstrip("/").split("/")[-1]
     if args.env_name == "TEST_DATABASE_URL" and not database_name.endswith("_test"):
         parser.error("TEST_DATABASE_URL must point to a database ending in _test")
-    if args.env_name == "DATABASE_URL" and not args.allow_non_test:
-        parser.error("refusing to migrate DATABASE_URL without --allow-non-test")
+    if args.env_name != "TEST_DATABASE_URL" and not args.allow_non_test:
+        parser.error(f"refusing to migrate {args.env_name} without --allow-non-test")
     applied = apply_migrations(database_url)
     print("Applied: " + (", ".join(applied) if applied else "none; schema is current"))
     return 0
