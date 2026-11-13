@@ -1,27 +1,12 @@
-const PAGES = new Set(['home', 'support', 'login', 'register', 'guest', 'workspace', 'companies'])
+// 해시 라우트: #/cases, #/cases/new, #/cases/CLM-001. 서버가 정적 파일만 제공하므로 새로고침·직접 링크가 그대로 동작한다.
 
-// Hash routes keep refresh/deep links compatible with the existing static server.
-export function pageFromHash(hash, current = 'home') {
-  if (!hash || hash === '#' || hash === '#machines') return 'home'
-  if (!hash.startsWith('#/')) return current // Native anchors, including the skip link.
-  const page = hash.slice(2)
-  return PAGES.has(page) ? page : 'home'
+export function parseRoute(hash) {
+  const path = (hash || '').replace(/^#\/?/, '').split('?')[0]
+  if (path === '' || path === 'cases') return { name: 'list' }
+  if (path === 'cases/new') return { name: 'new' }
+  const detail = /^cases\/(CLM-\d+)$/.exec(path)
+  if (detail) return { name: 'detail', id: detail[1] }
+  return { name: 'notfound' }
 }
 
-export function needsSession(page) {
-  return page === 'login' || page === 'workspace' || page === 'companies'
-}
-
-export function accountArea(user) {
-  if (user?.role === 'customer') return 'customer'
-  if (user?.role === 'admin' || user?.role === 'user') return 'operator'
-  return 'blocked'
-}
-
-export function pageForSession(page, session) {
-  if (!session?.authenticated) return page
-  const area = accountArea(session.user)
-  if (area === 'operator') return page === 'companies' ? 'companies' : 'workspace'
-  if (area === 'customer') return ['login', 'register', 'guest', 'companies'].includes(page) ? 'workspace' : page
-  return 'workspace'
-}
+export const caseHref = (id) => `#/cases/${id}`
