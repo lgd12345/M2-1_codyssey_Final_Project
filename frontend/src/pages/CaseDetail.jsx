@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { canApprove, canReanalyze, isEditable } from '../mock/store.js'
+import { allWorkDone, canApprove, canReanalyze, canResolve, isEditable } from '../mock/store.js'
 import { Avatar, Lozenge, formatTime, nowIso } from '../ui.jsx'
 import { AnalysisSection } from './AnalysisSection.jsx'
 import { DeptSection } from './DeptSection.jsx'
@@ -14,6 +14,7 @@ export function CaseDetail({ item, dispatch, me }) {
       <div className="issue-grid">
         <div className="issue-main">
           <h1 id="detail-title">{item.title}</h1>
+          {item.closeRequested && item.status !== '종결' && <p className="notice warn" role="status"><strong>고객이 종결을 요청했습니다.</strong> 활동의 고객 메시지를 확인하세요.</p>}
           <RequestCard item={item} />
           <AnalysisSection item={item} dispatch={dispatch} me={me} />
           <DeptSection item={item} dispatch={dispatch} />
@@ -46,6 +47,11 @@ function RequestCard({ item }) {
           <div><dt>알람 · 오류 번호</dt><dd>{intake.alarm || '없음'}</dd></div>
           <div><dt>발생 상황</dt><dd>{intake.occurred || '미입력'}</dd></div>
           <div><dt>메시지</dt><dd className="pre">{intake.symptom}</dd></div>
+          {intake.asset && (
+            <div className="asset"><dt>장비 · 보증</dt>
+              <dd><span className={intake.asset.warranty === '보증 만료' ? 'lozenge lozenge-red' : 'lozenge lozenge-green'}>{intake.asset.warranty}</span> {intake.asset.warrantyNote}<br />
+                <small>설치 {intake.asset.installDate} · 출하 {intake.asset.shipDate} · 이전 서비스 {intake.asset.previous}건</small></dd></div>
+          )}
         </dl>
       )}
     </div>
@@ -58,7 +64,7 @@ function StatusMenu({ item, dispatch }) {
   const can = canReanalyze(item)
   return (
     <div className="status-menu">
-      <button className={`status-btn status-${item.status === '승인됨' ? 'green' : item.status === '반려됨' ? 'red' : item.status === '추가 정보 필요' ? 'yellow' : 'blue'}`} aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen(!open)}>{item.status} ▾</button>
+      <button className={`status-btn status-${item.status === '종결' ? 'green' : item.status === '반려됨' ? 'red' : item.status === '추가 정보 필요' ? 'yellow' : 'blue'}`} aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen(!open)}>{item.status} ▾</button>
       {open && (
         <ul className="menu" role="menu">
           <li role="none"><button role="menuitem" disabled={!can} onClick={() => { dispatch({ type: 'REANALYZE', id: item.id, at: nowIso() }); setOpen(false) }}>재분석 요청</button></li>
@@ -75,9 +81,7 @@ function ApprovalPanel({ item, dispatch, me }) {
   const [reason, setReason] = useState('')
 
   if (item.status === '분석 중') return null
-  if (item.status === '승인됨') {
-    return <div className="side-panel approved"><h3>승인 완료</h3><p><strong>{item.approval.by}</strong> · {formatTime(item.approval.at)}</p><p className="muted small">선택한 부서로 연결 업무가 생성되었습니다.</p></div>
-  }
+  if (item.status === '처리 중' || item.status === '종결') return <ResolvePanel item={item} dispatch={dispatch} me={me} />
   if (item.status === '반려됨') {
     const last = [...item.comments].reverse().find((c) => c.text.startsWith('반려 사유'))
     return <div className="side-panel declined"><h3>반려됨</h3><p className="small">{last?.text}</p><p className="muted small">상태 메뉴에서 재분석을 요청할 수 있습니다.</p></div>
@@ -107,11 +111,33 @@ function ApprovalPanel({ item, dispatch, me }) {
   )
 }
 
+// 승인 후: 연결 업무가 모두 완료되면 품질 담당자가 부서 결과를 확인하고 원본 요청을 종결한다(Jira 연결 작업 완료 후 원본 해결).
+function ResolvePanel({ item, dispatch, me }) {
+  const [note, setNote] = useState('')
+  const done = item.linked.filter((l) => l.status === '완료').length
+  if (item.status === '종결') {
+    return <div className="side-panel approved"><h3>종결됨</h3><p><strong>{item.resolution.by}</strong> · {formatTime(item.resolution.at)}</p>{item.resolution.note && <p className="small">{item.resolution.note}</p>}<p className="muted small">고객 포털에서 완료로 표시됩니다.</p></div>
+  }
+  return (
+    <div className={canResolve(item) ? 'side-panel approval' : 'side-panel'}>
+      <h3>부서 처리 {done}/{item.linked.length} 완료</h3>
+      <p className="small">{item.approval.by}이 {formatTime(item.approval.at)}에 승인했습니다.</p>
+      {canResolve(item) ? (
+        <>
+          <p className="small">모든 연결 업무가 완료되었습니다. 처리 결과를 확인한 뒤 요청을 종결하세요.</p>
+          <label className="small">종결 메모(고객에게 보입니다)<textarea rows={3} value={note} onChange={(e) => setNote(e.target.value)} /></label>
+          <button className="primary" onClick={() => dispatch({ type: 'RESOLVE', id: item.id, by: me, note, at: nowIso() })}>요청 종결</button>
+        </>
+      ) : <p className="muted small">부서 업무가 모두 완료되면 종결할 수 있습니다.</p>}
+    </div>
+  )
+}
+
 function DetailsPanel({ item, dispatch, me }) {
   const { intake, analysis } = item
   const manual = analysis?.evidence.filter((e) => e.kind === 'manual').length ?? 0
   const cases = analysis?.evidence.filter((e) => e.kind === 'fsr').length ?? 0
-  const targets = item.status === '승인됨' ? item.linked.map((l) => l.name) : item.departments.filter((d) => d.selected).map((d) => d.key && ({ service: '서비스', quality: '품질', parts: '부품·자재', sales: '영업' }[d.key]))
+  const targets = item.linked.length > 0 ? item.linked.map((l) => l.name) : item.departments.filter((d) => d.selected).map((d) => d.key && ({ service: '서비스', quality: '품질', parts: '부품·자재', sales: '영업' }[d.key]))
   return (
     <div className="side-panel details">
       <h3>세부 정보</h3>

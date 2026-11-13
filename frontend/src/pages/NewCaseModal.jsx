@@ -1,18 +1,21 @@
 import React, { useEffect, useState } from 'react'
 import { SAMPLE_IDS, SCENARIOS } from '../mock/data.js'
 import { CALL_REASONS, META } from '../mock/meta.js'
-import { caseHref } from '../navigation.js'
+import { caseHref, portalHref } from '../navigation.js'
 import { nowIso } from '../ui.jsx'
 
 // 등록된 장비 목록(시연용). TRUMPF의 "Machine & Machine no." 선택에 해당한다.
-const MACHINES = SAMPLE_IDS.map((id) => SCENARIOS[id].intake)
+const ALL_MACHINES = SAMPLE_IDS.map((id) => SCENARIOS[id].intake)
   .filter((m, i, all) => all.findIndex((x) => x.serial === m.serial) === i)
 const machineLabel = (m) => `${m.company} · ${m.machine} · ${m.serial}`
 
-const close = () => { window.location.hash = '/cases' }
-
 // TRUMPF "Create new service case": 2단계 모달(1. 사유·기계·오류번호·메시지·이미지 → 2. 연락처).
-export function NewCaseModal({ dispatch, nextId }) {
+export function NewCaseModal({ dispatch, nextId, portal = false, company = null }) {
+  // 고객 포털에서는 로그인한 고객사의 등록 장비만 고를 수 있다.
+  const MACHINES = company ? ALL_MACHINES.filter((m) => m.company === company) : ALL_MACHINES
+  const sampleIds = company ? SAMPLE_IDS.filter((id) => SCENARIOS[id].intake.company === company) : SAMPLE_IDS
+  const home = portal ? '/portal' : '/cases'
+  const close = () => { window.location.hash = home }
   const [step, setStep] = useState(1)
   const [sampleId, setSampleId] = useState('')
   const [reason, setReason] = useState('')
@@ -27,7 +30,7 @@ export function NewCaseModal({ dispatch, nextId }) {
     const onKey = (e) => { if (e.key === 'Escape') close() }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [])
+  }, [home])
 
   function loadSample(id) {
     setSampleId(id)
@@ -52,7 +55,7 @@ export function NewCaseModal({ dispatch, nextId }) {
       creator: `${contact.name.trim()} (${machine.company})`, contact,
     }
     dispatch({ type: 'CREATE', intake, sampleId, at: nowIso() })
-    window.location.hash = caseHref(nextId).slice(1)
+    window.location.hash = (portal ? portalHref(nextId) : caseHref(nextId)).slice(1)
   }
 
   return (
@@ -70,7 +73,7 @@ export function NewCaseModal({ dispatch, nextId }) {
             <label className="demo-field">시연용 샘플 불러오기
               <select value={sampleId} onChange={(e) => loadSample(e.target.value)}>
                 <option value="">직접 입력 (시연에서는 &lsquo;근거 부족&rsquo; 분석)</option>
-                {SAMPLE_IDS.map((id) => <option key={id} value={id}>{SCENARIOS[id].label}</option>)}
+                {sampleIds.map((id) => <option key={id} value={id}>{SCENARIOS[id].label}</option>)}
               </select>
             </label>
             <label>접수 사유 *<select value={reason} onChange={(e) => setReason(e.target.value)} required><option value="">선택</option>{CALL_REASONS.map((r) => <option key={r}>{r}</option>)}</select></label>

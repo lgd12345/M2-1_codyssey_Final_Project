@@ -11,19 +11,23 @@ export function DeptSection({ item, dispatch }) {
   if (item.status === '분석 중') {
     return <section className="block"><div className="block-head"><h2>연결 업무</h2></div><p className="muted">분석이 끝나면 전달할 부서와 초안이 제안됩니다. 승인 전에는 어떤 부서에도 전달되지 않습니다.</p></section>
   }
-  if (item.status === '승인됨') return <Linked item={item} />
+  if (item.linked.length > 0) return <Linked item={item} />
   return <Proposed item={item} dispatch={dispatch} />
 }
 
+// 승인 후의 연결 업무: 부서가 처리하는 상태·담당자·결과가 원본 요청에서 보인다.
 function Linked({ item }) {
+  const done = item.linked.filter((l) => l.status === '완료').length
   return (
     <section className="block" aria-labelledby="linked-title">
-      <div className="block-head"><h2 id="linked-title">연결 업무 <span className="count-pill">{item.linked.length}</span></h2><span className="muted small">시연용 전달 · 실제 전송 없음</span></div>
+      <div className="block-head"><h2 id="linked-title">연결 업무 <span className="count-pill">{done}/{item.linked.length} 완료</span></h2><span className="muted small">부서의 처리 결과가 이곳에 모입니다</span></div>
       <ul className="linked">
         {item.linked.map((l) => (
           <li key={l.workKey}>
-            <div className="linked-head"><span className="key">{l.workKey}</span><strong>{l.name} 팀</strong><Lozenge status="승인됨" /><span className="muted small">전달됨</span>{l.edited && <span className="tag edited">검토 중 수정됨</span>}</div>
+            <div className="linked-head"><span className="key">{l.workKey}</span><strong>{l.name} 팀</strong><Lozenge status={l.status} />
+              <span className="muted small">{l.assignee ? `담당 ${l.assignee}` : '담당자 미지정'}</span>{l.edited && <span className="tag edited">검토 중 수정됨</span>}</div>
             <pre>{l.content}</pre>
+            {l.result && <div className="work-result"><strong>처리 결과</strong><p>{l.result.summary}</p><small>작업 시간 {l.result.hours ? `${l.result.hours}시간` : '미입력'}</small></div>}
           </li>
         ))}
       </ul>

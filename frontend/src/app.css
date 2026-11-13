@@ -244,3 +244,44 @@ input[type='checkbox'] { width: auto; margin: 0.2rem 0.6rem 0 0; }
   .queue-side, .issue-side { position: static; }
 }
 @media (prefers-reduced-motion: reduce) { .timeline li.running .dot { animation: none; } }
+
+/* 시연 보기 전환 */
+.view-switch { display: flex; align-items: center; gap: 0.3rem; padding-right: 0.6rem; margin-right: 0.3rem; border-right: 1px solid var(--border); }
+.view-switch select { width: auto; margin: 0; padding: 0.2rem 0.4rem; font-size: 0.82rem; }
+
+/* 고객 포털(TRUMPF My service cases) */
+.portal-hero { max-width: 760px; margin: 0 auto 1.4rem; text-align: center; }
+.portal-hero h1 { font-size: 1.8rem; }
+.create-case { background: var(--green-fg); color: var(--surface); border-color: var(--green-fg); font-weight: 700; padding: 0.55rem 1.3rem; margin-top: 0.6rem; }
+.create-case:hover { background: var(--green-fg); opacity: 0.9; }
+.portal .filters { justify-content: center; }
+.results-title { text-align: center; margin: 1.4rem 0 0.6rem; font-size: 1.2rem; }
+.th-sort { background: transparent; border: 0; padding: 0; font: inherit; text-transform: inherit; letter-spacing: inherit; color: inherit; font-weight: 700; }
+.portal-detail { max-width: 1000px; margin: 0 auto; }
+.pd-head { display: flex; justify-content: space-between; gap: 1.5rem; align-items: flex-start; margin-bottom: 1rem; }
+.pd-meta { display: flex; flex-wrap: wrap; gap: 0.4rem 1.6rem; margin: 0.4rem 0 0.8rem; }
+.pd-meta div { min-width: 7rem; }
+.pd-meta dt { font-size: 0.75rem; color: var(--muted); }
+.pd-meta dd { margin: 0; font-weight: 500; }
+.pd-desc { margin: 0; }
+.pd-actions { display: flex; flex-direction: column; gap: 0.5rem; min-width: 9.5rem; }
+.pd-actions button { width: 100%; }
+.pd-panel { padding: 1rem 1.2rem; }
+.portal-events .event, .portal-events .comment { padding-left: 0; }
+.portal-events .comment { background: var(--sunken); margin-bottom: 0.4rem; }
+.guides { list-style: none; margin: 0; padding: 0; }
+.guides li { display: flex; justify-content: space-between; align-items: center; gap: 1rem; padding: 0.6rem 0; border-bottom: 1px solid var(--border); }
+.guides small { display: block; }
+.notice { margin-bottom: 0.8rem; }
+.notice.ok { background: var(--green-bg); color: var(--green-fg); }
+.notice p { margin: 0.3rem 0; }
+
+/* 담당자·부서 화면 보강 */
+.asset dd small { color: var(--muted); }
+.who { display: inline-flex; align-items: center; gap: 0.4rem; }
+.work-result { margin-top: 0.5rem; padding: 0.5rem 0.8rem; background: var(--green-bg); color: var(--green-fg); border-radius: var(--radius); }
+.work-result p { margin: 0.2rem 0; }
+.narrow-field { max-width: 11rem; }
+.siblings { list-style: none; margin: 0; padding: 0; font-size: 0.86rem; }
+.siblings li { padding: 0.35rem 0; border-bottom: 1px solid var(--border); }
+.crumbs .muted { margin-left: 0.4rem; }

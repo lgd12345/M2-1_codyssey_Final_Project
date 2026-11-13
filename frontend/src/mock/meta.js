@@ -4,6 +4,23 @@ export const CALL_REASONS = ['기계 고장', '기술 문의', '부품 문의', 
 
 export const DEPT_PREFIX = { service: 'SVC', quality: 'QLT', parts: 'PRT', sales: 'SAL' }
 
+// 등록 장비 정보(시연용 가상). TRUMPF·Philips·DMG MORI 포털처럼 접수 시점에 장비·보증 정보를 함께 보여 준다.
+export const ASSETS = {
+  'MACH-00231': { warranty: '보증 기간 내', warrantyNote: '내구 1년 · 2027-03-14까지', installDate: '2026-03-15', shipDate: '2026-03-02', previous: 1 },
+  'MACH-00418': { warranty: '보증 기간 내', warrantyNote: '내구 1년 · 2027-01-20까지', installDate: '2026-01-21', shipDate: '2026-01-08', previous: 3 },
+  'MACH-00577': { warranty: '보증 기간 내', warrantyNote: '내구 1년 · 2027-06-09까지', installDate: '2026-06-10', shipDate: '2026-05-27', previous: 0 },
+  'MACH-00339': { warranty: '보증 만료', warrantyNote: '내구 1년 · 2026-08-30 만료', installDate: '2025-08-31', shipDate: '2025-08-18', previous: 2 },
+  'MACH-00102': { warranty: '보증 기간 내', warrantyNote: '내구 1년 · 2027-02-11까지', installDate: '2026-02-12', shipDate: '2026-01-30', previous: 0 },
+}
+
+// 시연에서 보는 화면(역할). 고객 포털 / 담당자 대기열 / 부서 업무함으로 나뉜다.
+export const VIEWS = [
+  { key: 'customer', label: '고객 포털' },
+  { key: 'quality', label: '품질 담당자' },
+  { key: 'dept', label: '부서 업무함' },
+]
+export const CUSTOMER_COMPANIES = ['가상고객사 A', '가상고객사 B', '가상고객사 C', '가상고객사 D']
+
 export const META = {
   s1: {
     type: '기계 고장', creator: '김현장 (가상고객사 A)',
