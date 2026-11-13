@@ -3,9 +3,9 @@
   "action": "install_registry_001_004",
   "release_id": "f085e778beb69eac0c243dde3b0cf7ef",
   "subject_sha256": "d3336174ddb0d56821560ed5c5f40ab292d68d4bd30b8e04191b7be45c10971d",
-  "approval_sha256": "e38088e626d9247f7ca197efa2cd23191c9fb337ac2436e45a8ff1178a45c8c7",
-  "issued_at": "2026-11-12T15:12:00.512933+00:00",
-  "expires_at": "2026-11-12T16:07:00.512933+00:00",
+  "approval_sha256": "580a09f56509ddaf65aab596e5febe529ce5470b8bc7ae08ee73f8022f29e1ae",
+  "issued_at": "2026-11-13T02:39:52.543967+00:00",
+  "expires_at": "2026-11-13T03:34:52.543967+00:00",
   "origin": "https://demo.morrono.com",
   "migration_checksums": {
     "001": "1a22e4849e21166c0a26adb4b116a71b66f2ca47eb2aacbad0d77177805585f3",
