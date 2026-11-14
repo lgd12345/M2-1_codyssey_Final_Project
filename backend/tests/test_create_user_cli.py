@@ -4,7 +4,6 @@ import psycopg
 import pytest
 from psycopg.conninfo import conninfo_to_dict
 
-from scripts.migrate import apply_migrations
 
 DATABASE_URL = os.getenv("TEST_DATABASE_URL")
 pytestmark = pytest.mark.skipif(not DATABASE_URL, reason="isolated TEST_DATABASE_URL not configured")
@@ -12,10 +11,9 @@ PASSWORD = "correct-horse-battery"
 
 
 @pytest.fixture
-def db(monkeypatch):
+def db(monkeypatch, service_schema):
     from db_safety import require_disposable_test_database
     require_disposable_test_database(DATABASE_URL)
-    apply_migrations(DATABASE_URL)
     monkeypatch.setenv("DATABASE_URL", DATABASE_URL)
     connection = psycopg.connect(DATABASE_URL)
     connection.execute("TRUNCATE app_user, app_login_failure CASCADE")

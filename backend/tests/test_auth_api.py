@@ -8,7 +8,6 @@ from fastapi import Depends, FastAPI
 from fastapi.testclient import TestClient
 from psycopg.conninfo import conninfo_to_dict
 
-from scripts.migrate import apply_migrations
 
 DATABASE_URL = os.getenv("TEST_DATABASE_URL")
 pytestmark = pytest.mark.skipif(not DATABASE_URL, reason="isolated TEST_DATABASE_URL not configured")
@@ -17,10 +16,9 @@ ORIGIN = {"Origin": "http://testserver"}
 
 
 @pytest.fixture
-def db(monkeypatch):
+def db(monkeypatch, service_schema):
     from db_safety import require_disposable_test_database
     require_disposable_test_database(DATABASE_URL)
-    apply_migrations(DATABASE_URL)
     monkeypatch.setenv("DATABASE_URL", DATABASE_URL)
     monkeypatch.delenv("APP_COOKIE_SECURE", raising=False)
     connection = psycopg.connect(DATABASE_URL)

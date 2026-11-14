@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 import os
+from concurrent.futures import ThreadPoolExecutor
+import time
 from pathlib import Path
 import re
 import subprocess
@@ -28,6 +30,7 @@ def regression_database_dsn(base: str, name: str) -> str:
 
 
 MAX_WORKERS = 32
+DEFAULT_WORKERS = min(8, os.cpu_count() or 1)
 
 
 def split_worker_option(arguments: list[str], *, default: int) -> tuple[int, list[str]]:
@@ -72,6 +75,21 @@ def redact_output(output: str, config: dict[str, str | None]) -> str:
     return output
 
 
+def database_jobs(base: str, names: list[str], *, create: bool) -> None:
+    """Independent CREATE/DROP operations, parallel connections; validate every name before any SQL."""
+    for name in names:
+        regression_database_dsn(base, name)
+
+    def one(name):
+        with psycopg.connect(base, autocommit=True, connect_timeout=5) as connection:
+            statement = "CREATE DATABASE {}" if create else "DROP DATABASE IF EXISTS {} WITH (FORCE)"
+            connection.execute(sql.SQL(statement).format(sql.Identifier(name)))
+
+    with ThreadPoolExecutor(max_workers=min(8, max(1, len(names)))) as pool:
+        # All submitted jobs finish before cleanup, even when one raises.
+        list(pool.map(one, names))
+
+
 def main() -> int:
     load_dotenv(ROOT / ".env", override=False)
     config = {**dotenv_values(ROOT / ".env"), **os.environ}
@@ -80,43 +98,38 @@ def main() -> int:
         print("TEST_DATABASE_URL is required; no application database fallback is allowed.")
         return 2
     try:
-        workers, pytest_args = split_worker_option(sys.argv[1:], default=int(os.getenv("TEST_WORKERS", "4")))
+        workers, pytest_args = split_worker_option(sys.argv[1:], default=int(os.getenv("TEST_WORKERS", str(DEFAULT_WORKERS))))
     except ValueError as exc:
         print(str(exc))
         return 2
-    created: list[str] = []
+    names = ["rag_regression_" + uuid4().hex[:16] + "_test" for _ in range(workers)]
+    started = time.perf_counter()
     try:
-        # One disposable database per worker: the tests TRUNCATE tables, so workers must never share one.
-        with psycopg.connect(base, autocommit=True, connect_timeout=5) as admin:
-            try:
-                targets = []
-                for _ in range(workers):
-                    name = "rag_regression_" + uuid4().hex[:16] + "_test"
-                    targets.append(regression_database_dsn(base, name))
-                    admin.execute(sql.SQL("CREATE DATABASE {}").format(sql.Identifier(name)))
-                    created.append(name)
-                print(f"Created {workers} disposable regression database(s); existing corpus is not a test target.", flush=True)
-                env = os.environ.copy()
-                env["TEST_DATABASE_URL"] = targets[0]
-                env["DATABASE_URL"] = targets[0]  # the application inside the tests uses the disposable database
-                env["REGRESSION_DATABASES"] = json.dumps(targets)
-                env["PYDANTIC_AI_NO_BANNER"] = "1"
-                parent = ROOT / ".pytest-tmp"
-                parent.mkdir(exist_ok=True)
-                with tempfile.TemporaryDirectory(prefix="isolated-", dir=parent) as temporary:
-                    args = pytest_arguments(workers, pytest_args or ["tests", "-q", "--disable-warnings"])
-                    result = subprocess.run(
-                        [sys.executable, "-m", "pytest", *args, "--basetemp", str(Path(temporary) / "pytest")],
-                        cwd=ROOT, env=env, capture_output=True, text=True, encoding="utf-8", errors="replace",
-                    )
-                    print(redact_output(result.stdout + result.stderr, config), flush=True)
-                    return result.returncode
-            finally:
-                for name in created:
-                    admin.execute(sql.SQL("DROP DATABASE IF EXISTS {} WITH (FORCE)").format(sql.Identifier(name)))
-                print(f"Dropped {len(created)} disposable regression database(s).", flush=True)
+        targets = [regression_database_dsn(base, name) for name in names]
+        try:
+            database_jobs(base, names, create=True)
+            print(f"Created {workers} disposable databases in {time.perf_counter() - started:.2f}s; existing corpus is not a test target.", flush=True)
+            env = os.environ.copy()
+            env["TEST_DATABASE_URL"] = targets[0]
+            env["DATABASE_URL"] = targets[0]
+            env["REGRESSION_DATABASES"] = json.dumps(targets)
+            env["TEST_WORKERS"] = str(workers)  # E2E shards track actual worker count
+            env["PYDANTIC_AI_NO_BANNER"] = "1"
+            parent = ROOT / ".pytest-tmp"
+            parent.mkdir(exist_ok=True)
+            with tempfile.TemporaryDirectory(prefix="isolated-", dir=parent) as temporary:
+                args = pytest_arguments(workers, pytest_args or ["tests", "-q", "--disable-warnings"])
+                result = subprocess.run(
+                    [sys.executable, "-m", "pytest", *args, "--basetemp", str(Path(temporary) / "pytest")],
+                    cwd=ROOT, env=env, capture_output=True, text=True, encoding="utf-8", errors="replace",
+                )
+                print(redact_output(result.stdout + result.stderr, config), flush=True)
+                return result.returncode
+        finally:
+            # Names were generated by this invocation. IF EXISTS also covers partial CREATE failure.
+            database_jobs(base, names, create=False)
+            print(f"Dropped {len(names)} disposable databases. Total wall time: {time.perf_counter() - started:.2f}s.", flush=True)
     except Exception as exc:
-        # Never emit exception messages or DSNs, even when the test environment is misconfigured.
         print(f"Isolated regression runner failed: {type(exc).__name__}", flush=True)
         return 2
 

@@ -9,17 +9,15 @@ from app.agent_rag.ingest import ingest_documents
 from app.agent_rag.embedding import EmbeddingUnavailable
 from app.agent_rag.embedding_index import ensure_embedding_config, index_embeddings
 from app.agent_rag.retrieval import lookup_identifier, search_manual
-from scripts.migrate import apply_migrations
 
 DATABASE_URL = os.getenv("TEST_DATABASE_URL")
 pytestmark = pytest.mark.skipif(not DATABASE_URL, reason="isolated TEST_DATABASE_URL not configured")
 
 
 @pytest.fixture
-def test_db():
+def test_db(service_schema):
     from db_safety import require_disposable_test_database
     require_disposable_test_database(DATABASE_URL)
-    apply_migrations(DATABASE_URL)
     import psycopg
     connection = psycopg.connect(DATABASE_URL)
     _clear_test_data(connection)

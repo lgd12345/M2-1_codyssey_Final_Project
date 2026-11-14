@@ -8,7 +8,6 @@ from app.agent_rag.case_retrieval import search_cases
 from app.agent_rag.cases import ingest_cases, load_cases
 from app.agent_rag.settings import AgentSettings
 from app.agent_rag.tools import ManualAgentTools
-from scripts.migrate import apply_migrations
 
 HEADER = ["FSR문서번호", "기종명", "보증구분(서비스)", "접수내용", "진행현황", "등록일", "수리구분",
           "현상(대)", "현상(중)", "현상(소)", "귀책유형", "신청부품번호", "신청부품명", "대체부품번호", "대체부품명"]
@@ -53,11 +52,10 @@ needs_db = pytest.mark.skipif(not DATABASE_URL, reason="isolated TEST_DATABASE_U
 
 
 @pytest.fixture
-def case_db(tmp_path):
+def case_db(tmp_path, service_schema):
     from psycopg.conninfo import conninfo_to_dict
     from db_safety import require_disposable_test_database
     require_disposable_test_database(DATABASE_URL)
-    apply_migrations(DATABASE_URL)
     import psycopg
     connection = psycopg.connect(DATABASE_URL)
     connection.execute("TRUNCATE rag_case")
