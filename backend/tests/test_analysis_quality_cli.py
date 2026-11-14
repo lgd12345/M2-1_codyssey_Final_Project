@@ -67,3 +67,30 @@ def test_infrastructure_errors_fail_the_run_without_leaking_messages(capsys):
         out = Path(folder) / 'report.json'
         assert run(['--only', 'vague', '--min-rate', '0', '--output', str(out)], broken) == 1
         assert 'secret-value' not in out.read_text(encoding='utf-8') + capsys.readouterr().out
+
+
+def test_e2e_mode_needs_explicit_current_database_approval_before_doing_anything():
+    called = []
+    with pytest.raises(SystemExit) as stopped:
+        analysis_quality.main(['--e2e', '--only', 'vague'], e2e_runner=lambda cases, args: called.append(cases) or [])
+    assert stopped.value.code == 2 and called == []
+    with pytest.raises(SystemExit):
+        analysis_quality.main(['--e2e', '--allow-current-db', 'some_other_db', '--only', 'vague'], e2e_runner=lambda c, a: [])
+
+
+def test_e2e_mode_scores_stored_results_writes_a_report_and_reports_the_mode():
+    seen = {}
+
+    def fake_e2e(cases, args):
+        seen['ids'] = [case.id for case in cases]
+        seen['repeats'] = args.repeats
+        return [{'case': case.id, 'run': 0, 'passed': True, 'error': None, 'failed_checks': [], 'details': {}, 'status': 'insufficient_evidence',
+                 'request_status': '추가 정보 필요', 'request': 'CLM-001', 'seconds': 12.0, 'result': insufficient()} for case in cases]
+
+    with tempfile.TemporaryDirectory() as folder:
+        out = Path(folder) / 'e2e.json'
+        code = analysis_quality.main(['--e2e', '--allow-current-db', 'service_poc_test', '--only', 'vague', '--repeats', '1',
+                                      '--output', str(out)], e2e_runner=fake_e2e)
+        report = json.loads(out.read_text(encoding='utf-8'))
+    assert code == 0 and report['mode'] == 'e2e' and report['verdict']['passed'] is True
+    assert seen == {'ids': ['vague_machine_is_odd'], 'repeats': 1}

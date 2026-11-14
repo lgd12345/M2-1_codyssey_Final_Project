@@ -322,3 +322,81 @@ test('current database: customer actions, internal notes and company isolation o
     await adminContext.close()
   }
 })
+
+// Real LLM, real retrieval, real screens: what an operator actually sees for three representative requests.
+const analyse = async (admin, id) => {
+  await admin.goto(`/#/cases/${id}`)
+  await admin.getByRole('button', { name: 'AI 분석 시작', exact: true }).click()
+  await expect(admin.getByText('분석 중입니다.', { exact: false })).toBeVisible()
+  await expect.poll(async () => (await (await admin.request.get(`${base}/${id}`)).json()).status,
+    { timeout: 270000, intervals: [3000] }).not.toBe('분석 중')
+  const stored = await (await admin.request.get(`${base}/${id}`)).json()
+  expect(stored.analysisRun, 'analysis must not fail').toEqual({ status: 'succeeded', errorCode: null })
+  await admin.reload()
+  return stored
+}
+const IDENTIFIERS = /FSR-\d{5}|\b\d{4}-\d{2}-\d{3}-\d{2}\b/g
+
+test('current database: analysis quality as shown on the screens', async ({ browser }) => {
+  test.setTimeout(900000)
+  const userContext = await browser.newContext()
+  const adminContext = await browser.newContext()
+  const user = await userContext.newPage()
+  const admin = await adminContext.newPage()
+  try {
+    await login(user, 'user', process.env.LIVE_E2E_USER_PASSWORD, process.env.LIVE_E2E_EXPECTED_USER_ID, 'user')
+    await login(admin, 'admin', process.env.LIVE_E2E_ADMIN_PASSWORD, process.env.LIVE_E2E_EXPECTED_ADMIN_ID, 'admin')
+    const open = async message => {
+      await user.goto('/#/portal/new')
+      await prepareForm(user, process.env.LIVE_E2E_USER_EQUIPMENT_ID, message)
+      return submit(user)
+    }
+    const report = {}
+
+    // 1) A realistic symptom: grounded causes with sources, listed evidence, and nothing the evidence lacks.
+    const symptomMessage = `${marker} Y축 원점 복귀를 하면 O.T 알람이 뜨고 원점이 잡히지 않습니다. 슬라이드 커버 쪽에 절삭유가 샌 흔적이 있습니다.`
+    const symptom = await analyse(admin, (await open(symptomMessage)).id)
+    expect(symptom.analysis.status).toBe('answered')
+    await expect(admin.getByRole('heading', { name: '추정 원인', exact: true })).toBeVisible()
+    const causeCount = await admin.locator('ol.causes > li').count()
+    expect(causeCount).toBe(symptom.analysis.causes.length)
+    expect(causeCount).toBeGreaterThan(0)
+    for (const cause of symptom.analysis.causes) await expect(admin.getByText(cause.title, { exact: false }).first()).toBeVisible()
+    expect(await admin.locator('ol.causes .source').count()).toBe(causeCount)
+    await admin.getByRole('tab', { name: '과거 정비 이력', exact: true }).click()
+    expect(await admin.locator('ul.evidence > li').count()).toBe(symptom.analysis.evidence.filter(item => item.kind === 'fsr').length)
+    await admin.getByRole('tab', { name: '매뉴얼 열람', exact: true }).click()
+    expect(await admin.locator('ul.evidence > li').count()).toBe(symptom.analysis.evidence.filter(item => item.kind === 'manual').length)
+    const known = [symptomMessage, ...symptom.analysis.evidence.map(item => `${item.title} ${item.source} ${item.excerpt}`)].join(' ')
+    const shown = (await admin.locator('main').innerText()).match(IDENTIFIERS) ?? []
+    for (const identifier of shown) expect(known, `screen shows an identifier absent from request and evidence: ${identifier}`).toContain(identifier)
+    report.symptom = { causes: causeCount, evidence: symptom.analysis.evidence.length, departments: symptom.departments.filter(d => d.selected).map(d => d.key) }
+
+    // 2) An unrelated request: the screen must say there is no evidence and offer nothing to approve.
+    const offtopic = await analyse(admin, (await open(`${marker} 오늘 점심 메뉴를 추천해 주세요. 김치찌개가 좋을까요?`)).id)
+    expect(offtopic.analysis.status).toBe('insufficient_evidence')
+    expect(offtopic.status).toBe('추가 정보 필요')
+    await expect(admin.getByText('관련 근거가 부족해 원인 후보와 권장 사항을 제시하지 않았습니다.', { exact: false })).toBeVisible()
+    expect(offtopic.analysis.causes).toEqual([])
+    expect(offtopic.departments.every(item => !item.selected)).toBe(true)
+    await expect(admin.getByRole('button', { name: '승인', exact: true })).toBeDisabled()
+    const customerOfftopic = await (await user.request.get(`${base}/${offtopic.id}`)).json()
+    expect(customerOfftopic.status).toBe('정보 요청')
+    for (const field of ['analysis', 'departments', 'linked']) expect(customerOfftopic).not.toHaveProperty(field)
+
+    // 3) An identifier lookup: the part and its source list are shown, nothing is guessed.
+    const part = await analyse(admin, (await open(`${marker} 부품 번호 2064-75-114-00 이 어떤 부품인지, 어느 기종 부품 목록에 있는지 알려 주세요.`)).id)
+    if (part.analysis.status === 'answered') {
+      await admin.getByRole('tab', { name: '권장 부품', exact: true }).click()
+      await expect(admin.getByText('2064-75-114-00', { exact: false }).first()).toBeVisible()
+      expect(part.analysis.evidence.some(item => /PARTS LIST/i.test(item.title))).toBe(true)
+    } else {
+      expect(part.analysis.parts).toEqual([])  // never a guessed part when nothing was found
+    }
+    report.part = { status: part.analysis.status, parts: part.analysis.parts.map(item => item.name) }
+    console.log(JSON.stringify({ quality_on_screens: true, ...report, offtopic: offtopic.analysis.status }))
+  } finally {
+    await userContext.close()
+    await adminContext.close()
+  }
+})

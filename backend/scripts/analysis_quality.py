@@ -6,6 +6,11 @@ fakes (tests/test_analysis_quality*.py); run this on demand, e.g. before a relea
     python scripts/analysis_quality.py --repeats 2
     python scripts/analysis_quality.py --only safety --repeats 3
     python scripts/analysis_quality.py --list
+
+End to end through the running app (real login, API, DB, UI-visible stored analysis), explicitly approved:
+
+    LIVE_E2E_USER_PASSWORD=... LIVE_E2E_ADMIN_PASSWORD=... python scripts/analysis_quality.py --e2e \
+        --allow-current-db service_poc_test --base-url http://localhost:4173 --repeats 1
 """
 from __future__ import annotations
 
@@ -50,7 +55,8 @@ def print_summary(summary: dict[str, Any], ok: bool, reasons: list[str]) -> None
     print('VERDICT:', 'PASS' if ok else 'FAIL', *reasons, sep='\n  ' if reasons else ' ')
 
 
-def main(argv: list[str] | None = None, *, analyzer: Callable[[dict[str, Any]], Awaitable[dict[str, Any]]] | None = None) -> int:
+def main(argv: list[str] | None = None, *, analyzer: Callable[[dict[str, Any]], Awaitable[dict[str, Any]]] | None = None,
+         e2e_runner: Callable[[list[Case], argparse.Namespace], list[dict[str, Any]]] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument('--repeats', type=int, default=2, help='runs per case; model output varies between runs')
     parser.add_argument('--concurrency', type=int, default=3)
@@ -58,23 +64,34 @@ def main(argv: list[str] | None = None, *, analyzer: Callable[[dict[str, Any]], 
     parser.add_argument('--min-rate', type=float, default=0.8, help='minimum overall pass rate')
     parser.add_argument('--output', type=Path, default=DEFAULT_REPORT, help='JSON report with every analysis result')
     parser.add_argument('--list', action='store_true', help='list the cases and exit without calling a model')
+    parser.add_argument('--e2e', action='store_true', help='drive the running app through its HTTP API instead of calling the analyzer directly')
+    parser.add_argument('--allow-current-db', help='database name you approve for --e2e (it creates and removes tagged requests)')
+    parser.add_argument('--base-url', default='http://localhost:4173', help='origin of the running app for --e2e (local only)')
+    parser.add_argument('--timeout', type=float, default=300, help='seconds to wait for each analysis in --e2e')
     args = parser.parse_args(argv)
     cases = select(load_cases(CASES), args.only)
     if args.list:
         for case in cases:
             print(f'{case.id:38} {case.category:10} {case.reason}  {case.message[:60]!r}')
         return 0
-    if analyzer is None:
-        from app.service_requests.analyzer import analyze_request
-        analyzer = analyze_request
-    records = asyncio.run(run_suite(cases, analyzer, repeats=args.repeats, concurrency=args.concurrency))
+    if args.e2e:
+        if args.allow_current_db != 'service_poc_test':
+            parser.error('--e2e creates tagged requests in the application database: pass --allow-current-db service_poc_test')
+        if e2e_runner is None:
+            from quality.live import run_live_e2e as e2e_runner
+        records = e2e_runner(cases, args)
+    else:
+        if analyzer is None:
+            from app.service_requests.analyzer import analyze_request
+            analyzer = analyze_request
+        records = asyncio.run(run_suite(cases, analyzer, repeats=args.repeats, concurrency=args.concurrency))
     runs: dict[str, list[dict[str, Any]]] = {case.id: [] for case in cases}
     for record in records:
         runs[record['case']].append(record)
     summary = summarize(runs, {case.id: case.category for case in cases})
     ok, reasons = verdict(summary, args.min_rate)
     args.output.parent.mkdir(parents=True, exist_ok=True)
-    args.output.write_text(json.dumps({'repeats': args.repeats, 'summary': summary, 'verdict': {'passed': ok, 'reasons': reasons},
+    args.output.write_text(json.dumps({'mode': 'e2e' if args.e2e else 'direct', 'repeats': args.repeats, 'summary': summary, 'verdict': {'passed': ok, 'reasons': reasons},
                                        'runs': records}, ensure_ascii=False, indent=1), encoding='utf-8')
     print_summary(summary, ok, reasons)
     return 0 if ok else 1

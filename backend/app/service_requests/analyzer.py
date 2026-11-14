@@ -1,10 +1,12 @@
 """Model-backed request analysis. Sources must come from this run's retrieval; excerpts come from the DB."""
 from __future__ import annotations
 
-from typing import Any, Callable, Literal
+import asyncio
+from typing import Any, Awaitable, Callable, Literal
 
 from pydantic import BaseModel, Field, ValidationError
 from pydantic_ai import Agent, Tool, UsageLimits
+from pydantic_ai.exceptions import ModelAPIError
 
 from app.agent_rag.agent import make_llm
 from app.agent_rag.settings import AgentSettings
@@ -158,7 +160,30 @@ async def run_analysis(request: dict[str, Any], *, settings: AgentSettings, tool
     return to_result(run.output, tools, excerpts or database_excerpts(settings.database_url))
 
 
+TRANSIENT_ATTEMPTS = 3   # model timeouts, connection drops, rate limits and overload usually clear up
+UNGROUNDED_ATTEMPTS = 2  # a fresh run may cite only what it retrieved
+BACKOFF_SECONDS = (2.0, 6.0)
+
+
+async def run_with_retries(call: Callable[[], Awaitable[dict[str, Any]]], *,
+                           sleep: Callable[[float], Awaitable[None]] = asyncio.sleep) -> dict[str, Any]:
+    """Retry only failures a repeat can fix. Configuration and programming errors are raised immediately."""
+    transient = ungrounded = 0
+    while True:
+        try:
+            return await call()
+        except ModelAPIError:
+            transient += 1
+            if transient >= TRANSIENT_ATTEMPTS:
+                raise
+            await sleep(BACKOFF_SECONDS[min(transient - 1, len(BACKOFF_SECONDS) - 1)])
+        except InvalidAnalysis:
+            ungrounded += 1
+            if ungrounded >= UNGROUNDED_ATTEMPTS:
+                raise
+
+
 async def analyze_request(request: dict[str, Any]) -> dict[str, Any]:
     from app.agent_rag.runner import _embedder
     settings = AgentSettings.from_env()
-    return await run_analysis(request, settings=settings, embedder=_embedder(settings))
+    return await run_with_retries(lambda: run_analysis(request, settings=settings, embedder=_embedder(settings)))

@@ -109,7 +109,7 @@ def main() -> int:
             print('Running explicit current-DB E2E; not an isolated regression database.', flush=True)
             process = subprocess.Popen([node, str(cli), 'test', '--config', 'playwright.live.config.js'], cwd=frontend, env=env)
             try:
-                return process.wait(timeout=600)
+                return process.wait(timeout=1500)
             finally:
                 if process.poll() is None:
                     if os.name == 'nt':

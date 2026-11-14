@@ -175,7 +175,9 @@ async def execute_analysis(analysis_id, request_input, runner) -> None:
         await asyncio.shield(asyncio.to_thread(_write, analysis_flow.finish_failure, analysis_id, 'interrupted'))
         raise
     except Exception as error:
-        logger.warning('analysis failed: %s', type(error).__name__)  # never the message: it may hold secrets
+        # Never the message of unknown errors: it may hold secrets. Our own grounding errors are fixed text.
+        detail = f': {error}' if isinstance(error, analysis_flow.InvalidAnalysis) else ''
+        logger.warning('analysis failed: %s%s', type(error).__name__, detail)
         await asyncio.to_thread(_write, analysis_flow.finish_failure, analysis_id, analysis_flow.error_code_for(error))
         return
     try:
