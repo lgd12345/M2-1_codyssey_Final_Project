@@ -63,7 +63,7 @@ def serialize(row: dict[str, Any], related: dict[str, dict[int, list[dict[str, A
     history = related['history'].get(number, [])
     item = {
         'id': f'CLM-{number:03d}', 'title': row['title'], 'createdAt': created,
-        'intake': {'company': snapshot['company'], 'machine': snapshot['machine'], 'serial': snapshot['serial'],
+        'intake': {'company': snapshot['company'], 'machine': snapshot['machine'],
                    'symptom': row['message'], 'alarm': ', '.join(row['alarm_numbers']), 'occurred': '',
                    'type': row['reason'], 'creator': f"{contact['name']} ({snapshot['company']})",
                    'contact': contact, 'asset': None},

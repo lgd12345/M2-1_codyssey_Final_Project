@@ -34,7 +34,7 @@ export function WorkDetail({ cases, workKey, deptKey, dispatch }) {
           <section className="block"><div className="block-head"><h2>원본 요청</h2></div>
             <div className="request-card">
               <dl className="qa">
-                <div><dt>고객사 · 기계</dt><dd>{parent.intake.company} · {parent.intake.machine} · {parent.intake.serial}</dd></div>
+                <div><dt>고객사 · 기계</dt><dd>{parent.intake.company} · {parent.intake.machine}</dd></div>
                 <div><dt>접수 내용</dt><dd className="pre">{parent.intake.symptom}</dd></div>
                 <div><dt>알람 · 오류 번호</dt><dd>{parent.intake.alarm || '없음'}</dd></div>
                 {asset && <div><dt>보증</dt><dd>{asset.warranty} ({asset.warrantyNote}) · 설치 {asset.installDate} · 이전 서비스 {asset.previous}건</dd></div>}

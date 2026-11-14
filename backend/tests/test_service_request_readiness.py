@@ -31,7 +31,7 @@ def test_missing_schema_returns_503_without_demo_data_or_schema_changes(monkeypa
     monkeypatch.setattr('psycopg.connect', unexpected_connect)
     response = TestClient(app).request(method, path, headers={
         'Origin': 'http://testserver', 'X-CSRF-Token': 'csrf',
-    }, json={'equipment_id': str(uuid4()), 'reason': '기계 고장', 'message': '증상',
+    }, json={'equipment_id': str(uuid4()), 'reason': '공구 교환 이상', 'message': '증상',
              'contact': {'name': '담당자', 'phone': '010'}})
     assert response.status_code == 503
     assert response.json()['code'] == 'REQUESTS_NOT_READY'

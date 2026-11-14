@@ -193,7 +193,7 @@ def begin(connection, number: int, user_id: UUID, *, allowed: tuple[str, ...] = 
     snapshot = row[4]
     # Only diagnostic facts: the customer's contact details are deliberately not sent to a model.
     return analysis_id, {'message': row[1], 'reason': row[2], 'alarm_numbers': list(row[3]),
-                         'machine': snapshot['machine'], 'serial': snapshot['serial']}
+                         'machine': snapshot['machine']}
 
 
 def finish_success(connection, analysis_id: UUID, result: dict[str, Any]) -> None:

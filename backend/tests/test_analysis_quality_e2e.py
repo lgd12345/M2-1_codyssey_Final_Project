@@ -8,7 +8,7 @@ from quality.scoring import Case, score
 from test_service_analysis_api import Runner, good_result, use_runner  # noqa: F401
 from test_service_requests_api import setup, BASE, pytestmark  # noqa: F401
 
-CASE = Case(id='sym_atc', category='symptom', message='ATC가 공구 교환 중에 멈춥니다.', reason='기계 고장', machine='F400',
+CASE = Case(id='sym_atc', category='symptom', message='ATC가 공구 교환 중에 멈춥니다.', reason='공구 교환 이상', machine='F400',
             alarm_numbers=['2023'], expect={'status': ['answered'], 'keywords_any': ['ATC'], 'departments_any': ['service'], 'min_evidence': 1})
 
 
@@ -64,7 +64,7 @@ def test_insufficient_evidence_moves_the_request_to_additional_information_and_i
     use_runner(Runner(good_result(status='insufficient_evidence', summary='근거를 찾지 못했습니다.', causes=[], steps=[],
                                   parts=[], evidence=[], departments=[], questions=['어떤 증상인가요?'])))
     user, admin = apis(clients)
-    off_topic = Case('safety_x', 'safety', '점심 메뉴 추천', '기술 문의', 'F400', [], {'status': ['insufficient_evidence'], 'no_conclusions': True})
+    off_topic = Case('safety_x', 'safety', '점심 메뉴 추천', '알람·전장 이상', 'F400', [], {'status': ['insufficient_evidence'], 'no_conclusions': True})
     record = run_case(off_topic, user, admin, str(equipment[0]), tag='QEVAL-4', timeout=30, interval=0.01)
     assert record['passed'] is True, record
     assert record['request_status'] == '추가 정보 필요'
@@ -74,7 +74,7 @@ def test_stored_result_maps_back_to_the_analysis_contract_losslessly(setup, use_
     clients, equipment = setup
     use_runner(Runner())
     user, admin = apis(clients)
-    created = clients['alice'].post(BASE, json={'equipment_id': str(equipment[0]), 'reason': '기계 고장', 'message': 'm',
+    created = clients['alice'].post(BASE, json={'equipment_id': str(equipment[0]), 'reason': '공구 교환 이상', 'message': 'm',
                                                  'alarm_numbers': [], 'contact': {'name': 'n', 'phone': '1'}}).json()
     admin.post(f"/{created['id']}/analysis")
     item = admin.get(f"/{created['id']}").json()

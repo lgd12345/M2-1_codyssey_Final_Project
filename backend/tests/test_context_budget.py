@@ -256,7 +256,7 @@ def test_the_prompt_prefix_never_depends_on_the_request():
 
 
 def test_request_specific_text_comes_last_after_a_fixed_header():
-    a = {'message': 'ATC 멈춤', 'reason': '기계 고장', 'alarm_numbers': ['2023'], 'machine': 'F400', 'serial': 'SN-1'}
+    a = {'message': 'ATC 멈춤', 'reason': '공구 교환 이상', 'alarm_numbers': ['2023'], 'machine': 'F400', 'serial': 'SN-1'}
     b = {**a, 'message': '도어 간섭 있음', 'alarm_numbers': [], 'machine': 'F500', 'serial': 'SN-2'}
     one, two = build_prompt(a), build_prompt(b)
     assert one.split('\n')[0] == two.split('\n')[0]  # fixed leading sentence

@@ -27,11 +27,12 @@ async function session(browser, loginId, home, options = {}) {
 const closeAll = async (...sessions) => { for (const s of sessions) await s.context.close() }
 
 async function chooseMachine(page) {
-  await page.getByRole('combobox', { name: '기계 · 호기 *', exact: true }).selectOption({ index: 1 })
+  await page.getByRole('button', { name: '기종 목록', exact: true }).click()
+  await page.getByRole('listbox', { name: '기종 목록', exact: true }).getByRole('option', { name: 'F400', exact: true }).click()
 }
 
 // Customer intake through the real form. `portal` false = the operator's own "새 요청" modal.
-async function createRequest(page, { reason = '기계 고장', message, name = '접수 담당자', phone = '010-0000-0000', portal = true }) {
+async function createRequest(page, { reason = '공구 교환 이상', message, name = '접수 담당자', phone = '010-0000-0000', portal = true }) {
   await page.goto(portal ? '/#/portal/new' : '/#/cases/new')
   await page.getByRole('combobox', { name: '접수 사유 *', exact: true }).selectOption(reason)
   await chooseMachine(page)
@@ -216,7 +217,7 @@ test('private pages need a session, wrong credentials are refused, roles are rou
 // Intake form
 // ---------------------------------------------------------------------------------------------------------------
 
-test('intake form: required fields, two steps, alarm numbers, dismissal and no attachment upload', async ({ browser }) => {
+test('intake form: required fields, two steps, message-only symptoms, dismissal and no attachment upload', async ({ browser }) => {
   const customer = await session(browser, process.env.E2E_CUSTOMER, 'portal')
   const { page } = customer
   await page.goto('/#/portal/new')
@@ -230,7 +231,7 @@ test('intake form: required fields, two steps, alarm numbers, dismissal and no a
 
   const next = dialog.getByRole('button', { name: '계속', exact: true })
   await expect(next).toBeDisabled()
-  await dialog.getByRole('combobox', { name: '접수 사유 *' }).selectOption('부품 문의')
+  await dialog.getByRole('combobox', { name: '접수 사유 *' }).selectOption('부품 교체·문의')
   await expect(next).toBeDisabled()
   await chooseMachine(page)
   await expect(next).toBeDisabled()
@@ -239,17 +240,14 @@ test('intake form: required fields, two steps, alarm numbers, dismissal and no a
   await dialog.getByLabel('메시지 *', { exact: true }).fill('부품 교체 시기를 알고 싶습니다. 입력 확인용')
   await expect(next).toBeEnabled()
 
-  // Alarm numbers: add until the limit of 20.
-  await dialog.getByLabel('오류 번호 1', { exact: true }).fill('2023')
-  for (let count = 2; count <= 20; count += 1) await dialog.getByRole('button', { name: '+ 오류 번호 추가' }).click()
-  await expect(dialog.getByRole('button', { name: '+ 오류 번호 추가' })).toBeDisabled()
-  await expect(dialog.getByLabel('오류 번호 20', { exact: true })).toBeVisible()
-  await dialog.getByLabel('오류 번호 2', { exact: true }).fill('2024')
+  // Alarm numbers belong in the message, not a separate field.
+  await expect(dialog.getByLabel('오류 번호 1', { exact: true })).toHaveCount(0)
+  await expect(dialog.getByRole('button', { name: '+ 오류 번호 추가' })).toHaveCount(0)
 
   // Step 2 recaps step 1, needs a name and phone, and can go back without losing input.
   await next.click()
   await expect(dialog.getByRole('list', { name: '진행 단계' }).locator('li.on')).toContainText('연락처')
-  await expect(dialog.getByText('부품 문의', { exact: true })).toBeVisible()
+  await expect(dialog.getByText('부품 교체·문의', { exact: true })).toBeVisible()
   await expect(dialog.getByText('부품 교체 시기를 알고 싶습니다. 입력 확인용')).toBeVisible()
   const send = dialog.getByRole('button', { name: '전송', exact: true })
   await expect(send).toBeDisabled()
@@ -260,7 +258,6 @@ test('intake form: required fields, two steps, alarm numbers, dismissal and no a
   await dialog.getByRole('button', { name: '이전', exact: true }).click()
   // A re-mounted textarea carries its text inside the label, so address it by role, not by exact label text.
   await expect(dialog.getByRole('textbox', { name: '메시지 *' })).toHaveValue('부품 교체 시기를 알고 싶습니다. 입력 확인용')
-  await expect(dialog.getByLabel('오류 번호 1', { exact: true })).toHaveValue('2023')
   await next.click()
   await expect(dialog.getByLabel('이름 *', { exact: true })).toHaveValue('홍길동')
 
@@ -279,9 +276,8 @@ test('intake form: required fields, two steps, alarm numbers, dismissal and no a
 
   // What was typed is what was stored and what the customer sees again.
   const stored = await serverItem(page, created.id)
-  expect(stored.intake.type).toBe('부품 문의')
-  expect(stored.intake.alarm).toContain('2023')
-  expect(stored.intake.alarm).toContain('2024')
+  expect(stored.intake.type).toBe('부품 교체·문의')
+  expect(stored.intake.alarm).toBe('')
   expect(stored.intake.contact).toMatchObject({ name: '홍길동', phone: '010-1234-5678', email: 'hong@example.com' })
   await expect(page.getByText('부품 교체 시기를 알고 싶습니다. 입력 확인용').first()).toBeVisible()
   await page.getByRole('tab', { name: '연락처', exact: true }).click()
@@ -316,12 +312,12 @@ test('an account without a company cannot file requests and is told why; operato
   await expect(nobody.page.getByText('조건에 맞는 서비스 요청이 없습니다.')).toBeVisible()
   await nobody.page.goto('/#/portal/new')
   const dialog = nobody.page.getByRole('dialog', { name: '새 서비스 요청' })
-  await expect(dialog.getByRole('status')).toContainText('접수할 수 있는 등록 장비가 없습니다')
-  await expect(dialog.getByRole('combobox', { name: '기계 · 호기 *' })).toBeDisabled()
+  await expect(dialog.getByRole('status')).toContainText('선택할 수 있는 기종이 없습니다')
+  await expect(dialog.getByRole('combobox', { name: '기종 *' })).toBeDisabled()
   await expect(dialog.getByRole('button', { name: '계속', exact: true })).toBeDisabled()
   const forced = await nobody.page.request.post(API, {
     headers: { Origin: new URL(nobody.page.url()).origin, 'X-CSRF-Token': (await (await nobody.page.request.get('/api/v1/auth/me')).json()).csrf_token },
-    data: { equipment_id: '00000000-0000-0000-0000-000000000000', reason: '기계 고장', message: 'x', alarm_numbers: [], contact: { name: 'n', phone: '1' } } })
+    data: { equipment_id: '00000000-0000-0000-0000-000000000000', reason: '공구 교환 이상', message: 'x', alarm_numbers: [], contact: { name: 'n', phone: '1' } } })
   expect(forced.status()).toBeGreaterThanOrEqual(400)
   await closeAll(nobody)
 
@@ -332,6 +328,7 @@ test('an account without a company cannot file requests and is told why; operato
   await expect(staff.page.getByText('운영진이 대신 접수한 요청입니다.').first()).toBeVisible()
   expect((await serverItem(staff.page, id)).status).toBe('접수됨')
   await staff.page.goto('/#/cases/new')
+  await expect(staff.page.getByRole('dialog', { name: '새 서비스 요청' })).toBeVisible()
   await staff.page.keyboard.press('Escape')
   await expect(staff.page).toHaveURL(/#\/cases$/)
   expect(staff.errors).toEqual([])
@@ -347,9 +344,9 @@ test('customer list: company sharing, every filter, sorting and the customer-saf
   const colleague = await session(browser, process.env.E2E_COLLEAGUE, 'portal')
   const bob = await session(browser, process.env.E2E_OTHER_CUSTOMER, 'portal')
   const staff = await session(browser, process.env.E2E_STAFF, 'cases')
-  const first = await createRequest(alice.page, { reason: '기계 고장', message: '목록 확인 첫째 요청', name: '앨리스 담당' })
-  const second = await createRequest(colleague.page, { reason: '기술 문의', message: '목록 확인 둘째 요청', name: '동료 담당' })
-  const foreign = await createRequest(bob.page, { reason: '기계 고장', message: '다른 회사의 요청', name: '밥 담당' })
+  const first = await createRequest(alice.page, { reason: '공구 교환 이상', message: '목록 확인 첫째 요청', name: '앨리스 담당' })
+  const second = await createRequest(colleague.page, { reason: '알람·전장 이상', message: '목록 확인 둘째 요청', name: '동료 담당' })
+  const foreign = await createRequest(bob.page, { reason: '공구 교환 이상', message: '다른 회사의 요청', name: '밥 담당' })
   await analyse(staff.page, first)
 
   // The whole company sees the same requests; another company sees none of them.
@@ -375,10 +372,10 @@ test('customer list: company sharing, every filter, sorting and the customer-saf
   await page.getByRole('button', { name: '상태: 확인 중 ×' }).click()
   await expect(rowFor(page, second)).toBeVisible()
   // Type filter.
-  await page.getByRole('combobox', { name: '유형', exact: true }).selectOption('기술 문의')
+  await page.getByRole('combobox', { name: '유형', exact: true }).selectOption('알람·전장 이상')
   await expect(rowFor(page, second)).toBeVisible()
   await expect(rowFor(page, first)).toHaveCount(0)
-  await page.getByRole('button', { name: '유형: 기술 문의 ×' }).click()
+  await page.getByRole('button', { name: '유형: 알람·전장 이상 ×' }).click()
   // Creator filter (options are the people who filed).
   await page.getByRole('combobox', { name: '접수자', exact: true }).selectOption({ label: await optionWith(page.getByRole('combobox', { name: '접수자', exact: true }), '동료 담당') })
   await expect(rowFor(page, second)).toBeVisible()
@@ -448,7 +445,7 @@ test('operator queue: counts per status, search, every filter, empty state and n
   const alice = await session(browser, process.env.E2E_CUSTOMER, 'portal')
   const colleague = await session(browser, process.env.E2E_COLLEAGUE, 'portal')
   const staff = await session(browser, process.env.E2E_STAFF, 'cases')
-  const analysed = await createRequest(alice.page, { reason: '기계 고장', message: '대기열 확인 분석 대상', name: '큐 앨리스' })
+  const analysed = await createRequest(alice.page, { reason: '공구 교환 이상', message: '대기열 확인 분석 대상', name: '큐 앨리스' })
   const waiting = await createRequest(colleague.page, { reason: '교육·기술지원', message: '대기열 확인 접수 대상', name: '큐 동료' })
   const page = staff.page
   await page.reload()  // the list loaded at sign-in predates the two requests filed above

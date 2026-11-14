@@ -15,8 +15,9 @@ from test_service_requests_api import setup, PASSWORD
 
 pytestmark = pytest.mark.skipif(os.getenv('RUN_BROWSER_E2E') != '1', reason='RUN_BROWSER_E2E=1 is opt-in')
 ROOT = Path(__file__).resolve().parents[2]
-# One test per spec file: parallel workers each have their own database, servers and browser, so specs never share data.
-SPECS = sorted(path.name for path in (ROOT / 'frontend' / 'e2e').glob('*.spec.js'))
+# Split by individual Playwright tests, not files: the large screens spec must not serialize most of the suite.
+# Every shard still has a separate disposable DB, server and browser.
+SHARDS = 4
 
 
 def unused_port():
@@ -38,8 +39,8 @@ def wait_for(url, process):
     pytest.fail('Test server did not become ready')
 
 
-@pytest.mark.parametrize('spec', SPECS)
-def test_browser_flows_through_real_auth_api_and_database(setup, tmp_path, spec):
+@pytest.mark.parametrize('shard', range(1, SHARDS + 1))
+def test_browser_flows_through_real_auth_api_and_database(setup, tmp_path, shard):
     clients, _equipment = setup
     node = os.getenv('NODE_BINARY') or shutil.which('node')
     assert node, 'Node.js is required for browser E2E'
@@ -67,9 +68,10 @@ def test_browser_flows_through_real_auth_api_and_database(setup, tmp_path, spec)
                                         env=environment, stdout=log, stderr=subprocess.STDOUT)
             processes.append(frontend)
             wait_for(environment['E2E_BASE_URL'], frontend)
-            # E2E_PLAYWRIGHT_ARGS narrows a run while iterating, e.g. "-g mobile" (the spec file is chosen by the test).
+            # E2E_PLAYWRIGHT_ARGS narrows development runs, e.g. "-g intake".
             extra = shlex.split(os.getenv('E2E_PLAYWRIGHT_ARGS', ''))
-            result = subprocess.run([node, 'node_modules/@playwright/test/cli.js', 'test', f'e2e/{spec}', *extra], cwd=ROOT / 'frontend',
+            result = subprocess.run([node, 'node_modules/@playwright/test/cli.js', 'test', f'--shard={shard}/{SHARDS}',
+                                     '--output', str(tmp_path / 'browser-results'), *extra], cwd=ROOT / 'frontend',
                                     env=environment, capture_output=True, text=True, encoding='utf-8',
                                     errors='replace', timeout=600)
             assert result.returncode == 0, result.stdout + result.stderr

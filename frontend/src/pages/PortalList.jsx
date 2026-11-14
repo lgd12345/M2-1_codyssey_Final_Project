@@ -66,7 +66,7 @@ export function PortalList({ cases, company, onCreate, equipment, modalOpen }) {
             {shown.length === 0 && <tr><td colSpan={7} className="empty">조건에 맞는 서비스 요청이 없습니다.</td></tr>}
             {shown.map((r) => (
               <tr key={r.id}>
-                <td>{r.machine}<small>{r.c.intake.serial}</small></td>
+                <td>{r.machine}</td>
                 <td><span className={`lozenge lozenge-${TONE[r.status]}`}>{r.status}</span></td>
                 <td>{r.type}</td>
                 <td><a className="key" href={portalHref(r.id)}>{r.id}</a><small>{r.c.title}</small></td>

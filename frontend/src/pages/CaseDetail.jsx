@@ -42,8 +42,7 @@ function RequestCard({ item }) {
       {!hidden && (
         <dl className="qa">
           <div><dt>접수 사유</dt><dd>{intake.type}</dd></div>
-          <div><dt>기계 · 호기</dt><dd>{intake.company} · {intake.machine} · {intake.serial}</dd></div>
-          <div><dt>알람 · 오류 번호</dt><dd>{intake.alarm || '없음'}</dd></div>
+          <div><dt>기종</dt><dd>{intake.company} · {intake.machine}</dd></div>
           <div><dt>발생 상황</dt><dd>{intake.occurred || '미입력'}</dd></div>
           <div><dt>메시지</dt><dd className="pre">{intake.symptom}</dd></div>
           {intake.asset && (
@@ -145,7 +144,7 @@ function DetailsPanel({ item, dispatch, me }) {
         <div><dt>접수자</dt><dd><Avatar name={intake.creator} /> {intake.creator}</dd></div>
         <div><dt>접수 사유</dt><dd>{intake.type}</dd></div>
         <div><dt>고객사</dt><dd>{intake.company}</dd></div>
-        <div><dt>기계 · 호기</dt><dd>{intake.machine} · {intake.serial}</dd></div>
+        <div><dt>기종</dt><dd>{intake.machine}</dd></div>
         <div><dt>지식 근거</dt><dd>{analysis ? `${manual + cases}건 (매뉴얼 ${manual}, 과거 사례 ${cases})` : '미분석'}</dd></div>
         <div><dt>대상 부서</dt><dd>{targets.length ? targets.join(', ') : '없음'}</dd></div>
       </dl>

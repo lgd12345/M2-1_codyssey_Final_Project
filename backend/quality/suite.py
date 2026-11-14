@@ -14,7 +14,7 @@ Analyzer = Callable[[dict[str, Any]], Awaitable[dict[str, Any]]]
 def request_for(case: Case) -> dict[str, Any]:
     # Same shape the application sends: stored facts only, never the expectations.
     return {'message': case.message, 'reason': case.reason, 'alarm_numbers': list(case.alarm_numbers),
-            'machine': case.machine, 'serial': 'SN-0001'}
+            'machine': case.machine}
 
 
 async def run_suite(cases: list[Case], analyze: Analyzer, *, repeats: int = 1, concurrency: int = 3) -> list[dict[str, Any]]:

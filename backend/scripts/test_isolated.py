@@ -50,7 +50,7 @@ def split_worker_option(arguments: list[str], *, default: int) -> tuple[int, lis
 def pytest_arguments(workers: int, arguments: list[str]) -> list[str]:
     if workers <= 1 or "-n" in arguments or any(a.startswith(("-n=", "--numprocesses")) for a in arguments):
         return arguments
-    return ["-n", str(workers), *arguments]
+    return ["-n", str(workers), "--maxschedchunk=2", *arguments]
 
 
 def redact_output(output: str, config: dict[str, str | None]) -> str:

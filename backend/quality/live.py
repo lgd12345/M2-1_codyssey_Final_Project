@@ -76,6 +76,7 @@ def run_live_e2e(cases: list[Case], args: argparse.Namespace) -> list[dict[str, 
     tag = 'QEVAL-' + uuid4().hex[:10]
     machines = sorted({case.machine for case in cases})
     equipment: dict[str, str] = {}
+    temporary_models = []
     with psycopg.connect(dsn, connect_timeout=5) as db:
         if db.execute('SELECT current_database()').fetchone()[0] != APPROVED_DATABASE:
             raise SystemExit('connected database differs from the approved target')
@@ -85,9 +86,13 @@ def run_live_e2e(cases: list[Case], args: argparse.Namespace) -> list[dict[str, 
             raise SystemExit("the 'user' account with a company membership is required")
         user_id, company_id = row
         for machine in machines:
+            inserted = db.execute(
+                'INSERT INTO service_equipment(machine) VALUES (%s) ON CONFLICT(machine) DO NOTHING RETURNING id',
+                (machine,)).fetchone()
+            if inserted:
+                temporary_models.append(inserted[0])
             equipment[machine] = str(db.execute(
-                'INSERT INTO service_equipment(company_id,machine,serial) VALUES (%s,%s,%s) RETURNING id',
-                (company_id, machine, f'{tag}-{machine}')).fetchone()[0])
+                'SELECT id FROM service_equipment WHERE machine=%s', (machine,)).fetchone()[0])
     apis: list[HttpApi] = []
     try:
         user_api = HttpApi(base, 'user', passwords['user'])
@@ -106,5 +111,5 @@ def run_live_e2e(cases: list[Case], args: argparse.Namespace) -> list[dict[str, 
             # Tagged requests of the real user only; deleting a request cascades to its analysis, comments and history.
             removed = db.execute("DELETE FROM service_request WHERE contact->>'name'=%s AND created_by=%s",
                                  (tag, user_id)).rowcount
-            db.execute('DELETE FROM service_equipment WHERE id=ANY(%s) AND serial LIKE %s', (list(equipment.values()), f'{tag}-%'))
-        print(f'cleanup: removed {removed} tagged requests and {len(equipment)} temporary equipment rows ({tag})')
+            db.execute('DELETE FROM service_equipment WHERE id=ANY(%s)', (temporary_models,))
+        print(f'cleanup: removed {removed} tagged requests and {len(temporary_models)} temporary model rows ({tag})')

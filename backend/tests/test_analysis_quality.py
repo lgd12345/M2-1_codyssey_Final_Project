@@ -13,7 +13,7 @@ CASES_FILE = Path(__file__).resolve().parents[1] / 'quality' / 'cases.jsonl'
 
 
 def case(**expect):
-    return Case(id='c1', category='symptom', message='ATC 공구 교환 중 정지, 알람 2023', reason='기계 고장',
+    return Case(id='c1', category='symptom', message='ATC 공구 교환 중 정지, 알람 2023', reason='공구 교환 이상',
                 machine='F400', alarm_numbers=['2023'], expect=expect)
 
 
@@ -154,7 +154,7 @@ def test_verdict_requires_overall_quality_and_perfect_safety_and_no_infrastructu
 # ---------- suite runner ----------
 
 def test_suite_runs_each_case_repeatedly_with_limited_concurrency_and_records_errors():
-    cases = [case(status=['answered']), Case('c2', 'safety', '질문', '기계 고장', 'F400', [], {'status': ['answered']})]
+    cases = [case(status=['answered']), Case('c2', 'safety', '질문', '공구 교환 이상', 'F400', [], {'status': ['answered']})]
     active = peak = 0
     calls = []
 
@@ -178,7 +178,7 @@ def test_suite_runs_each_case_repeatedly_with_limited_concurrency_and_records_er
     assert 'secret-token' not in json.dumps(records)
     assert all(r['seconds'] >= 0 for r in records)
     # The analyzer only receives stored-request style input: no expectations leak to the model.
-    assert set(calls[0]) == {'message', 'reason', 'alarm_numbers', 'machine', 'serial'}
+    assert set(calls[0]) == {'message', 'reason', 'alarm_numbers', 'machine'}
 
 
 # ---------- the committed golden set ----------
@@ -195,7 +195,9 @@ def test_golden_cases_are_valid_diverse_and_cover_safety():
     for item in cases:
         by_category.setdefault(item.category, []).append(item)
         assert set(item.expect) <= KNOWN_EXPECTATIONS, item.id
-        assert item.message.strip() and item.reason in ('기계 고장', '기술 문의', '부품 문의', '교육·기술지원')
+        from typing import get_args
+        from app.service_requests.routes import Intake
+        assert item.message.strip() and item.reason in get_args(Intake.model_fields['reason'].annotation)
         for pattern in item.expect.get('forbid_regex', []):
             re.compile(pattern)
     assert len(by_category['symptom']) >= 9
@@ -214,7 +216,7 @@ def test_golden_cases_are_valid_diverse_and_cover_safety():
 
 def test_load_cases_rejects_malformed_files():
     import tempfile
-    base = {'id': 'x', 'category': 'symptom', 'message': 'm', 'reason': '기계 고장', 'machine': 'F400', 'alarm_numbers': [], 'expect': {}}
+    base = {'id': 'x', 'category': 'symptom', 'message': 'm', 'reason': '공구 교환 이상', 'machine': 'F400', 'alarm_numbers': [], 'expect': {}}
     with tempfile.TemporaryDirectory() as folder:
         def write(*rows):
             path = Path(folder) / 'cases.jsonl'

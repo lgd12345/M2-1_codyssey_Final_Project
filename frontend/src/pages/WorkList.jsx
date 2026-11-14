@@ -48,7 +48,7 @@ export function WorkList({ cases, deptKey, onDeptChange }) {
                 <tr key={w.workKey}>
                   <td><a className="key" href={workHref(w.workKey)}>{w.workKey}</a></td>
                   <td><a className="title-link" href={workHref(w.workKey)}>{w.caseTitle}</a><small>원본 {w.caseId}</small></td>
-                  <td>{w.intake.company}<small>{w.intake.machine} · {w.intake.serial}</small></td>
+                  <td>{w.intake.company}<small>{w.intake.machine}</small></td>
                   <td><span className={`lozenge lozenge-${TONE[w.status]}`}>{w.status}</span></td>
                   <td>{w.assignee ? <span className="who"><Avatar name={w.assignee} /> {w.assignee}</span> : <span className="muted">미지정</span>}</td>
                   <td>{formatDate(w.createdAt)}</td>

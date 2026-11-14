@@ -1,15 +1,15 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { CALL_REASONS } from '../domain/catalog.js'
 import { caseHref, portalHref } from '../navigation.js'
+import { ModelPicker } from './ModelPicker.jsx'
 
-const machineLabel = machine => `${machine.company} · ${machine.machine} · ${machine.serial}`
+const machineLabel = machine => machine.machine
 
 export function NewCaseModal({ onCreate, equipment = [], portal = false }) {
   const home = portal ? '/portal' : '/cases'
   const [step, setStep] = useState(1)
   const [reason, setReason] = useState('')
   const [equipmentId, setEquipmentId] = useState('')
-  const [alarms, setAlarms] = useState([''])
   const [message, setMessage] = useState('')
   const [contact, setContact] = useState({ name: '', phone: '', email: '' })
   const [busy, setBusy] = useState(false)
@@ -32,7 +32,7 @@ export function NewCaseModal({ onCreate, equipment = [], portal = false }) {
     submitting.current = true; setBusy(true); setError('')
     try {
       const created = await onCreate({ equipment_id: machine.id, reason, message: message.trim(),
-        alarm_numbers: alarms.map(value => value.trim()).filter(Boolean), contact })
+        contact })
       window.location.hash = (portal ? portalHref(created.id) : caseHref(created.id)).slice(1)
     } catch (failure) { setError(failure.message) }
     finally { submitting.current = false; setBusy(false) }
@@ -47,21 +47,17 @@ export function NewCaseModal({ onCreate, equipment = [], portal = false }) {
           <li className={step === 1 ? 'on' : 'done'}><span>{step > 1 ? '✓' : '1'}</span>요청 내용</li>
           <li className={step === 2 ? 'on' : ''}><span>2</span>연락처</li>
         </ol>
-        {equipment.length === 0 && <p className="notice warn" role="status">접수할 수 있는 등록 장비가 없습니다. 고객사 소속과 장비 등록 정보를 관리자에게 확인해 주세요.</p>}
+        {equipment.length === 0 && <p className="notice warn" role="status">선택할 수 있는 기종이 없습니다. 고객사 소속과 기종 등록 정보를 관리자에게 확인해 주세요.</p>}
         {error && <p className="error" role="alert">{error}</p>}
         {step === 1 ? <>
           <label>접수 사유 *<select value={reason} onChange={event => setReason(event.target.value)} required><option value="">선택</option>{CALL_REASONS.map(value => <option key={value}>{value}</option>)}</select></label>
-          <label>기계 · 호기 *<select value={equipmentId} onChange={event => setEquipmentId(event.target.value)} required disabled={!equipment.length}><option value="">선택</option>{equipment.map(item => <option key={item.id} value={item.id}>{machineLabel(item)}</option>)}</select></label>
-          <fieldset className="errors"><legend>알람·오류 번호</legend>
-            {alarms.map((value, index) => <input key={index} value={value} maxLength={80} aria-label={`오류 번호 ${index + 1}`} onChange={event => setAlarms(alarms.map((old, at) => at === index ? event.target.value : old))} />)}
-            <button type="button" className="linkish" disabled={alarms.length >= 20} onClick={() => setAlarms([...alarms, ''])}>+ 오류 번호 추가</button>
-          </fieldset>
-          <label>메시지 *<textarea rows={4} maxLength={10000} value={message} onChange={event => setMessage(event.target.value)} placeholder="어떤 문제가 어떻게 나타나는지 적어 주세요." required /></label>
+          <ModelPicker models={equipment} value={equipmentId} onChange={setEquipmentId} />
+          <label>메시지 *<textarea rows={4} maxLength={10000} value={message} onChange={event => setMessage(event.target.value)} placeholder="예: 공구 교환 중 ATC가 멈춥니다. 발생 시점, 알람 번호, 반복 여부를 적어 주세요." required /></label>
           <p className="muted small">* 표시는 필수 항목입니다.</p>
-          <div className="modal-actions"><button type="button" onClick={close}>취소</button><button type="button" className="primary" disabled={!step1Ready} onClick={() => setStep(2)}>계속</button></div>
+          <div className="modal-actions"><button type="button" onClick={close}>취소</button><button type="button" className="primary" disabled={!step1Ready} onClick={event => { event.preventDefault(); setStep(2) }}>계속</button></div>
         </> : <>
           <p className="muted small">접수 내용을 확인하고 연락받을 담당자를 입력해 주세요.</p>
-          <dl className="kv recap"><div><dt>접수 사유</dt><dd>{reason}</dd></div><div><dt>기계 · 호기</dt><dd>{machine && machineLabel(machine)}</dd></div><div><dt>메시지</dt><dd>{message}</dd></div></dl>
+          <dl className="kv recap"><div><dt>접수 사유</dt><dd>{reason}</dd></div><div><dt>기종</dt><dd>{machine && machineLabel(machine)}</dd></div><div><dt>메시지</dt><dd>{message}</dd></div></dl>
           <div className="grid2">
             <label>이름 *<input value={contact.name} maxLength={80} onChange={event => setContact({ ...contact, name: event.target.value })} required autoFocus disabled={busy} /></label>
             <label>전화번호 *<input value={contact.phone} maxLength={40} onChange={event => setContact({ ...contact, phone: event.target.value })} required disabled={busy} /></label>

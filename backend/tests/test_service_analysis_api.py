@@ -86,7 +86,7 @@ def test_runner_receives_only_server_stored_request_and_client_body_is_rejected(
     assert start(clients, identity).status_code == 202
     stored = runner.inputs[0]
     assert stored['message'] == 'ATC 교환 중 멈춥니다.'
-    assert (stored['machine'], stored['alarm_numbers'], stored['reason']) == ('F400', ['2023'], '기계 고장')
+    assert (stored['machine'], stored['alarm_numbers'], stored['reason']) == ('F400', ['2023'], '공구 교환 이상')
     assert 'contact' not in stored  # personal contact data is not needed for diagnosis
 
 

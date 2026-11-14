@@ -38,7 +38,7 @@ def test_worker_count_comes_from_the_runner_flag_and_is_not_passed_on_to_pytest(
 def test_pytest_gets_xdist_only_when_there_is_more_than_one_worker():
     from scripts.test_isolated import pytest_arguments
     assert pytest_arguments(1, ['tests', '-q']) == ['tests', '-q']
-    assert pytest_arguments(4, ['tests', '-q']) == ['-n', '4', 'tests', '-q']
+    assert pytest_arguments(4, ['tests', '-q']) == ['-n', '4', '--maxschedchunk=2', 'tests', '-q']
     assert pytest_arguments(4, ['-n', '2', 'tests']) == ['-n', '2', 'tests']  # an explicit choice wins
 
 
@@ -67,6 +67,19 @@ def test_worker_database_assignment_never_invents_or_widens_access():
         assert environment['DATABASE_URL'] == 'application'
     with pytest.raises(RuntimeError, match='more workers'):
         assign_worker_database({'REGRESSION_DATABASES': '["host=h dbname=rag_regression_a_test"]', 'PYTEST_XDIST_WORKER': 'gw3'})
+
+
+def test_browser_shards_are_paired_with_short_tests_for_xdist_initial_batches():
+    from types import SimpleNamespace
+    from conftest import pytest_collection_modifyitems
+    browser = [SimpleNamespace(nodeid=f'tests/test_service_requests_e2e.py::test_browser[{i}]') for i in range(4)]
+    short = [SimpleNamespace(nodeid=f'tests/test_unit.py::test_{i}') for i in range(6)]
+    items = short + browser
+    pytest_collection_modifyitems(items)
+    assert items == [browser[0], short[0], browser[1], short[1], browser[2], short[2], browser[3], short[3], *short[4:]]
+    only_short = short.copy()
+    pytest_collection_modifyitems(only_short)
+    assert only_short == short
 
 
 def test_production_password_hashing_keeps_the_library_defaults():

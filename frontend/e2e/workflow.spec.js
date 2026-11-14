@@ -20,8 +20,9 @@ async function newContext(browser, who, home) {
 
 async function createRequest(page, message) {
   await page.goto('/#/portal/new')
-  await page.getByRole('combobox', { name: '접수 사유 *', exact: true }).selectOption('기계 고장')
-  await page.getByRole('combobox', { name: '기계 · 호기 *', exact: true }).selectOption({ index: 1 })
+  await page.getByRole('combobox', { name: '접수 사유 *', exact: true }).selectOption('공구 교환 이상')
+  await page.getByRole('button', { name: '기종 목록', exact: true }).click()
+  await page.getByRole('listbox', { name: '기종 목록', exact: true }).getByRole('option', { name: 'F400', exact: true }).click()
   await page.getByLabel('메시지 *', { exact: true }).fill(message)
   await page.getByRole('button', { name: '계속', exact: true }).click()
   await page.getByLabel('이름 *', { exact: true }).fill('접수 담당자')

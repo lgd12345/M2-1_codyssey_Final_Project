@@ -13,7 +13,6 @@ from fastapi.testclient import TestClient
 
 from app.main import app
 from app.auth.service import create_user
-from scripts.migrate import apply_migrations
 
 DSN = os.getenv('TEST_DATABASE_URL', '')
 pytestmark = pytest.mark.skipif(not DSN, reason='isolated TEST_DATABASE_URL not configured')
@@ -22,11 +21,10 @@ BASE = '/api/v1/service-requests'
 
 
 @pytest.fixture
-def setup(monkeypatch):
+def setup(monkeypatch, service_schema):
     name = conninfo_to_dict(DSN).get('dbname', '')
     if not name.startswith('rag_regression_') or not name.endswith('_test'):
         pytest.fail('Use scripts/test_isolated.py: this fixture requires a fresh disposable DB')
-    apply_migrations(DSN)
     monkeypatch.setenv('DATABASE_URL', DSN)
     monkeypatch.delenv('APP_COOKIE_SECURE', raising=False)
     suffix = uuid4().hex[:10]
@@ -35,10 +33,10 @@ def setup(monkeypatch):
                  for role in ['alice', 'colleague', 'bob', 'staff', 'unassigned']}
         companies = [db.execute('INSERT INTO service_company(name) VALUES (%s) RETURNING id', (f'{s}-{suffix}',)).fetchone()[0]
                      for s in ['Company A', 'Company B']]
-        for who, company in [('alice', companies[0]), ('colleague', companies[0]), ('bob', companies[1])]:
+        for who, company in [('alice', companies[0]), ('colleague', companies[0]), ('bob', companies[1]), ('staff', companies[1])]:
             db.execute('INSERT INTO service_company_member(user_id, company_id) VALUES (%s,%s)', (users[who].id, company))
-        equipment = [db.execute('INSERT INTO service_equipment(company_id,machine,serial) VALUES (%s,%s,%s) RETURNING id',
-                               (company, 'F400', f'{i}-{suffix}')).fetchone()[0] for i, company in enumerate(companies)]
+        equipment = [db.execute('INSERT INTO service_equipment(machine) VALUES (%s) RETURNING id',
+                               (model,)).fetchone()[0] for model in ['F400', 'F500']]
     clients = {}
     for who, user in users.items():
         client = TestClient(app)
@@ -60,7 +58,7 @@ def setup(monkeypatch):
 
 
 def body(equipment):
-    return {'equipment_id': str(equipment), 'reason': '기계 고장', 'message': 'ATC 교환 중 멈춥니다.',
+    return {'equipment_id': str(equipment), 'reason': '공구 교환 이상', 'message': 'ATC 교환 중 멈춥니다.',
             'alarm_numbers': ['2023'], 'contact': {'name': '담당자', 'phone': '010-0000-0000', 'email': ''}}
 
 
@@ -73,6 +71,7 @@ def test_customer_intake_is_durable_visible_to_company_and_staff_not_other_compa
     assert identity.startswith('CLM-')
     assert item['status'] == '접수됨'  # No pretend running/completed analysis.
     assert item['intake']['machine'] == 'F400'
+    assert 'serial' not in item['intake']
     assert item['intake']['alarm'] == '2023'
     assert item['intake']['contact']['phone'] == '010-0000-0000'
     for who in ['alice', 'colleague', 'staff']:
@@ -93,10 +92,10 @@ def test_customer_intake_is_durable_visible_to_company_and_staff_not_other_compa
 def test_equipment_is_derived_from_authenticated_membership_not_query_or_body(setup):
     clients, equipment = setup
     context = clients['alice'].get(f'{BASE}/context?company=Company B').json()
-    assert [m['id'] for m in context['equipment']] == [str(equipment[0])]
+    assert [m['id'] for m in context['equipment']] == list(map(str, equipment))
     assert context['company']['name'].startswith('Company A')
     assert len(clients['staff'].get(f'{BASE}/context').json()['equipment']) == 2
-    assert clients['alice'].post(BASE, json=body(equipment[1])).status_code == 404
+    assert clients['alice'].post(BASE, json=body(uuid4())).status_code == 404
     forged = {**body(equipment[0]), 'company': 'Company B', 'created_by': 'staff', 'createdAt': '2000-01-01'}
     assert clients['alice'].post(BASE, json=forged).status_code == 422
     assert clients['alice'].get(BASE).json() == {'requests': []}

@@ -20,7 +20,7 @@ export function CaseList({ cases, onCreate, equipment, modalOpen }) {
 
   const shown = cases.filter((c) => {
     const day = formatDate(c.createdAt)
-    const hay = `${c.id} ${c.title} ${c.intake.machine} ${c.intake.serial} ${c.intake.company}`.toLowerCase()
+    const hay = `${c.id} ${c.title} ${c.intake.machine} ${c.intake.company}`.toLowerCase()
     return (queue === '전체' || c.status === queue)
       && (!search || hay.includes(search.toLowerCase()))
       && (!filters.machine || c.intake.machine === filters.machine)
@@ -81,7 +81,7 @@ export function CaseList({ cases, onCreate, equipment, modalOpen }) {
                 <tr key={c.id}>
                   <td><a href={caseHref(c.id)} className="key">{c.id}</a></td>
                   <td><a href={caseHref(c.id)} className="title-link">{c.title}</a></td>
-                  <td>{c.intake.machine}<small>{c.intake.serial}</small></td>
+                  <td>{c.intake.machine}</td>
                   <td>{c.intake.type}</td>
                   <td><Lozenge status={c.status} /></td>
                   <td>{c.intake.creator}</td>

@@ -19,8 +19,8 @@ analysed: set[tuple[str, str]] = set()
 async def controlled_model(request):
     await asyncio.sleep(1.2)  # long enough for the browser to observe the running state
     # A request whose text says so lacks evidence the first time it is analysed; a re-analysis then finds some.
-    first_time = (request['message'], request['serial']) not in analysed
-    analysed.add((request['message'], request['serial']))
+    first_time = (request['message'], request['machine']) not in analysed
+    analysed.add((request['message'], request['machine']))
     if '근거부족' in request['message'] and first_time:
         return {'status': 'insufficient_evidence', 'summary': 'E2E 근거 부족 응답', 'causes': [], 'steps': [],
                 'questions': ['알람 번호를 알려주세요.'], 'parts': [], 'evidence': [], 'departments': [], 'case_search': 'ok'}

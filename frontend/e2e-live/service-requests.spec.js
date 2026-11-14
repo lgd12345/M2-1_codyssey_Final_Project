@@ -19,8 +19,12 @@ async function login(page, loginId, password, expectedId, role) {
 }
 
 async function prepareForm(page, equipmentId, message) {
-  await page.getByRole('combobox', { name: '접수 사유 *', exact: true }).selectOption('기술 문의')
-  await page.getByRole('combobox', { name: '기계 · 호기 *', exact: true }).selectOption(equipmentId)
+  await page.getByRole('combobox', { name: '접수 사유 *', exact: true }).selectOption('알람·전장 이상')
+  const context = await (await page.request.get('/api/v1/service-requests/context')).json()
+  const model = context.equipment.find(item => item.id === equipmentId)
+  if (!model) throw new Error('Configured model is not in the CSV catalogue')
+  await page.getByRole('combobox', { name: '기종 *', exact: true }).fill(model.machine)
+  await page.getByRole('listbox', { name: '기종 목록', exact: true }).getByRole('option', { name: model.machine, exact: true }).click()
   await page.getByLabel('메시지 *', { exact: true }).fill(message)
   await expect(page.locator('input[type=file]')).toBeDisabled()
   await page.getByRole('button', { name: '계속', exact: true }).click()
@@ -113,7 +117,7 @@ test('current database: user intake, admin review and cross-company isolation', 
     const session = await me.json()
     const payload = {
       equipment_id: process.env.LIVE_E2E_OTHER_EQUIPMENT_ID,
-      reason: '기술 문의', message: `${marker} denied submission`,
+      reason: '알람·전장 이상', message: `${marker} denied submission`,
       contact: { name: 'E2E 검증 담당자', phone: '010-0000-0000' },
     }
     const origin = new URL(user.url()).origin

@@ -8,7 +8,8 @@ if (!process.env.E2E_BASE_URL || !process.env.E2E_CUSTOMER || !process.env.E2E_P
 
 export default defineConfig({
   testDir: './e2e',
-  workers: 1,
+  workers: 1, // pytest owns concurrency and gives each shard its own DB
+  fullyParallel: true, // --shard distributes individual tests, including the large screens.spec.js
   reporter: 'line',
   timeout: 120000,
   expect: { timeout: 8000 },

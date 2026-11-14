@@ -29,7 +29,7 @@ export function PortalDetail({ item }) {
             <div><dt>요청 번호</dt><dd>{item.id}</dd></div>
             <div><dt>접수자</dt><dd>{item.intake.creator}</dd></div>
             <div><dt>접수일</dt><dd>{formatDate(item.createdAt)}</dd></div>
-            <div><dt>기계</dt><dd>{item.intake.machine} · {item.intake.serial}</dd></div>
+            <div><dt>기계</dt><dd>{item.intake.machine}</dd></div>
             <div><dt>상태</dt><dd><span className={`lozenge lozenge-${TONE[status]}`}>{status}</span></dd></div>
           </dl>
           <p className="pd-desc"><strong>설명</strong><br />{item.intake.symptom}</p>

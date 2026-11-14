@@ -53,7 +53,7 @@ class Contact(Input):
 
 class Intake(Input):
     equipment_id: UUID
-    reason: Literal['기계 고장', '기술 문의', '부품 문의', '교육·기술지원']
+    reason: Literal['공구 교환 이상', '스핀들 이상', '이송축 이상', '유압·공압·윤활 이상', '알람·전장 이상', '가공 정밀도 이상', '부품 교체·문의', '교육·기술지원', '기타 증상']
     message: str = Field(min_length=1, max_length=10000)
     alarm_numbers: list[str] = Field(default_factory=list, max_length=20)
     contact: Contact
@@ -95,33 +95,30 @@ def access_company(connection, session):
 @router.get('/context')
 def context(session: SessionInfo = Depends(require_user)):
     with request_database() as connection:
-        company = membership(connection, session) if session.user.role != 'admin' else None
-        if not company and session.user.role != 'admin':
+        company = membership(connection, session)
+        if not company:
             return {'company': None, 'equipment': [], 'can_submit': False}
         with connection.cursor(row_factory=dict_row) as cursor:
-            rows = cursor.execute('''SELECT e.id, e.machine, e.serial, c.name AS company
-                FROM service_equipment e JOIN service_company c ON c.id=e.company_id
-                WHERE (%s OR e.company_id=%s) ORDER BY c.name,e.machine,e.serial''',
-                                  (session.user.role == 'admin', company['id'] if company else None)).fetchall()
+            rows = cursor.execute('''SELECT id, machine FROM service_equipment ORDER BY machine''').fetchall()
         return {'company': company, 'equipment': rows, 'can_submit': bool(rows)}
 
 
 @router.post('', status_code=201)
 def create(body: Intake, session: SessionInfo = Depends(require_csrf)):
     with request_database() as connection:
-        company_id = access_company(connection, session)
+        company = membership(connection, session)
+        if not company:
+            raise CompanyRequired()
         with connection.cursor(row_factory=dict_row) as cursor:
-            equipment = cursor.execute('''SELECT e.id,e.company_id,e.machine,e.serial,c.name AS company
-                FROM service_equipment e JOIN service_company c ON c.id=e.company_id
-                WHERE e.id=%s AND (%s OR e.company_id=%s) FOR SHARE OF e,c''',
-                                       (body.equipment_id, session.user.role == 'admin', company_id)).fetchone()
+            equipment = cursor.execute('SELECT id,machine FROM service_equipment WHERE id=%s FOR SHARE',
+                                       (body.equipment_id,)).fetchone()
             if not equipment:
                 raise RequestNotFound()
-            snapshot = {key: equipment[key] for key in ('company', 'machine', 'serial')}
+            snapshot = {'company': company['name'], 'machine': equipment['machine']}
             row = cursor.execute('''INSERT INTO service_request
                 (equipment_id,company_id,created_by,title,reason,message,alarm_numbers,contact,equipment_snapshot)
                 VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING *''',
-                                 (equipment['id'], equipment['company_id'], session.user.id, body.message[:80],
+                                 (equipment['id'], company['id'], session.user.id, body.message[:80],
                                   body.reason, body.message, Jsonb(body.alarm_numbers),
                                   Jsonb(body.contact.model_dump(mode='json')), Jsonb(snapshot))).fetchone()
         return views.fetch_items(connection, 'r.id=%s', (row['id'],), staff=session.user.role == 'admin')[0]
