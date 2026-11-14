@@ -6,7 +6,7 @@ from typing import Any, Awaitable, Callable, Literal
 
 from pydantic import BaseModel, Field, ValidationError
 from pydantic_ai import Agent, Tool, UsageLimits
-from pydantic_ai.exceptions import ModelAPIError
+from pydantic_ai.exceptions import ModelAPIError, ModelHTTPError
 
 from app.agent_rag.agent import make_llm
 from app.agent_rag.settings import AgentSettings
@@ -124,14 +124,16 @@ def to_result(output: ModelAnalysis, tools: ManualAgentTools, excerpts: Excerpts
               for cause in output.causes]
     parts = [{'name': part.name, 'note': part.note, 'source': evidence.add(part.source)['source']}
              for part in output.parts]
-    status, steps, departments = output.status, output.steps, [item.model_dump() for item in output.departments]
+    status, summary, steps, departments = output.status, output.summary, output.steps, [item.model_dump() for item in output.departments]
     if status == 'answered' and not evidence.items:
         status = 'insufficient_evidence'  # conclusions without retrieved sources are not trusted; keep it reviewable
+        # The summary is also a conclusion surface: clearing only structured fields would leave a false diagnosis visible.
+        summary = '관련 근거를 확보하지 못해 원인이나 조치를 제안하지 않았습니다. 추가 증상과 장비 정보를 확인해 주세요.'
     if status == 'insufficient_evidence':
         # Only the summary and questions for the customer survive: ungrounded causes, steps and drafts are dropped.
         causes, parts, steps, departments, evidence.items = [], [], [], [], []
     searched = any(call.get('tool') == 'search_cases' and call.get('status') == 'ok' for call in tools.tool_calls)
-    result = {'status': status, 'summary': output.summary, 'causes': causes, 'steps': steps,
+    result = {'status': status, 'summary': summary, 'causes': causes, 'steps': steps,
               'questions': output.questions, 'parts': parts, 'evidence': evidence.items,
               'departments': departments,
               'case_search': 'ok' if searched else 'unavailable'}
@@ -172,7 +174,9 @@ async def run_with_retries(call: Callable[[], Awaitable[dict[str, Any]]], *,
     while True:
         try:
             return await call()
-        except ModelAPIError:
+        except ModelAPIError as error:
+            if isinstance(error, ModelHTTPError) and error.status_code not in (408, 429) and not 500 <= error.status_code < 600:
+                raise  # authentication, invalid model and bad input will not improve by repeating the call
             transient += 1
             if transient >= TRANSIENT_ATTEMPTS:
                 raise

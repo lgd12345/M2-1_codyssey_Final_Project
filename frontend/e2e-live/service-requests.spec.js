@@ -386,13 +386,11 @@ test('current database: analysis quality as shown on the screens', async ({ brow
 
     // 3) An identifier lookup: the part and its source list are shown, nothing is guessed.
     const part = await analyse(admin, (await open(`${marker} 부품 번호 2064-75-114-00 이 어떤 부품인지, 어느 기종 부품 목록에 있는지 알려 주세요.`)).id)
-    if (part.analysis.status === 'answered') {
-      await admin.getByRole('tab', { name: '권장 부품', exact: true }).click()
-      await expect(admin.getByText('2064-75-114-00', { exact: false }).first()).toBeVisible()
-      expect(part.analysis.evidence.some(item => /PARTS LIST/i.test(item.title))).toBe(true)
-    } else {
-      expect(part.analysis.parts).toEqual([])  // never a guessed part when nothing was found
-    }
+    expect(part.analysis.status, 'the known part must actually be found, not merely avoid guessing').toBe('answered')
+    await admin.getByRole('tab', { name: '권장 부품', exact: true }).click()
+    await expect(admin.getByText('2064-75-114-00', { exact: false }).first()).toBeVisible()
+    expect(part.analysis.parts.some(item => /2064-75-114-00/.test(item.name) && /COVER|커버/i.test(item.name))).toBe(true)
+    expect(part.analysis.evidence.some(item => /PARTS LIST/i.test(item.title) && /PL-147/.test(item.source))).toBe(true)
     report.part = { status: part.analysis.status, parts: part.analysis.parts.map(item => item.name) }
     console.log(JSON.stringify({ quality_on_screens: true, ...report, offtopic: offtopic.analysis.status }))
   } finally {

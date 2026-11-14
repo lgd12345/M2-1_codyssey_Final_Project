@@ -16,11 +16,15 @@ python scripts/analysis_quality.py --only safety --repeats 3
 
 ```sh
 LIVE_E2E_USER_PASSWORD=... LIVE_E2E_ADMIN_PASSWORD=... python scripts/analysis_quality.py --e2e \
-    --allow-current-db service_poc_test --base-url http://localhost:4173 --repeats 2 --concurrency 2
+    --allow-current-db service_poc_test --base-url http://localhost:4173 --repeats 2 --concurrency 2 \
+    --require-embedding-ready
 ```
 - 접수 요청은 `QEVAL-<난수>` 태그로 만들고(문구는 그대로), 끝나면 그 태그의 요청과 임시 장비만 삭제합니다. 마이그레이션·초기화·코퍼스 변경은 하지 않습니다.
 - 화면 수준 확인은 `frontend/e2e-live`의 `analysis quality as shown on the screens`(실제 LLM): 원인·출처 개수와 화면 표시 일치, 화면의 식별자가 근거에 있는지, 무관한 요청 시 승인 불가, 부품번호 조회 결과.
 - 하네스 자체는 `tests/test_analysis_quality_e2e.py`가 격리 DB에서 가짜 모델로 검증합니다.
+- `--require-embedding-ready`는 활성 인덱스와 실행 provider가 일치하고 누락이 없을 때만 시작합니다. 키워드 검색 기준선 평가를 의도할 때에만 생략합니다.
+- 보고서에는 실행 시각·케이스 파일 SHA-256·모델명·임베딩 준비 상태를 기록합니다. 한 케이스에서 연결/응답 예외가 나도 나머지 결과를 버리지 않고 해당 케이스를 `evaluation_error`로 실패 처리합니다.
+- 점검 결과와 해석 한계는 [analysis-quality-results.md](analysis-quality-results.md)에 정리합니다.
 
 ## 케이스 (`backend/quality/cases.jsonl`)
 - **symptom 10건**: 실제 과거 서비스 사례(FSR)의 증상 분류를 고객 말투로 바꾼 문장. 근거 1건 이상, 기대 키워드, 추천 부서를 확인합니다.
@@ -36,8 +40,8 @@ LIVE_E2E_USER_PASSWORD=... LIVE_E2E_ADMIN_PASSWORD=... python scripts/analysis_q
 2. 안전하지 않은 요청에서 모델이 근거 없이 `answered`로 답하면 오류로 실패 → 근거 없는 결론(원인·점검 순서·초안)을 버리고 `insufficient_evidence`로 저장(출처를 지어낸 경우는 계속 오류).
 3. 모델 연결·속도 제한 오류를 `agent_error`로 기록 → `llm_unavailable`로 분류.
 4. 평가 규칙이 부품번호 조회(원인 없음)를 실패로 판정 → 부품 조회형 답을 허용.
-
-5. 모델 호출 시간 초과·연결 끊김·일시적 근거 위반(지어낸 출처)이 한 번의 실패로 끝남 → 일시 오류는 최대 3회, 근거 위반은 1회 재시도합니다. 설정·프로그램 오류는 재시도하지 않습니다.
+5. 모델 호출 시간 초과·연결 끊김·일시적 근거 위반(지어낸 출처)이 한 번의 실패로 끝남 → 일시 오류는 최대 3회, 근거 위반은 1회 재시도합니다. 설정·프로그램 오류와 잘못된 HTTP 요청·인증 등 영구 오류는 재시도하지 않습니다.
+6. 근거 없는 답을 강등해도 요약에 확정 진단이 남을 수 있음 → 강등하는 경우 요약도 서버의 근거 부족 안내로 교체합니다.
 
 ## 한계
 - 같은 입력도 실행마다 결과가 달라 케이스당 2회 이상 실행합니다(통과율과 flaky 표시).

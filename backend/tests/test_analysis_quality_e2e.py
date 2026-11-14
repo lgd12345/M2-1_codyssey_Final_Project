@@ -3,7 +3,7 @@ background analysis) and the STORED analysis is scored. The model is a controlle
 script uses the real one. Run only through scripts/test_isolated.py."""
 import pytest
 
-from quality.e2e import api_to_result, customer_leaks, run_case, wait_for_analysis
+from quality.e2e import api_to_result, customer_leaks, run_case, run_suite_e2e, wait_for_analysis
 from quality.scoring import Case, score
 from test_service_analysis_api import Runner, good_result, use_runner  # noqa: F401
 from test_service_requests_api import setup, BASE, pytestmark  # noqa: F401
@@ -91,6 +91,33 @@ def test_customers_must_never_see_analysis_drafts_or_internal_state():
     leaky = {**clean, 'analysis': {}, 'departments': [], 'linked': [], 'analysisRun': {}, 'approval': None}
     assert set(customer_leaks(leaky)) == {'analysis', 'departments', 'linked', 'analysisRun', 'approval'}
     assert customer_leaks({**clean, 'status': '검토 대기'}) == ['status:검토 대기']  # internal status names are not customer wording
+
+
+@pytest.mark.parametrize('status', ['not_indexed', 'config_mismatch', 'incomplete'])
+def test_embedding_preflight_refuses_unready_runs(status):
+    from quality.live import check_embedding_ready
+    snapshot = {'embedding': {'status': status}}
+    with pytest.raises(SystemExit, match='no evaluation fixtures created'):
+        check_embedding_ready(snapshot, required=True)
+    check_embedding_ready(snapshot, required=False)  # explicitly allowed lexical baseline
+    check_embedding_ready({'embedding': {'status': 'ready'}}, required=True)
+
+
+def test_one_broken_evaluation_does_not_lose_the_other_case_results(monkeypatch):
+    import quality.e2e as harness
+    other = Case(**{**CASE.__dict__, 'id': 'second'})
+
+    def fake_case(case, *args, **kwargs):
+        if case.id == CASE.id:
+            raise RuntimeError('secret-token do not record me')
+        return {'case': case.id, 'passed': True, 'error': None}
+
+    monkeypatch.setattr(harness, 'run_case', fake_case)
+    records = run_suite_e2e([CASE, other], None, None, lambda machine: 'equipment', tag='QEVAL-test', concurrency=2)
+    assert len(records) == 2
+    assert records[0]['error'] == 'evaluation_error' and records[0]['passed'] is False
+    assert records[1]['passed'] is True
+    assert 'secret-token' not in str(records)
 
 
 class StuckApi:

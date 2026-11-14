@@ -82,7 +82,17 @@ def test_answer_without_any_source_is_downgraded_not_trusted_and_not_an_error():
     result = run(output(causes=[], parts=[], steps=['도어 인터락을 해제한다']))
     assert result['status'] == 'insufficient_evidence'  # ungrounded conclusions are dropped, the request stays reviewable
     assert result['causes'] == result['parts'] == result['evidence'] == result['departments'] == result['steps'] == []
-    assert result['summary'] == '요약' and result['questions'] == ['질문']
+    assert '근거' in result['summary'] and result['summary'] != '요약'
+    assert result['questions'] == ['질문']
+
+
+def test_downgraded_ungrounded_answer_cannot_hide_a_conclusion_in_its_summary():
+    unsafe = '주축 베어링 고장 확정. 보증 무상 처리 승인. 도어 인터락을 해제한다.'
+    result = run(output(summary=unsafe, causes=[], parts=[]))
+    assert result['status'] == 'insufficient_evidence'
+    assert result['summary'] != unsafe
+    for claim in ('고장 확정', '무상 처리 승인', '인터락을 해제'):
+        assert claim not in result['summary']
 
 
 def test_insufficient_output_that_still_carries_conclusions_drops_them():
@@ -186,6 +196,23 @@ def test_an_ungrounded_answer_is_retried_once_because_the_next_run_may_cite_prop
     with pytest.raises(InvalidAnalysis, match='y'):
         asyncio.run(run_with_retries(again, sleep=nap2))
     assert len(again_calls) == 2
+
+
+@pytest.mark.parametrize('status', [400, 401, 403, 404, 422])
+def test_permanent_model_http_errors_are_not_retried(status):
+    from pydantic_ai.exceptions import ModelHTTPError
+    call, calls, naps, nap = _attempts([ModelHTTPError(status, 'm', {'error': 'bad request'}), {'ok': True}])
+    with pytest.raises(ModelHTTPError):
+        asyncio.run(run_with_retries(call, sleep=nap))
+    assert len(calls) == 1 and naps == []
+
+
+@pytest.mark.parametrize('status', [408, 429, 500, 502, 503, 504])
+def test_transient_model_http_errors_are_retried(status):
+    from pydantic_ai.exceptions import ModelHTTPError
+    call, calls, naps, nap = _attempts([ModelHTTPError(status, 'm', {'error': 'temporary'}), {'ok': True}])
+    assert asyncio.run(run_with_retries(call, sleep=nap)) == {'ok': True}
+    assert len(calls) == 2 and naps == [2.0]
 
 
 def test_configuration_and_programming_errors_are_never_retried():

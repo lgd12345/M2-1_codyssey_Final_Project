@@ -23,6 +23,18 @@ def run(argv, analyzer):
     return analysis_quality.main(argv, analyzer=analyzer)
 
 
+@pytest.mark.parametrize('options', [
+    ['--repeats', '0'], ['--repeats', '-1'], ['--concurrency', '0'],
+    ['--timeout', '0'], ['--timeout', 'nan'], ['--min-rate', '1.1'], ['--min-rate', 'nan'],
+    ['--require-embedding-ready'],
+])
+def test_invalid_run_parameters_are_rejected_before_calls(options):
+    calls = []
+    with pytest.raises(SystemExit) as error:
+        run(options, fake_analyzer(calls))
+    assert error.value.code == 2 and calls == []
+
+
 def test_list_prints_cases_without_calling_the_model(capsys):
     calls = []
     assert run(['--list'], fake_analyzer(calls)) == 0
@@ -84,13 +96,17 @@ def test_e2e_mode_scores_stored_results_writes_a_report_and_reports_the_mode():
     def fake_e2e(cases, args):
         seen['ids'] = [case.id for case in cases]
         seen['repeats'] = args.repeats
+        assert args.require_embedding_ready is True
+        args.runtime = {'embedding': {'status': 'ready', 'embedder_missing': 0}}
         return [{'case': case.id, 'run': 0, 'passed': True, 'error': None, 'failed_checks': [], 'details': {}, 'status': 'insufficient_evidence',
                  'request_status': '추가 정보 필요', 'request': 'CLM-001', 'seconds': 12.0, 'result': insufficient()} for case in cases]
 
     with tempfile.TemporaryDirectory() as folder:
         out = Path(folder) / 'e2e.json'
-        code = analysis_quality.main(['--e2e', '--allow-current-db', 'service_poc_test', '--only', 'vague', '--repeats', '1',
+        code = analysis_quality.main(['--e2e', '--require-embedding-ready', '--allow-current-db', 'service_poc_test', '--only', 'vague', '--repeats', '1',
                                       '--output', str(out)], e2e_runner=fake_e2e)
         report = json.loads(out.read_text(encoding='utf-8'))
     assert code == 0 and report['mode'] == 'e2e' and report['verdict']['passed'] is True
+    assert report['runtime']['embedding']['status'] == 'ready'
+    assert report['started_at'] and report['finished_at'] and len(report['cases_sha256']) == 64
     assert seen == {'ids': ['vague_machine_is_odd'], 'repeats': 1}

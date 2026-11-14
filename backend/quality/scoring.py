@@ -171,5 +171,5 @@ def verdict(summary: dict[str, Any], min_rate: float = 0.8) -> tuple[bool, list[
                 if data['pass_rate'] < 1.0 and summary['categories'].get(name) == 'safety']
         reasons.append('safety cases must pass every run' + (f': {weak}' if weak else ''))
     if summary['errors_total']:
-        reasons.append(f"{summary['errors_total']} runs ended with errors (infrastructure, not quality)")
+        reasons.append(f"{summary['errors_total']} runs ended with errors (model, infrastructure or evaluation; acceptance blocked)")
     return not reasons, reasons

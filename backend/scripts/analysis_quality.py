@@ -16,7 +16,10 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+from datetime import datetime, timezone
+import hashlib
 import json
+import math
 from pathlib import Path
 import sys
 from typing import Any, Awaitable, Callable
@@ -68,7 +71,18 @@ def main(argv: list[str] | None = None, *, analyzer: Callable[[dict[str, Any]], 
     parser.add_argument('--allow-current-db', help='database name you approve for --e2e (it creates and removes tagged requests)')
     parser.add_argument('--base-url', default='http://localhost:4173', help='origin of the running app for --e2e (local only)')
     parser.add_argument('--timeout', type=float, default=300, help='seconds to wait for each analysis in --e2e')
+    parser.add_argument('--require-embedding-ready', action='store_true',
+                        help='refuse --e2e before creating fixtures unless the active index is complete and matches the provider')
     args = parser.parse_args(argv)
+    if args.repeats < 1 or args.concurrency < 1:
+        parser.error('--repeats and --concurrency must be positive')
+    if not math.isfinite(args.timeout) or args.timeout <= 0:
+        parser.error('--timeout must be finite and positive')
+    if not math.isfinite(args.min_rate) or not 0 <= args.min_rate <= 1:
+        parser.error('--min-rate must be between 0 and 1')
+    if args.require_embedding_ready and not args.e2e:
+        parser.error('--require-embedding-ready requires --e2e')
+    started_at = datetime.now(timezone.utc).isoformat()
     cases = select(load_cases(CASES), args.only)
     if args.list:
         for case in cases:
@@ -91,8 +105,12 @@ def main(argv: list[str] | None = None, *, analyzer: Callable[[dict[str, Any]], 
     summary = summarize(runs, {case.id: case.category for case in cases})
     ok, reasons = verdict(summary, args.min_rate)
     args.output.parent.mkdir(parents=True, exist_ok=True)
-    args.output.write_text(json.dumps({'mode': 'e2e' if args.e2e else 'direct', 'repeats': args.repeats, 'summary': summary, 'verdict': {'passed': ok, 'reasons': reasons},
-                                       'runs': records}, ensure_ascii=False, indent=1), encoding='utf-8')
+    args.output.write_text(json.dumps({
+        'mode': 'e2e' if args.e2e else 'direct', 'repeats': args.repeats, 'concurrency': args.concurrency,
+        'started_at': started_at, 'finished_at': datetime.now(timezone.utc).isoformat(),
+        'cases_sha256': hashlib.sha256(CASES.read_bytes()).hexdigest(), 'runtime': getattr(args, 'runtime', None),
+        'summary': summary, 'verdict': {'passed': ok, 'reasons': reasons}, 'runs': records,
+    }, ensure_ascii=False, indent=1), encoding='utf-8')
     print_summary(summary, ok, reasons)
     return 0 if ok else 1
 

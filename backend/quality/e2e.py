@@ -97,7 +97,12 @@ def run_suite_e2e(cases: list[Case], user, admin, equipment_for: Callable[[str],
 
     def one(job: tuple[Case, int]) -> dict[str, Any]:
         case, index = job
-        record = run_case(case, user, admin, equipment_for(case.machine), tag=tag, timeout=timeout, interval=interval)
+        try:
+            record = run_case(case, user, admin, equipment_for(case.machine), tag=tag, timeout=timeout, interval=interval)
+        except Exception:
+            # A broken response/connection must fail this case, not discard every completed result.
+            # Exception messages can contain credentials or customer data and are never recorded.
+            record = _record(case, error='evaluation_error', failed_checks=['error'])
         record['run'] = index
         return record
 

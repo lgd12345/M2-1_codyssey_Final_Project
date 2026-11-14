@@ -16,6 +16,8 @@ import httpx
 import psycopg
 from dotenv import load_dotenv
 
+from app.agent_rag.embedding import configured_embedder
+from app.agent_rag.embedding_readiness import embedding_readiness
 from quality.e2e import run_suite_e2e
 from quality.scoring import Case
 from scripts.test_live_intake import APPROVED_DATABASE, validate_target
@@ -45,6 +47,22 @@ class HttpApi:
         self.client.close()
 
 
+def runtime_snapshot(dsn: str) -> dict[str, Any]:
+    """No remote calls and no writes. Save the retrieval conditions, not credentials or endpoints."""
+    provider = os.getenv('RAG_EMBEDDING_PROVIDER', 'gemini')
+    embedder = configured_embedder(provider=provider)
+    with psycopg.connect(dsn, connect_timeout=5) as db:
+        db.execute('SET TRANSACTION READ ONLY')
+        report = embedding_readiness(db, embedder)
+        database = db.execute('SELECT current_database()').fetchone()[0]
+    return {'database': database, 'model': os.getenv('LLM_MODEL'), 'provider': provider, 'embedding': report}
+
+
+def check_embedding_ready(snapshot: dict[str, Any], required: bool) -> None:
+    if required and snapshot['embedding']['status'] != 'ready':
+        raise SystemExit(f"embedding preflight failed: {snapshot['embedding']['status']}; no evaluation fixtures created")
+
+
 def run_live_e2e(cases: list[Case], args: argparse.Namespace) -> list[dict[str, Any]]:
     load_dotenv(ROOT / '.env', override=False)
     dsn = (os.getenv('RAG_DATABASE_URL', '') or os.getenv('DATABASE_URL', '')).strip()
@@ -52,6 +70,8 @@ def run_live_e2e(cases: list[Case], args: argparse.Namespace) -> list[dict[str, 
     passwords = {name: os.getenv(f'LIVE_E2E_{name.upper()}_PASSWORD') for name in ('user', 'admin')}
     if not all(passwords.values()):
         raise SystemExit('set LIVE_E2E_USER_PASSWORD and LIVE_E2E_ADMIN_PASSWORD')
+    args.runtime = runtime_snapshot(dsn)
+    check_embedding_ready(args.runtime, args.require_embedding_ready)
     tag = 'QEVAL-' + uuid4().hex[:10]
     machines = sorted({case.machine for case in cases})
     equipment: dict[str, str] = {}
