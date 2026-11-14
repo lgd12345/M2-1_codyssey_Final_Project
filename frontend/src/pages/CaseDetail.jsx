@@ -4,9 +4,10 @@ import { Avatar, formatTime } from '../ui.jsx'
 import { AnalysisSection } from './AnalysisSection.jsx'
 import { DeptSection } from './DeptSection.jsx'
 import { Activity } from './Activity.jsx'
+import { ChatPanel } from './ChatPanel.jsx'
 
 // Jira 요청 상세(work item view): 왼쪽에 요청 정보·AI·연결 업무·활동, 오른쪽에 상태 버튼과 승인·세부 정보 패널.
-export function CaseDetail({ item, dispatch, me, onAnalyze, analyzing, analysisError }) {
+export function CaseDetail({ item, dispatch, me, onAnalyze, analyzing, analysisError, csrf }) {
   if (!item) return <section className="center-card"><h1>요청을 찾을 수 없습니다</h1><a href="#/cases">대기열로</a></section>
   return (
     <article className="issue" aria-labelledby="detail-title">
@@ -16,6 +17,7 @@ export function CaseDetail({ item, dispatch, me, onAnalyze, analyzing, analysisE
           <h1 id="detail-title">{item.title}</h1>
           <RequestCard item={item} />
           <AnalysisSection item={item} dispatch={dispatch} onAnalyze={onAnalyze} analyzing={analyzing} error={analysisError} />
+          {csrf && <ChatPanel item={item} csrf={csrf} />}
           <DeptSection item={item} dispatch={dispatch} />
           <Activity item={item} dispatch={dispatch} me={me} />
         </div>

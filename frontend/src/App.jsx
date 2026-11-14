@@ -185,7 +185,7 @@ export function App({ theme }) {
   else if (view && (workspace.pending || workspace.owner !== auth.user.id)) content = <section className="center-card" role="status" aria-busy="true"><h1>요청을 불러오는 중</h1></section>
   else if (view && workspace.error) content = <section className="center-card"><h1>요청을 불러오지 못했습니다</h1><p className="error" role="alert">{workspace.error}</p><button onClick={() => setRefresh(value => value + 1)}>다시 시도</button></section>
   else if (route.name === 'list' || route.name === 'new') content = <CaseList cases={cases} onCreate={createRequest} equipment={equipment} modalOpen={route.name === 'new'} />
-  else if (route.name === 'detail') content = <CaseDetail key={route.id} item={item} me={me} dispatch={dispatch} onAnalyze={startAnalysis} analyzing={analysisStarting} analysisError={analysisError} />
+  else if (route.name === 'detail') content = <CaseDetail key={route.id} item={item} me={me} dispatch={dispatch} onAnalyze={startAnalysis} analyzing={analysisStarting} analysisError={analysisError} csrf={auth?.csrf_token} />
   else if (route.name === 'portal-list' || route.name === 'portal-new') content = <PortalList cases={cases} company={workspace.context?.company?.name} onCreate={createRequest} equipment={equipment} modalOpen={route.name === 'portal-new'} />
   else if (route.name === 'portal-detail') content = <PortalDetail key={route.id} item={item} />
   else if (route.name === 'work-list') content = <WorkList cases={cases} deptKey={deptKey} onDeptChange={setDeptKey} />

@@ -5,13 +5,15 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "test": "node --test src/theme.test.js src/navigation.test.js src/workflow.test.js src/vite-config.test.js src/actions.test.js",
+    "test": "node --test src/theme.test.js src/navigation.test.js src/workflow.test.js src/vite-config.test.js src/actions.test.js src/chat.test.js",
     "test:e2e": "playwright test",
     "test:e2e:live": "playwright test --config playwright.live.config.js",
     "build": "vite build",
     "preview": "vite preview"
   },
   "dependencies": {
+    "@ai-sdk/react": "4.0.129",
+    "ai": "7.0.126",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"
   },

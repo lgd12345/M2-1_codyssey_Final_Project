@@ -220,3 +220,44 @@ test('internal notes never reach customers; companies are isolated; customers ca
   }
   await customer.context.close(); await other.context.close(); await staff.context.close()
 })
+
+test('the operator chat answers from tool results, shows evidence and keeps its history; customers have none', async ({ browser }) => {
+  const customer = await newContext(browser, process.env.E2E_CUSTOMER, 'portal')
+  const staff = await newContext(browser, process.env.E2E_STAFF, 'cases')
+  const id = await createRequest(customer.page, 'ATC가 작동하지 않습니다. 채팅 확인용 증상 설명입니다.')
+  await staff.page.goto(`/#/cases/${id}`)
+  await expect(staff.page.getByRole('heading', { name: 'AI 대화', exact: true })).toBeVisible()
+  await expect(staff.page.getByText('읽기 전용입니다', { exact: false })).toBeVisible()
+
+  await staff.page.getByRole('button', { name: '사례 담당자는?', exact: true }).click()
+  const log = staff.page.getByRole('log', { name: 'AI 대화 내용' })
+  await expect(log.getByText('이 요청과 비슷한 과거 사례를 찾아', { exact: false })).toBeVisible()
+  await expect(log.getByText('비슷한 사례는 FSR-00005이며 담당 작업자는 EMP-0003입니다.', { exact: true })).toBeVisible({ timeout: 15000 })
+  const trail = log.getByRole('list', { name: '조회 과정' }).getByRole('listitem')
+  await expect(trail).toHaveText(['과거 사례 검색 · 완료', '사례 담당 기록 조회 · 완료', '매뉴얼 검색 · 완료'])
+  await expect(log.getByText('과거 사례 1건 (보기)', { exact: true })).toBeVisible()
+  await expect(log.getByText('사례 담당 기록 1건', { exact: true })).toBeVisible()
+  await expect(log.getByText('FSR-00005 · 작업자 EMP-0003 · 천안직영센터 · CENTER-003', { exact: true })).toBeVisible()
+  await staff.page.getByText('관련 문서 1건 (보기)', { exact: true }).click()
+  await staff.page.getByRole('button', { name: '원본 페이지 보기', exact: true }).click()
+  const image = staff.page.getByRole('img', { name: 'E2E 매뉴얼 p.2-31 원본 페이지' })
+  await expect(image).toBeVisible()
+  await expect.poll(() => image.evaluate((img) => img.complete && img.naturalWidth > 0), { timeout: 10000 }).toBe(true)  // really decoded
+  await staff.page.keyboard.press('Escape')
+  await expect(staff.page.getByText('질문 1/30', { exact: true })).toBeVisible()
+
+  // The chat only reads: the request itself is unchanged.
+  expect((await serverItem(staff.page, id)).status).toBe('접수됨')
+
+  // History is kept by the server.
+  await staff.page.reload()
+  await expect(staff.page.getByRole('log', { name: 'AI 대화 내용' }).getByText('비슷한 사례는 FSR-00005이며 담당 작업자는 EMP-0003입니다.', { exact: true })).toBeVisible()
+  await expect(staff.page.getByText('질문 1/30', { exact: true })).toBeVisible()
+
+  // Customers have no chat, in the screen or in the API.
+  await customer.page.goto(`/#/portal/${id}`)
+  await expect(customer.page.getByText('AI 대화', { exact: false })).toHaveCount(0)
+  expect((await customer.page.request.get(`/api/v1/service-requests/${id}/chat`)).status()).toBe(403)
+  await customer.context.close()
+  await staff.context.close()
+})

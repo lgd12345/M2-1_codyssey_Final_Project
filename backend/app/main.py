@@ -8,6 +8,7 @@ from fastapi.staticfiles import StaticFiles
 
 from app.auth.routes import install_auth
 from app.config import check_configuration, startup_notes
+from app.service_requests.chat import router as service_chat_router
 from app.service_requests.pages import router as service_pages_router
 from app.service_requests.routes import router as service_requests_router
 from app.service_requests.workflow_routes import router as service_workflow_router
@@ -30,6 +31,7 @@ install_auth(app)
 app.include_router(service_requests_router)
 app.include_router(service_workflow_router)
 app.include_router(service_pages_router)
+app.include_router(service_chat_router)
 
 
 @app.get("/api/health")

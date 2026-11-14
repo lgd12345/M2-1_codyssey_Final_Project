@@ -4,6 +4,16 @@ Auth, sessions, CSRF, authorization, DB, validation, persistence and the UI stay
 """
 import asyncio
 import base64
+import json
+from contextlib import asynccontextmanager
+from pathlib import Path
+
+from pydantic_ai.messages import ModelResponse, TextPart, ToolCallPart
+from pydantic_ai.models.function import DeltaToolCall, FunctionModel
+
+import app.agent_rag.tools as agent_tools
+from app.agent_rag.settings import AgentSettings
+from app.service_requests import chat
 
 from app.mail.deps import get_mail_sender
 from app.main import app
@@ -54,5 +64,56 @@ class NoMail:
 
 
 app.dependency_overrides[get_mail_sender] = lambda: NoMail()
+
+
+# --- operator chat: scripted model; retrieval of cases and manuals is stubbed (the E2E database has no corpus) ---
+CHAT_CASE = {'found': True, 'fsr_no': 'FSR-00005', 'matched_fsr_no': 'FSR-00005', 'machine': 'VMCT-02',
+             'registered_on': '2024-01-02', 'same_case_count': 1,
+             'handlers': [{'fsr_no': 'FSR-00005', 'worker': 'EMP-0003', 'center': 'CENTER-003', 'branch': '천안직영센터'}]}
+CHAT_CASES = {'query': 'q', 'results': [{
+    'id': 1, 'fsr_no': 'FSR-00005', 'duplicate_fsr_nos': [], 'machine': 'VMCT-02', 'warranty': '', 'repair_type': '',
+    'registered_on': None, 'symptom': ['ATC'], 'complaint': 'POT UP 신호 불량', 'resolution': 'UP 확인 센서 재조임',
+    'requested_part': None, 'replacement_part': None, 'same_case_count': 1, 'resolution_detail': 'full',
+    'content_hash': 'c' * 64}], 'search_status': {'keyword': 'ok'}}
+CHAT_MANUAL = {'query': 'ATC', 'results': [{'content_hash': 'h' * 64, 'content': 'ATC 구동부 점검 절차', 'score': 1.0,
+                                           'ranks': {}, 'table_evidence': None, 'sources': [{
+                                               'document_sha256': 'e' * 64, 'pdf_page': 45, 'printed_page': '2-31',
+                                               'title': 'E2E 매뉴얼', 'page_class': 'text', 'machine': 'F400',
+                                               'verification': 'verified', 'page_id': 1, 'content': 'ATC 구동부 점검 절차'}]}],
+                'search_status': {'keyword': 'ok'}}
+chat.lookup_case = lambda value, **kwargs: CHAT_CASE
+agent_tools.search_cases = lambda *args, **kwargs: CHAT_CASES
+agent_tools.search_manual = lambda *args, **kwargs: CHAT_MANUAL
+
+
+def chat_plan(messages):
+    if any(getattr(part, 'part_kind', '') == 'tool-return' for message in messages for part in message.parts):
+        return [('text', '비슷한 사례는 FSR-00005이며 담당 작업자는 EMP-0003입니다.')]
+    return [('tool', 'search_cases', {'query': 'ATC'}), ('tool', 'lookup_case', {'fsr_no': 'FSR-00005'}),
+            ('tool', 'search_manual', {'query': 'ATC'})]
+
+
+def chat_model():
+    def function(messages, info):
+        parts = [ToolCallPart(s[1], s[2], tool_call_id=f'c{len(messages)}-{i}') if s[0] == 'tool' else TextPart(s[1])
+                 for i, s in enumerate(chat_plan(messages))]
+        return ModelResponse(parts=parts)
+
+    async def stream(messages, info):
+        for i, step in enumerate(chat_plan(messages)):
+            if step[0] == 'tool':
+                yield {i: DeltaToolCall(name=step[1], json_args=json.dumps(step[2]), tool_call_id=f'c{len(messages)}-{i}')}
+            else:
+                yield step[1]
+    return FunctionModel(function, stream_function=stream)
+
+
+@asynccontextmanager
+async def chat_provider():
+    yield chat_model()
+
+
+app.dependency_overrides[chat.get_chat_runtime] = lambda: chat.ChatRuntime(
+    chat_provider, AgentSettings('', '', '', 60, '', Path('cache'), 150))
 app.dependency_overrides[get_analysis_runner] = lambda: controlled_model
 app.dependency_overrides[get_page_renderer] = lambda: (lambda document_sha256, page: PAGE_PNG)
