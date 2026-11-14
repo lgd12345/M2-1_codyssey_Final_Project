@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { analysisRunNotice, canStartAnalysis, isAnalysisRunning } from '../domain/workflow.js'
+import { analysisRunNotice, canStartAnalysis, identifierCheckLine, isAnalysisRunning } from '../domain/workflow.js'
 import { SourcePageButton } from './SourcePage.jsx'
 
 // 위치는 Jira의 "Agent sessions"(Uses AI. Verify results.), 내용 구성은 Siemens Maintenance Copilot의
@@ -29,6 +29,11 @@ export function AnalysisSection({ item, dispatch, onAnalyze, analyzing, error })
           {a.status === 'insufficient_evidence' && <p className="notice warn" role="note">관련 근거가 부족해 원인 후보와 권장 사항을 제시하지 않았습니다.</p>}
           {a.caseSearch === 'unavailable' && <p className="notice warn" role="note">과거 사례 검색 결과를 확인하지 못했습니다.</p>}
           <p className="summary-text">{a.summary}</p>
+          {a.identifierChecks?.length > 0 && (
+            <ul className="identifier-checks" aria-label="식별자 확인">
+              {a.identifierChecks.map((check) => <li key={`${check.kind}:${check.value}`} className={check.status}>{identifierCheckLine(check)}</li>)}
+            </ul>
+          )}
           <div className="ai-answer" role="tabpanel">
             {tab === 'steps' && <Steps a={a} />}
             {tab === 'history' && <History a={a} open={open} setOpen={setOpen} />}

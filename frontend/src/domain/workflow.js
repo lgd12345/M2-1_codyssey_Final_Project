@@ -36,3 +36,9 @@ export function workItems(cases, deptKey) {
     ...work, caseId: item.id, caseTitle: item.title, intake: item.intake, caseStatus: item.status, createdAt: item.approval?.at,
   })))
 }
+
+const IDENTIFIER_KINDS = { alarm_number: '알람', part_no: '부품번호', drawing_no: '도면번호', pmc_address: 'PMC 주소' }
+const IDENTIFIER_OUTCOMES = { found: '색인된 매뉴얼에서 찾음', not_found: '색인된 매뉴얼에서 찾지 못함', check_failed: '조회하지 못함' }
+// "Not found" only says the indexed manuals have no exact match, so the wording never claims the number does not exist.
+export const identifierCheckLine = check =>
+  `${IDENTIFIER_KINDS[check.kind] || '식별자'} ${check.value}: ${IDENTIFIER_OUTCOMES[check.status]}${check.source === 'agent' ? ' (AI 추가 조회)' : ''}`

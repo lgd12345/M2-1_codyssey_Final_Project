@@ -89,6 +89,8 @@ test('real intake persists, is shared with company/staff and isolated from other
   await staff.getByRole('button', { name: 'AI 분석 시작', exact: true }).click()
   await expect(staff.getByText('분석 중입니다.', { exact: false })).toBeVisible()
   await expect(staff.getByText('E2E 통제된 분석 응답', { exact: false })).toBeVisible({ timeout: 15000 })
+  const checks = staff.getByRole('list', { name: '식별자 확인' }).getByRole('listitem')
+  await expect(checks).toHaveText(['알람 2023: 색인된 매뉴얼에서 찾음', '부품번호 2064-75-114-00: 색인된 매뉴얼에서 찾지 못함'])
   await expect(staff.getByText('ATC 암 구동 불량', { exact: false })).toBeVisible()
   await expect(staff.getByRole('button', { name: 'AI 분석 시작', exact: true })).toHaveCount(0)
   await staff.getByRole('tab', { name: '과거 정비 이력', exact: true }).click()

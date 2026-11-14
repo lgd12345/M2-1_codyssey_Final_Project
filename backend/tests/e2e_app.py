@@ -36,6 +36,9 @@ async def controlled_model(request):
              'excerpt': '공구 교환 중 정지', 'note': '과거 사례는 참고용입니다.'}],
         'departments': [{'key': 'service', 'reason': '현장 점검 필요', 'draft': 'ATC 점검 방문 초안'}],
         'case_search': 'ok',
+        'identifier_checks': [
+            {'kind': 'alarm_number', 'value': '2023', 'status': 'found', 'source': 'server'},
+            {'kind': 'part_no', 'value': '2064-75-114-00', 'status': 'not_found', 'source': 'server'}],
     }
 
 

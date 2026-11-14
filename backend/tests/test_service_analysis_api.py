@@ -29,6 +29,7 @@ def good_result(**change):
         'departments': [{'key': 'service', 'reason': '현장 점검 필요', 'draft': 'ATC 점검 방문'},
                         {'key': 'parts', 'reason': '부품 수배', 'draft': '모터 재고 확인'}],
         'case_search': 'ok',
+        'identifier_checks': [{'kind': 'alarm_number', 'value': '2023', 'status': 'found', 'source': 'server'}],
     }
     result.update(change)
     return result
@@ -105,6 +106,7 @@ def test_success_is_durable_structured_and_does_not_approve_or_create_work(setup
     assert analysis['causes'][0]['evidence'] == ['E1', 'E2']
     assert [e['id'] for e in analysis['evidence']] == ['E1', 'E2']
     assert analysis['caseSearch'] == 'ok'
+    assert analysis['identifierChecks'] == [{'kind': 'alarm_number', 'value': '2023', 'status': 'found', 'source': 'server'}]
     departments = {d['key']: d for d in item['departments']}
     assert set(departments) == {'service', 'quality', 'parts', 'sales'}
     assert departments['service'] == {'key': 'service', 'selected': True, 'aiSelected': True,

@@ -11,6 +11,7 @@ from app.agent_rag.case_retrieval import search_cases
 from app.agent_rag.context import ContextPolicy, compact_cases, compact_identifier, compact_manual, compact_source
 from app.agent_rag.embedding import GeminiEmbedder
 from app.agent_rag.pdf_source import open_source_page
+from app.agent_rag.preprocess import extract_query_identifiers
 from app.agent_rag.retrieval import lookup_identifier, search_manual
 from app.agent_rag.settings import AgentSettings
 from app.agent_rag.tables import table_evidence
@@ -54,6 +55,35 @@ class ManualAgentTools:
         self.available_citations: dict[tuple[str, int], dict[str, Any]] = {}
         self.available_cases: dict[str, dict[str, Any]] = {}
         self.tool_calls: list[dict[str, Any]] = []
+        self.identifier_checks: list[dict[str, str]] = []  # per-identifier outcome, stored with the analysis
+
+    def _record_check(self, kind: str, value: str, status: str, source: str) -> None:
+        """First outcome per value wins; only a failed check may be replaced by a definite one."""
+        for index, check in enumerate(self.identifier_checks):
+            if check["value"].upper() == value.upper():
+                if check["status"] == "check_failed" and status != "check_failed":
+                    self.identifier_checks[index] = {"kind": kind, "value": value, "status": status, "source": source}
+                return
+        self.identifier_checks.append({"kind": kind, "value": value, "status": status, "source": source})
+
+    def check_identifier(self, kind: str, value: str) -> dict[str, Any]:
+        """Server-side exact lookup done before the model runs. It is not a model tool call: it spends no budget.
+
+        A database failure or an unusable input is 'check_failed', never 'not_found'.
+        """
+        try:
+            result = lookup_identifier(value, kind=kind, database_url=self.settings.database_url)
+        except (psycopg.Error, RuntimeError):
+            result = None
+        if result is None or result.get("status"):
+            status = "check_failed"
+        else:
+            status = "found" if result["matches"] else "not_found"
+        for source in (result or {}).get("matches", []):
+            self._remember(source)
+        self._record_check(kind, value, status, "server")
+        view = compact_identifier(result, value, self.policy) if result and self.policy else result
+        return {"kind": kind, "value": value, "status": status, "result": view if status == "found" else None}
 
     def _remember(self, source: dict[str, Any], *, match_type: str | None = None,
                   matched_identifiers: list[dict[str, str]] | None = None) -> None:
@@ -166,6 +196,12 @@ class ManualAgentTools:
             return self._failure("lookup_identifier", "database_unavailable", arguments=arguments)
         for source in result["matches"]:
             self._remember(source)
+        if not result.get("status"):
+            detected = extract_query_identifiers(value)
+            kind_name = (result["matches"][0]["kind"] if result["matches"] else resolved
+                         or (detected[0].kind if detected else "identifier"))
+            self._record_check(kind_name, result["matches"][0]["normalized"] if result["matches"] else result.get("value", value),
+                               "found" if result["matches"] else "not_found", "agent")
         self.tool_calls.append({"tool": "lookup_identifier", "status": "ok", "arguments": arguments,
                                 "found": result["found"],
                                 "match_count": len(result["matches"])})

@@ -86,6 +86,14 @@ class Recommendation(_Model):
     draft: str = Field(min_length=1)
 
 
+class IdentifierCheck(_Model):
+    """Outcome of the server's exact lookup of one identifier. 'not_found' means absent from the indexed manuals."""
+    kind: str = Field(min_length=1)
+    value: str = Field(min_length=1)
+    status: Literal['found', 'not_found', 'check_failed']
+    source: Literal['server', 'agent']
+
+
 class AnalysisResult(_Model):
     status: Literal['answered', 'insufficient_evidence']
     summary: str = Field(min_length=1)
@@ -96,6 +104,7 @@ class AnalysisResult(_Model):
     evidence: list[Evidence] = Field(default_factory=list)
     departments: list[Recommendation] = Field(default_factory=list)
     case_search: Literal['ok', 'unavailable'] = 'ok'
+    identifier_checks: list[IdentifierCheck] = Field(default_factory=list)
 
     @field_validator('departments')
     @classmethod
@@ -237,4 +246,5 @@ def finish_failure(connection, analysis_id: UUID, code: str) -> None:
 def analysis_view(result: dict[str, Any]) -> dict[str, Any]:
     return {'summary': result['summary'], 'causes': result['causes'], 'steps': result['steps'],
             'questions': result['questions'], 'parts': result['parts'], 'evidence': result['evidence'],
-            'caseSearch': result['case_search'], 'status': result['status']}
+            'caseSearch': result['case_search'], 'status': result['status'],
+            'identifierChecks': result.get('identifier_checks', [])}

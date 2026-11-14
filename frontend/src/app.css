@@ -304,3 +304,7 @@ input:not([type='checkbox']), select, textarea { border-radius: 8px; }
 .source-page { display: block; max-width: 100%; height: auto; margin: 0 auto; border: 1px solid var(--border); }
 .modal:has(.source-page) { width: min(960px, 100%); }
 .source-page[hidden] { display: none; }
+
+.identifier-checks { list-style: none; margin: 0 0 0.7rem; padding: 0; font-size: 0.86rem; display: grid; gap: 0.15rem; }
+.identifier-checks li::before { content: '✓ '; color: var(--green-fg); }
+.identifier-checks li.not_found::before, .identifier-checks li.check_failed::before { content: '! '; color: var(--yellow-fg); }
