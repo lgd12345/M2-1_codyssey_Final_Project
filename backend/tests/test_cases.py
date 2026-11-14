@@ -56,8 +56,8 @@ needs_db = pytest.mark.skipif(not DATABASE_URL, reason="isolated TEST_DATABASE_U
 @pytest.fixture
 def case_db(tmp_path):
     from psycopg.conninfo import conninfo_to_dict
-    if not conninfo_to_dict(DATABASE_URL).get("dbname", "").endswith("_test"):
-        raise ValueError("TEST_DATABASE_URL must point to an isolated database ending in _test")
+    from db_safety import require_disposable_test_database
+    require_disposable_test_database(DATABASE_URL)
     apply_migrations(DATABASE_URL)
     import psycopg
     connection = psycopg.connect(DATABASE_URL)

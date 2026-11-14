@@ -13,8 +13,8 @@ PASSWORD = "correct-horse-battery"
 
 @pytest.fixture
 def db(monkeypatch):
-    if not conninfo_to_dict(DATABASE_URL).get("dbname", "").endswith("_test"):
-        raise ValueError("TEST_DATABASE_URL must point to an isolated _test database")
+    from db_safety import require_disposable_test_database
+    require_disposable_test_database(DATABASE_URL)
     apply_migrations(DATABASE_URL)
     monkeypatch.setenv("RAG_DATABASE_URL", DATABASE_URL)
     connection = psycopg.connect(DATABASE_URL)
