@@ -190,14 +190,10 @@ def begin(connection, number: int, user_id: UUID, *, allowed: tuple[str, ...] = 
         connection.execute("UPDATE service_request SET status='분석 중' WHERE id=%s", (number,))
         if history:
             add_history(connection, number, history)
-        # Customer additions are facts the analysis should consider; callbacks and closure requests are not.
-        additional = [r[0] for r in connection.execute(
-            "SELECT text FROM service_comment WHERE request_id=%s AND kind='customer' AND intent='reply' ORDER BY created_at,id",
-            (number,)).fetchall()]
     snapshot = row[4]
     # Only diagnostic facts: the customer's contact details are deliberately not sent to a model.
     return analysis_id, {'message': row[1], 'reason': row[2], 'alarm_numbers': list(row[3]),
-                         'machine': snapshot['machine'], 'serial': snapshot['serial'], 'additional_info': additional}
+                         'machine': snapshot['machine'], 'serial': snapshot['serial']}
 
 
 def finish_success(connection, analysis_id: UUID, result: dict[str, Any]) -> None:

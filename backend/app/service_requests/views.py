@@ -32,7 +32,7 @@ def load_related(connection, ids: list[int], *, staff: bool) -> dict[str, dict[i
     if not ids:
         return {'comments': {}, 'history': {}, 'departments': {}, 'works': {}, 'feedback': {}}
     with connection.cursor(row_factory=dict_row) as cursor:
-        kinds = ['internal', 'public', 'customer'] if staff else ['public', 'customer']
+        kinds = ['internal', 'public'] if staff else ['public']
         comments = cursor.execute(
             'SELECT * FROM service_comment WHERE request_id=ANY(%s) AND kind=ANY(%s) ORDER BY created_at,id',
             (ids, kinds)).fetchall()
@@ -68,7 +68,6 @@ def serialize(row: dict[str, Any], related: dict[str, dict[int, list[dict[str, A
                    'symptom': row['message'], 'alarm': ', '.join(row['alarm_numbers']), 'occurred': '',
                    'type': row['reason'], 'creator': f"{contact['name']} ({snapshot['company']})",
                    'contact': contact, 'asset': None},
-        'closeRequested': row['close_requested'],
     }
     comments = related['comments'].get(number, [])
     if not staff:

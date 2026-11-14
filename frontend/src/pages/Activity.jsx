@@ -61,7 +61,6 @@ export function Activity({ item, dispatch, me }) {
             <div>
               <p className="comment-meta"><strong>{e.by}</strong> {formatTime(e.at)}
                 {e.kind === 'internal' && <span className="lock"> · 🔒 내부 메모</span>}
-                {e.kind === 'customer' && <span className="tag">고객</span>}
                 {e.kind === 'public' && <span className="muted"> · 고객에게 답변</span>}</p>
               <p className="comment-text">{e.text}</p>
             </div>

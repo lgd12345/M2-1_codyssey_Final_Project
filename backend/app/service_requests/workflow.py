@@ -49,10 +49,9 @@ class NotFound(AuthError):
     message = '요청 또는 장비를 찾을 수 없습니다.'
 
 
-def lock(connection, number: int, company_id=None) -> dict[str, Any]:
+def lock(connection, number: int) -> dict[str, Any]:
     with connection.cursor(row_factory=dict_row) as cursor:
-        row = cursor.execute('SELECT * FROM service_request WHERE id=%s AND (%s OR company_id=%s) FOR UPDATE',
-                             (number, company_id is None, company_id)).fetchone()
+        row = cursor.execute('SELECT * FROM service_request WHERE id=%s FOR UPDATE', (number,)).fetchone()
     if row is None:
         raise NotFound()
     return row
@@ -87,9 +86,9 @@ def assign(connection, number: int, actor) -> None:
     add_history(connection, number, f'{actor.login_id} 담당자로 지정')
 
 
-def add_comment(connection, number: int, actor, kind: str, text: str, *, intent: str = 'reply') -> None:
-    connection.execute('INSERT INTO service_comment(request_id,author_id,author,kind,intent,text) VALUES (%s,%s,%s,%s,%s,%s)',
-                       (number, actor.id, actor.login_id, kind, intent, text))
+def add_comment(connection, number: int, actor, kind: str, text: str) -> None:
+    connection.execute('INSERT INTO service_comment(request_id,author_id,author,kind,text) VALUES (%s,%s,%s,%s,%s)',
+                       (number, actor.id, actor.login_id, kind, text))
 
 
 def comment(connection, number: int, actor, kind: str, text: str) -> None:
@@ -183,31 +182,3 @@ def resolve(connection, number: int, actor, note: str) -> None:
 
 def _now(connection) -> str:
     return connection.execute('SELECT now()').fetchone()[0].isoformat()
-
-
-# ----- customer actions (company scope is applied by lock(company_id)) -----
-
-def customer_reply(connection, number: int, actor, company_id, text: str) -> bool:
-    """Returns True when the reply answers an information request and re-analysis should start."""
-    row = lock(connection, number, company_id)
-    if row['status'] == '종결':
-        raise InvalidState()
-    add_comment(connection, number, actor, 'customer', text)
-    return row['status'] == '추가 정보 필요'
-
-
-def customer_callback(connection, number: int, actor, company_id) -> None:
-    row = lock(connection, number, company_id)
-    if row['status'] == '종결':
-        raise InvalidState()
-    add_comment(connection, number, actor, 'customer', '콜백을 요청했습니다.', intent='callback')
-    add_history(connection, number, '고객 콜백 요청', '콜백을 요청했습니다.')
-
-
-def customer_close_request(connection, number: int, actor, company_id, reason: str) -> None:
-    row = lock(connection, number, company_id)
-    if row['status'] == '종결':
-        raise InvalidState()
-    add_comment(connection, number, actor, 'customer', f'[종결 요청] {reason}', intent='close_request')
-    connection.execute('UPDATE service_request SET close_requested=TRUE WHERE id=%s', (number,))
-    add_history(connection, number, '고객 종결 요청', '종결을 요청했습니다.')

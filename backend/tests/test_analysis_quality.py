@@ -178,7 +178,7 @@ def test_suite_runs_each_case_repeatedly_with_limited_concurrency_and_records_er
     assert 'secret-token' not in json.dumps(records)
     assert all(r['seconds'] >= 0 for r in records)
     # The analyzer only receives stored-request style input: no expectations leak to the model.
-    assert set(calls[0]) == {'message', 'reason', 'alarm_numbers', 'machine', 'serial', 'additional_info'}
+    assert set(calls[0]) == {'message', 'reason', 'alarm_numbers', 'machine', 'serial'}
 
 
 # ---------- the committed golden set ----------

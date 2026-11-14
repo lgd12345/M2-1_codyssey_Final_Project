@@ -39,6 +39,9 @@ async function analyse(staff, id) {
   await expect(staff.getByText('분석 중입니다.', { exact: false })).toBeVisible()
 }
 
+const noFollowUp = page => Promise.all(['정보 추가', '콜백 요청', '종결 요청'].map(name =>
+  expect(page.getByRole('button', { name, exact: true })).toHaveCount(0)))
+
 const statusButton = (page, name) => page.getByRole('button', { name: new RegExp(`^${name}`) })
 const serverItem = async (page, id) => (await page.request.get(`/api/v1/service-requests/${id}`)).json()
 
@@ -109,7 +112,7 @@ test('review edits, approval, department work and closure run through the real U
   await customer.page.reload()
   await expect(customer.page.getByText('이 서비스 요청은 완료되었습니다.', { exact: false })).toBeVisible()
   await expect(customer.page.getByText('점검 결과를 안내드렸습니다.', { exact: false })).toBeVisible()
-  await expect(customer.page.getByRole('button', { name: '콜백 요청', exact: true })).toBeDisabled()
+  await noFollowUp(customer.page)  // a finished request offers nothing to do
   await customer.context.close()
   await staff.context.close()
 })
@@ -142,7 +145,7 @@ test('decline keeps its reason internal and re-analysis restores a reviewable re
   await staff.context.close()
 })
 
-test('insufficient evidence asks the customer, whose reply triggers a new analysis', async ({ browser }) => {
+test('insufficient evidence is handled by the operator, who asks publicly and re-analyses', async ({ browser }) => {
   const customer = await newContext(browser, process.env.E2E_CUSTOMER, 'portal')
   const staff = await newContext(browser, process.env.E2E_STAFF, 'cases')
   const id = await createRequest(customer.page, '근거부족 증상 설명입니다.')
@@ -154,45 +157,33 @@ test('insufficient evidence asks the customer, whose reply triggers a new analys
   await staff.page.getByRole('button', { name: '저장', exact: true }).click()
   await expect(staff.page.getByText('알람 번호를 알려 주세요.', { exact: false }).first()).toBeVisible()
 
+  // The customer sees the request for information and how it will continue, but nothing to press.
   await customer.page.reload()
   await expect(customer.page.getByText('서비스 담당자가 추가 정보를 요청했습니다.', { exact: false })).toBeVisible()
+  await expect(customer.page.getByText('알람 번호를 알려 주세요.', { exact: false }).first()).toBeVisible()
+  await expect(customer.page.getByText('담당자가 저장된 연락처로 연락드립니다.')).toBeVisible()
   await expect(customer.page.getByText('정보 요청', { exact: true }).first()).toBeVisible()
-  await customer.page.getByRole('button', { name: '정보 추가', exact: true }).first().click()
-  await customer.page.getByLabel('메시지 *', { exact: true }).fill('알람 번호는 2023 입니다.')
-  await customer.page.getByRole('button', { name: '전송', exact: true }).click()
-  await expect(customer.page.getByText('알람 번호는 2023 입니다.', { exact: false }).first()).toBeVisible()
+  await noFollowUp(customer.page)
 
-  await expect.poll(async () => (await serverItem(staff.page, id)).status, { timeout: 20000 }).toBe('검토 대기')
-  await staff.page.reload()
-  await expect(staff.page.getByText('E2E 통제된 분석 응답', { exact: false })).toBeVisible()
-  await expect(staff.page.getByText('알람 번호는 2023 입니다.', { exact: false }).first()).toBeVisible()
-  await expect(staff.page.getByText('고객 답변 · 재분석', { exact: false })).toBeVisible()
+  // The operator re-analyses on their own decision (the customer's request is not an automatic trigger).
+  await statusButton(staff.page, '추가 정보 필요').click()
+  await staff.page.getByRole('menuitem', { name: '재분석 요청', exact: true }).click()
+  await expect(statusButton(staff.page, '검토 대기')).toBeVisible({ timeout: 15000 })
+  await expect(staff.page.getByText('재분석 1회', { exact: false })).toBeVisible()
   await customer.page.reload()
   await expect(customer.page.getByText('확인 중', { exact: true }).first()).toBeVisible()
   await customer.context.close()
   await staff.context.close()
 })
 
-test('customer callback and close request reach operators; internal notes never reach customers', async ({ browser }) => {
+test('internal notes never reach customers; companies are isolated; customers cannot act on a request', async ({ browser }) => {
   const customer = await newContext(browser, process.env.E2E_CUSTOMER, 'portal')
-  const colleague = await newContext(browser, process.env.E2E_COLLEAGUE, 'portal')
   const other = await newContext(browser, process.env.E2E_OTHER_CUSTOMER, 'portal')
   const staff = await newContext(browser, process.env.E2E_STAFF, 'cases')
-  const id = await createRequest(customer.page, '콜백과 종결 요청 확인용입니다.')
-
-  await customer.page.getByRole('button', { name: '콜백 요청', exact: true }).click()
-  await customer.page.getByRole('button', { name: '요청', exact: true }).click()
-  await expect(customer.page.getByText('콜백을 요청했습니다.', { exact: false }).first()).toBeVisible()
-  await colleague.page.goto(`/#/portal/${id}`)
-  await colleague.page.getByRole('button', { name: '종결 요청', exact: true }).click()
-  await colleague.page.getByLabel('종결 사유 *', { exact: true }).fill('현장에서 스스로 해결했습니다.')
-  await colleague.page.getByRole('button', { name: '전송', exact: true }).click()
-  await expect(colleague.page.getByText('종결을 요청했습니다.', { exact: false }).first()).toBeVisible()
+  const id = await createRequest(customer.page, '내부 메모 비공개 확인용입니다.')
+  await noFollowUp(customer.page)
 
   await staff.page.goto(`/#/cases/${id}`)
-  await expect(staff.page.getByText('고객이 종결을 요청했습니다.', { exact: false })).toBeVisible()
-  await expect(staff.page.getByText('[종결 요청] 현장에서 스스로 해결했습니다.', { exact: false })).toBeVisible()
-  await expect(staff.page.getByText('콜백을 요청했습니다.', { exact: false }).first()).toBeVisible()
   await staff.page.getByRole('button', { name: '나에게 지정', exact: true }).click()
   await expect(staff.page.getByText('담당자로 지정', { exact: false })).toBeVisible()
   await staff.page.getByRole('button', { name: '내부 메모 추가', exact: true }).click()
@@ -207,14 +198,15 @@ test('customer callback and close request reach operators; internal notes never 
   await expect(customer.page.getByText('곧 연락드리겠습니다.', { exact: false })).toBeVisible()
   await expect(customer.page.getByText('내부 전용 메모', { exact: false })).toHaveCount(0)
   expect(JSON.stringify(await serverItem(customer.page, id))).not.toContain('내부 전용')
-  // A different company can neither read nor act on it.
-  const csrf = (await (await other.page.request.get('/api/v1/auth/me')).json()).csrf_token
-  const headers = { Origin: new URL(other.page.url()).origin, 'X-CSRF-Token': csrf }
+  // A different company can neither read it nor reach any action on it.
+  const otherHeaders = { Origin: new URL(other.page.url()).origin, 'X-CSRF-Token': (await (await other.page.request.get('/api/v1/auth/me')).json()).csrf_token }
   expect((await other.page.request.get(`/api/v1/service-requests/${id}`)).status()).toBe(404)
-  expect((await other.page.request.post(`/api/v1/service-requests/${id}/callback`, { headers })).status()).toBe(404)
-  // A customer cannot call operator actions even with a valid session and CSRF token.
-  const customerCsrf = (await (await customer.page.request.get('/api/v1/auth/me')).json()).csrf_token
-  const customerHeaders = { Origin: new URL(customer.page.url()).origin, 'X-CSRF-Token': customerCsrf }
+  // A customer cannot call operator actions, and the old customer follow-up endpoints no longer exist.
+  const customerHeaders = { Origin: new URL(customer.page.url()).origin, 'X-CSRF-Token': (await (await customer.page.request.get('/api/v1/auth/me')).json()).csrf_token }
   expect((await customer.page.request.post(`/api/v1/service-requests/${id}/approval`, { headers: customerHeaders })).status()).toBe(403)
-  await customer.context.close(); await colleague.context.close(); await other.context.close(); await staff.context.close()
+  for (const suffix of ['replies', 'callback', 'close-request']) {
+    expect([404, 405]).toContain((await customer.page.request.post(`/api/v1/service-requests/${id}/${suffix}`, { headers: customerHeaders, data: { text: 'x', reason: 'y' } })).status())
+    expect([404, 405]).toContain((await other.page.request.post(`/api/v1/service-requests/${id}/${suffix}`, { headers: otherHeaders, data: { text: 'x', reason: 'y' } })).status())
+  }
+  await customer.context.close(); await other.context.close(); await staff.context.close()
 })

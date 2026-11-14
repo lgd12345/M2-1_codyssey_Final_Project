@@ -40,7 +40,7 @@ test('real intake persists, is shared with company/staff and isolated from other
   await expect(page.locator('.pd-desc')).toContainText('실제 접수 E2E 확인')
   await page.reload()
   await expect(page.locator('.pd-desc')).toContainText('실제 접수 E2E 확인')
-  await expect(page.getByRole('button', { name: '콜백 요청', exact: true })).toBeEnabled()
+  for (const name of ['정보 추가', '콜백 요청', '종결 요청']) await expect(page.getByRole('button', { name, exact: true })).toHaveCount(0)  // filing is all a customer does
   await page.goto('/#/portal?company=forged-company')
   await expect(page.getByRole('link', { name: created.id, exact: true })).toBeVisible()
 

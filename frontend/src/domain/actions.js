@@ -40,9 +40,6 @@ export function requestFor(action, item) {
       return { method: 'PUT', path: `${base}/analysis/feedback`, body: { rating: action.rating }, result: 'item' }
     }
     case 'CLEAR_RATING': return { method: 'DELETE', path: `${base}/analysis/feedback`, body: undefined, result: 'item' }
-    case 'CUSTOMER_REPLY': return post(`${base}/replies`, { text: action.text })
-    case 'CUSTOMER_CALLBACK': return post(`${base}/callback`)
-    case 'CUSTOMER_CLOSE_REQUEST': return post(`${base}/close-request`, { reason: action.reason })
     default: throw new Error('지원하지 않는 작업입니다.')
   }
 }
@@ -61,7 +58,7 @@ export const myRating = (analysis, me) => analysis?.feedback?.ratings?.find(rati
 export function customerEvents(item) {
   const history = item.history.map((entry, index) => ({ id: `h${index}`, at: entry.at, who: '시스템', text: entry.text }))
   const comments = item.comments.map(comment => ({
-    id: comment.id, at: comment.at, who: comment.kind === 'customer' ? '나' : '서비스 담당자', text: comment.text, message: true,
+    id: comment.id, at: comment.at, who: '서비스 담당자', text: comment.text, message: true,
   }))
   return [...history, ...comments].sort((a, b) => (a.at < b.at ? 1 : a.at > b.at ? -1 : 0))
 }

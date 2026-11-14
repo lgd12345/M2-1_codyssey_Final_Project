@@ -17,9 +17,6 @@ test('every screen action maps to a server request with only user-chosen data', 
     [{ type: 'WORK_START', id: 'CLM-005', workKey: 'SVC-005' }, 'POST', '/service-requests/CLM-005/work/SVC-005/start', undefined, 'item'],
     [{ type: 'WORK_COMPLETE', id: 'CLM-005', workKey: 'SVC-005', result: { summary: '조치', hours: '2' } }, 'POST', '/service-requests/CLM-005/work/SVC-005/complete', { summary: '조치', hours: '2' }, 'item'],
     [{ type: 'RESOLVE', id: 'CLM-005', note: '완료 안내' }, 'POST', '/service-requests/CLM-005/resolution', { note: '완료 안내' }, 'item'],
-    [{ type: 'CUSTOMER_REPLY', id: 'CLM-005', text: '답변' }, 'POST', '/service-requests/CLM-005/replies', { text: '답변' }, 'item'],
-    [{ type: 'CUSTOMER_CALLBACK', id: 'CLM-005' }, 'POST', '/service-requests/CLM-005/callback', undefined, 'item'],
-    [{ type: 'CUSTOMER_CLOSE_REQUEST', id: 'CLM-005', reason: '해결' }, 'POST', '/service-requests/CLM-005/close-request', { reason: '해결' }, 'item'],
   ]
   for (const [action, method, path, body, result] of cases) {
     assert.deepEqual(requestFor(action, item), { method, path, body, result }, action.type)
@@ -48,11 +45,11 @@ test('unknown actions and unsafe identifiers are rejected instead of being sent'
 test('customer history shows only server-provided customer wording and never internal text', () => {
   const events = customerEvents({
     history: [{ at: '2026-11-14T01:00:00Z', text: '서비스 요청이 접수되었습니다.' }, { at: '2026-11-14T02:00:00Z', text: '담당 부서에서 처리를 시작했습니다.' }],
-    comments: [{ id: '1', by: '', kind: 'public', text: '확인 중입니다.', at: '2026-11-14T03:00:00Z' }, { id: '2', by: '', kind: 'customer', text: '문의', at: '2026-11-14T04:00:00Z' }],
+    comments: [{ id: '1', by: '', kind: 'public', text: '확인 중입니다.', at: '2026-11-14T03:00:00Z' }],
   })
   assert.deepEqual(events.map(event => [event.who, event.text]), [
-    ['나', '문의'], ['서비스 담당자', '확인 중입니다.'], ['시스템', '담당 부서에서 처리를 시작했습니다.'], ['시스템', '서비스 요청이 접수되었습니다.']])
-  assert.equal(events.filter(event => event.message).length, 2)
+    ['서비스 담당자', '확인 중입니다.'], ['시스템', '담당 부서에서 처리를 시작했습니다.'], ['시스템', '서비스 요청이 접수되었습니다.']])
+  assert.equal(events.filter(event => event.message).length, 1)
 })
 
 test('rating an analysis and taking the rating back are server requests with a fixed vocabulary', () => {
@@ -80,5 +77,11 @@ test('the original-page address is built only from a request number and a citati
   assert.equal(evidencePageUrl('CLM-005', 'E1'), '/api/v1/service-requests/CLM-005/evidence/E1/page')
   for (const [id, evidence] of [['CLM-5', 'E1'], ['../CLM-005', 'E1'], ['CLM-005', '../E1'], ['CLM-005', 'E1/page'], ['CLM-005', ''], ['CLM-005', 'e1']]) {
     assert.throws(() => evidencePageUrl(id, evidence), /올바르지 않은/, `${id} ${evidence}`)
+  }
+})
+
+test('customers have no follow-up actions after filing: those action types are not supported at all', () => {
+  for (const type of ['CUSTOMER_REPLY', 'CUSTOMER_CALLBACK', 'CUSTOMER_CLOSE_REQUEST']) {
+    assert.throws(() => requestFor({ type, id: 'CLM-005', text: 'x', reason: 'y' }, item), /지원하지 않는 작업/, type)
   }
 })

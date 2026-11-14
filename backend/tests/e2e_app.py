@@ -13,9 +13,15 @@ from app.service_requests.pages import get_page_renderer
 PAGE_PNG = base64.b64decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==')
 
 
+analysed: set[tuple[str, str]] = set()
+
+
 async def controlled_model(request):
     await asyncio.sleep(1.2)  # long enough for the browser to observe the running state
-    if '근거부족' in request['message'] and not request['additional_info']:
+    # A request whose text says so lacks evidence the first time it is analysed; a re-analysis then finds some.
+    first_time = (request['message'], request['serial']) not in analysed
+    analysed.add((request['message'], request['serial']))
+    if '근거부족' in request['message'] and first_time:
         return {'status': 'insufficient_evidence', 'summary': 'E2E 근거 부족 응답', 'causes': [], 'steps': [],
                 'questions': ['알람 번호를 알려주세요.'], 'parts': [], 'evidence': [], 'departments': [], 'case_search': 'ok'}
     return {

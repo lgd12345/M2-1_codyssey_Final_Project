@@ -82,7 +82,7 @@ test('current database: user intake, admin review and cross-company isolation', 
     await expect(user.locator('.pd-desc')).toContainText(marker)
     await user.reload()
     await expect(user.locator('.pd-desc')).toContainText(marker)
-    await expect(user.getByRole('button', { name: '콜백 요청', exact: true })).toBeEnabled()
+    for (const name of ['정보 추가', '콜백 요청', '종결 요청']) await expect(user.getByRole('button', { name, exact: true })).toHaveCount(0)  // filing is all a customer does
 
     await login(admin, 'admin', process.env.LIVE_E2E_ADMIN_PASSWORD, process.env.LIVE_E2E_EXPECTED_ADMIN_ID, 'admin')
     await expect(admin).toHaveURL(/#\/cases$/)
@@ -271,7 +271,7 @@ test('current database: real AI analysis, approval, department work and closure'
 })
 
 // No model call: operator/customer interaction rules on a real stored request in the current environment.
-test('current database: customer actions, internal notes and company isolation on real data', async ({ browser }) => {
+test('current database: internal notes, replies and company isolation on real data', async ({ browser }) => {
   test.setTimeout(120000)
   const userContext = await browser.newContext()
   const adminContext = await browser.newContext()
@@ -280,7 +280,124 @@ test('current database: customer actions, internal notes and company isolation o
   try {
     await login(user, 'user', process.env.LIVE_E2E_USER_PASSWORD, process.env.LIVE_E2E_EXPECTED_USER_ID, 'user')
     await user.getByRole('link', { name: '새 서비스 요청', exact: true }).click()
-    await prepareForm(user, process.env.LIVE_E2E_USER_EQUIPMENT_ID, `${marker} 고객 조작 확인용 요청`)
+    await prepareForm(user, process.env.LIVE_E2E_USER_EQUIPMENT_ID, `${marker} 내부 메모 확인용 요청`)
+    const own = await submit(user)
+    for (const name of ['정보 추가', '콜백 요청', '종결 요청']) await expect(user.getByRole('button', { name, exact: true })).toHaveCount(0)
+
+    await login(admin, 'admin', process.env.LIVE_E2E_ADMIN_PASSWORD, process.env.LIVE_E2E_EXPECTED_ADMIN_ID, 'admin')
+    await admin.goto(`/#/cases/${own.id}`)
+    await expect(admin.getByRole('heading', { name: own.title, exact: true })).toBeVisible()
+    const started = Date.now()
+    await admin.getByRole('button', { name: 'AI 분석 시작', exact: true }).click()
+    await expect(admin.getByText('분석 중입니다.', { exact: false })).toBeVisible()
+    await expect(admin.getByRole('button', { name: 'AI 분석 시작', exact: true })).toHaveCount(0)
+    await expect.poll(async () => (await (await admin.request.get(`${base}/${own.id}`)).json()).status,
+      { timeout: 270000, intervals: [3000] }).not.toBe('분석 중')
+    const seconds = Math.round((Date.now() - started) / 1000)
+    const stored = await (await admin.request.get(`${base}/${own.id}`)).json()
+    expect(stored.analysisRun, 'analysis must succeed against the real model: ' + JSON.stringify(stored.analysisRun)).toEqual({ status: 'succeeded', errorCode: null })
+    const analysis = stored.analysis
+    expect(['answered', 'insufficient_evidence']).toContain(analysis.status)
+    expect(stored.status).toBe(analysis.status === 'answered' ? '검토 대기' : '추가 정보 필요')
+    expect(analysis.summary.length).toBeGreaterThan(5)
+    const ids = analysis.evidence.map(item => item.id)
+    expect(new Set(ids).size).toBe(ids.length)
+    for (const cause of analysis.causes) {
+      expect(cause.evidence.length).toBeGreaterThan(0)
+      for (const id of cause.evidence) expect(ids).toContain(id)
+    }
+    if (analysis.status === 'answered') {
+      expect(analysis.evidence.length).toBeGreaterThan(0)
+      for (const item of analysis.evidence) {
+        expect(item.excerpt.length, 'excerpt must come from stored source: ' + item.source).toBeGreaterThan(0)
+        expect(['fsr', 'manual']).toContain(item.kind)
+      }
+    }
+    expect(stored.departments.map(item => item.key)).toEqual(['service', 'quality', 'parts', 'sales'])
+    expect(stored.linked).toEqual([])
+    expect(stored.approval).toBeNull()
+    await admin.reload()
+    await expect(admin.getByText(analysis.summary.slice(0, 20), { exact: false }).first()).toBeVisible()
+    await admin.getByRole('tab', { name: '매뉴얼 열람', exact: true }).click()
+    await admin.screenshot({ path: process.env.LIVE_E2E_SCREENSHOT || 'test-results/live-analysis.png', fullPage: true })
+
+    const customerView = await (await user.request.get(`${base}/${own.id}`)).json()
+    expect(customerView).not.toHaveProperty('analysis')
+    expect(customerView).not.toHaveProperty('departments')
+    expect(JSON.stringify(customerView)).not.toContain(analysis.summary)
+
+    // ---- review, approval, department work, closure on the same real analysis ----
+    if (stored.status === '추가 정보 필요') {
+      // Honest path when the real model finds no evidence: the customer is asked and the flow stops here.
+      expect((await (await user.request.get(`${base}/${own.id}`)).json()).status).toBe('정보 요청')
+      console.log(JSON.stringify({ real_llm: true, request: own.id, seconds, status: analysis.status, workflow: 'stopped_for_customer_information' }))
+      return
+    }
+    const recommended = stored.departments.filter(item => item.selected)
+    if (recommended.length === 0) {
+      await admin.getByRole('checkbox', { name: /서비스/ }).click()
+      await expect(admin.getByRole('checkbox', { name: /서비스/ })).toBeChecked()
+      await admin.getByLabel('서비스 초안', { exact: true }).fill(`${marker} 서비스 검토 지시`)
+    } else {
+      await admin.getByLabel(`${DEPARTMENT_NAME[recommended[0].key]} 초안`, { exact: true }).fill(`${marker} 검토자 수정 지시`)
+    }
+    await expect(admin.getByRole('button', { name: '승인', exact: true })).toBeEnabled({ timeout: 10000 })
+    await admin.getByRole('button', { name: '승인', exact: true }).click()
+    await expect(admin.getByRole('button', { name: /^처리 중/ })).toBeVisible()
+    const approved = await (await admin.request.get(`${base}/${own.id}`)).json()
+    expect(approved.status).toBe('처리 중')
+    expect(approved.linked.length).toBeGreaterThan(0)
+    expect(approved.linked.some(work => work.content.includes(marker))).toBe(true)
+    expect(approved.linked.every(work => work.status === '전달됨' && work.result === null)).toBe(true)
+    const numeric = own.id.slice(4)
+    for (const work of approved.linked) expect(work.workKey).toMatch(new RegExp(`^(SVC|QLT|PRT|SAL)-${numeric}$`))
+    const duplicate = await admin.request.post(`${base}/${own.id}/approval`, { headers: await csrfHeaders(admin) })
+    expect(duplicate.status()).toBe(409)
+    expect((await (await admin.request.get(`${base}/${own.id}`)).json()).linked.length).toBe(approved.linked.length)
+    const customerAfterApproval = await (await user.request.get(`${base}/${own.id}`)).json()
+    expect(customerAfterApproval.status).toBe('처리 중')
+    expect(JSON.stringify(customerAfterApproval)).not.toContain(approved.linked[0].workKey)
+    expect(customerAfterApproval).not.toHaveProperty('linked')
+    for (const work of approved.linked) {
+      await admin.goto(`/#/work/${work.workKey}`)
+      await admin.getByRole('button', { name: '처리 시작', exact: true }).click()
+      await admin.getByLabel('조치 내용 *', { exact: true }).fill(`${marker} ${work.workKey} 조치 완료`)
+      await admin.getByRole('button', { name: '처리 완료', exact: true }).click()
+      await expect(admin.getByText(`${work.workKey} 조치 완료`, { exact: false }).first()).toBeVisible()
+    }
+    await admin.goto(`/#/cases/${own.id}`)
+    await admin.getByLabel('종결 메모(고객에게 보입니다)', { exact: true }).fill(`${marker} 결과를 안내드렸습니다.`)
+    await admin.getByRole('button', { name: '요청 종결', exact: true }).click()
+    await expect(admin.getByText('종결됨', { exact: true })).toBeVisible()
+    const closed = await (await admin.request.get(`${base}/${own.id}`)).json()
+    expect(closed.status).toBe('종결')
+    expect(closed.linked.every(work => work.status === '완료' && work.result.summary.includes('조치 완료'))).toBe(true)
+    await user.reload()
+    await expect(user.getByText('이 서비스 요청은 완료되었습니다.', { exact: false })).toBeVisible()
+    await expect(user.getByText('결과를 안내드렸습니다.', { exact: false })).toBeVisible()
+    const customerClosed = await (await user.request.get(`${base}/${own.id}`)).json()
+    expect(customerClosed.status).toBe('완료')
+    for (const field of ['linked', 'approval', 'analysis', 'departments']) expect(customerClosed).not.toHaveProperty(field)
+    console.log(JSON.stringify({ real_llm: true, request: own.id, closed_after_real_workflow: true, seconds,
+      status: analysis.status, causes: analysis.causes.length, evidence: analysis.evidence.map(item => item.source),
+      case_search: analysis.caseSearch, departments_delivered: approved.linked.map(work => work.key) }))
+  } finally {
+    await userContext.close()
+    await adminContext.close()
+  }
+})
+
+// No model call: operator/customer interaction rules on a real stored request in the current environment.
+test('current database: internal notes, replies and company isolation on real data', async ({ browser }) => {
+  test.setTimeout(120000)
+  const userContext = await browser.newContext()
+  const adminContext = await browser.newContext()
+  const user = await userContext.newPage()
+  const admin = await adminContext.newPage()
+  try {
+    await login(user, 'user', process.env.LIVE_E2E_USER_PASSWORD, process.env.LIVE_E2E_EXPECTED_USER_ID, 'user')
+    await user.getByRole('link', { name: '새 서비스 요청', exact: true }).click()
+    await prepareForm(user, process.env.LIVE_E2E_USER_EQUIPMENT_ID, `${marker} 내부 메모 확인용 요청`)
     const own = await submit(user)
     await user.getByRole('button', { name: '콜백 요청', exact: true }).click()
     await user.getByRole('button', { name: '요청', exact: true }).click()
@@ -292,7 +409,6 @@ test('current database: customer actions, internal notes and company isolation o
 
     await login(admin, 'admin', process.env.LIVE_E2E_ADMIN_PASSWORD, process.env.LIVE_E2E_EXPECTED_ADMIN_ID, 'admin')
     await admin.goto(`/#/cases/${own.id}`)
-    await expect(admin.getByText('고객이 종결을 요청했습니다.', { exact: false })).toBeVisible()
     await admin.getByRole('button', { name: '나에게 지정', exact: true }).click()
     await expect(admin.getByText('admin 담당자로 지정', { exact: false })).toBeVisible()
     await admin.getByRole('button', { name: '내부 메모 추가', exact: true }).click()
@@ -308,7 +424,7 @@ test('current database: customer actions, internal notes and company isolation o
     await expect(user.getByText('확인 후 연락드리겠습니다.', { exact: false })).toBeVisible()
     const customerView = await (await user.request.get(`${base}/${own.id}`)).json()
     expect(JSON.stringify(customerView)).not.toContain('내부전용')
-    expect(customerView.closeRequested).toBe(true)
+    expect(customerView).not.toHaveProperty('closeRequested')
     // Operator-only actions are refused for the real customer account even with valid session and CSRF.
     const headers = await csrfHeaders(user)
     for (const action of ['approval', 'assignee', 'reanalysis', 'analysis'])
@@ -316,7 +432,7 @@ test('current database: customer actions, internal notes and company isolation o
     expect((await user.request.post(`${base}/${own.id}/comments`, { headers, data: { kind: 'internal', text: 'x' } })).status()).toBe(403)
     // Approval is impossible without an analysis, even for the real operator.
     expect((await admin.request.post(`${base}/${own.id}/approval`, { headers: await csrfHeaders(admin) })).status()).toBe(409)
-    console.log(JSON.stringify({ customer_actions_and_internal_notes_isolated: true, request: own.id }))
+    console.log(JSON.stringify({ internal_notes_isolated_and_no_customer_actions: true, request: own.id }))
   } finally {
     await userContext.close()
     await adminContext.close()

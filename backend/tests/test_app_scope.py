@@ -10,6 +10,9 @@ from app.main import app
 
 
 RETIRED_PATHS = [
+    ("POST", "/api/v1/service-requests/CLM-001/replies"),
+    ("POST", "/api/v1/service-requests/CLM-001/callback"),
+    ("POST", "/api/v1/service-requests/CLM-001/close-request"),
     ("POST", "/api/v1/agent/runs"),
     ("GET", "/api/v1/agent/runs"),
     ("GET", "/api/v1/agent/runs/example"),
@@ -84,9 +87,6 @@ def test_only_current_screen_and_analysis_routes_remain():
         ("POST", "/api/v1/service-requests/{identity}/work/{work_key}/start"),
         ("POST", "/api/v1/service-requests/{identity}/work/{work_key}/complete"),
         ("POST", "/api/v1/service-requests/{identity}/resolution"),
-        ("POST", "/api/v1/service-requests/{identity}/replies"),
-        ("POST", "/api/v1/service-requests/{identity}/callback"),
-        ("POST", "/api/v1/service-requests/{identity}/close-request"),
         ("GET", "/api/v1/auth/me"),
         ("POST", "/api/v1/auth/login"),
         ("POST", "/api/v1/auth/logout"),

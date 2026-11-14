@@ -51,8 +51,6 @@ OPERATOR_ACTIONS = [
     ('post', 'work/SVC-000/assignee', None), ('post', 'work/SVC-000/start', None),
     ('post', 'work/SVC-000/complete', {'summary': '조치'}), ('post', 'resolution', {'note': ''}),
 ]
-CUSTOMER_ACTIONS = [('post', 'replies', {'text': '답변'}), ('post', 'callback', None),
-                    ('post', 'close-request', {'reason': '해결됨'})]
 
 
 @pytest.mark.parametrize('method,suffix,payload', OPERATOR_ACTIONS)
@@ -70,23 +68,6 @@ def test_operator_actions_require_staff_session_csrf_and_origin(setup, use_runne
     assert send(clients['staff'], headers={'Origin': 'https://evil.example'}).status_code == 403
     after = item(clients, 'staff', identity)
     assert after['status'] == '검토 대기' and after['linked'] == [] and after['comments'] == []
-
-
-@pytest.mark.parametrize('method,suffix,payload', CUSTOMER_ACTIONS)
-def test_customer_actions_are_company_scoped_csrf_protected_and_not_for_staff(setup, use_runner, method, suffix, payload):
-    clients, equipment = setup
-    use_runner(Runner())
-    identity = reviewed(clients, equipment)
-    url = f'{BASE}/{identity}/{suffix}'
-    send = lambda client, **kw: getattr(client, method)(url, json=payload, **kw)
-    assert send(TestClient(app)).status_code == 401
-    assert send(clients['bob']).status_code == 404  # another company cannot even learn the request exists
-    assert send(clients['staff']).status_code == 403
-    with TestClient(app, cookies=clients['alice'].cookies) as no_csrf:
-        assert send(no_csrf, headers={'Origin': 'http://testserver'}).status_code == 403
-    assert send(clients['alice'], headers={'Origin': 'https://evil.example'}).status_code == 403
-    assert item(clients, 'staff', identity)['comments'] == []
-    assert send(clients['colleague']).status_code in (200, 201)  # same company colleague may act
 
 
 # ---------- department review edits ----------
@@ -305,63 +286,8 @@ def test_comments_are_authored_by_the_session_and_internal_notes_never_reach_cus
 
 # ---------- customer actions ----------
 
-def test_customer_reply_callback_and_close_request_are_durable_and_visible_to_operators(setup, use_runner):
-    clients, equipment = setup
-    runner = use_runner(Runner())
-    identity = reviewed(clients, equipment)
-    assert post(clients, 'alice', identity, 'replies', text='  ').status_code == 422
-    assert post(clients, 'alice', identity, 'replies', text='정지 위치는 12번 포트입니다.').status_code == 201
-    assert post(clients, 'colleague', identity, 'callback').status_code == 201
-    assert post(clients, 'alice', identity, 'close-request', reason='').status_code == 422
-    assert post(clients, 'alice', identity, 'close-request', reason='스스로 해결했습니다.').status_code == 201
-    assert len(runner.inputs) == 1  # status was 검토 대기: no automatic re-analysis
-    staff_view = item(clients, 'staff', identity)
-    assert staff_view['closeRequested'] is True and staff_view['status'] == '검토 대기'
-    assert [(c['kind'], c['text']) for c in staff_view['comments']] == [
-        ('customer', '정지 위치는 12번 포트입니다.'), ('customer', '콜백을 요청했습니다.'),
-        ('customer', '[종결 요청] 스스로 해결했습니다.')]
-    texts = [h['text'] for h in staff_view['history']]
-    assert '고객 콜백 요청' in texts and '고객 종결 요청' in texts
-    customer = item(clients, 'alice', identity)
-    assert customer['closeRequested'] is True
-    assert [h['text'] for h in customer['history']] == ['서비스 요청이 접수되었습니다.', '콜백을 요청했습니다.', '종결을 요청했습니다.']
-
-
-def test_closed_requests_reject_customer_actions(setup, use_runner):
-    clients, equipment = setup
-    use_runner(Runner())
-    identity = approved(clients, equipment)
-    wk = keys(identity)
-    for key in ['service', 'parts']:
-        clients['staff'].post(f'{BASE}/{identity}/work/{wk[key]}/start')
-        clients['staff'].post(f'{BASE}/{identity}/work/{wk[key]}/complete', json={'summary': '완료'})
-    assert post(clients, 'staff', identity, 'resolution', note='끝').status_code == 200
-    for suffix, payload in [('replies', {'text': '추가'}), ('callback', {}), ('close-request', {'reason': '이유'})]:
-        assert post(clients, 'alice', identity, suffix, **payload).status_code == 409, suffix
-    customer = item(clients, 'alice', identity)
-    assert customer['status'] == '완료' and customer['resolution'] == {'note': '끝'}
-
 
 # ---------- insufficient evidence, customer reply and re-analysis ----------
-
-def test_insufficient_analysis_asks_for_information_and_a_customer_reply_triggers_reanalysis(setup, use_runner):
-    clients, equipment = setup
-    runner = use_runner(Runner(good_result(**INSUFFICIENT)))
-    identity = reviewed(clients, equipment)
-    staff_view = item(clients, 'staff', identity)
-    assert staff_view['status'] == '추가 정보 필요' and staff_view['revision'] == 1
-    assert item(clients, 'alice', identity)['status'] == '정보 요청'
-    assert post(clients, 'staff', identity, 'comments', kind='public', text='알람 번호를 알려주세요.').status_code == 201
-    runner.result = good_result()
-    assert post(clients, 'alice', identity, 'replies', text='알람 번호는 2023 입니다.').status_code == 201
-    assert len(runner.inputs) == 2
-    assert runner.inputs[1]['additional_info'] == ['알람 번호는 2023 입니다.']
-    assert 'contact' not in runner.inputs[1]
-    after = item(clients, 'staff', identity)
-    assert after['status'] == '검토 대기' and after['revision'] == 2
-    assert after['analysis']['summary'] == 'ATC 구동부 점검이 우선입니다.'
-    assert any(h['text'] == '고객 답변 · 재분석' for h in after['history'])
-    assert item(clients, 'alice', identity)['status'] == '확인 중'
 
 
 def test_reanalysis_replaces_recommendations_and_discards_review_edits(setup, use_runner):
@@ -436,7 +362,7 @@ def test_customer_view_never_contains_internal_workflow_data(setup, use_runner):
     listed = next(x for x in clients['alice'].get(BASE).json()['requests'] if x['id'] == identity)
     for view in (customer, listed):
         assert view['status'] == '처리 중'
-        assert not {'analysis', 'analysisRun', 'departments', 'linked', 'approval', 'assignee', 'revision'} & set(view)
+        assert not {'analysis', 'analysisRun', 'departments', 'linked', 'approval', 'assignee', 'revision', 'closeRequested'} & set(view)
         dump = str(view)
         for secret in ['내부전용메모', 'ATC 점검 방문', 'staff-', '승인 ·', '연결 업무', 'SVC-', 'ATC 암 구동']:
             assert secret not in dump, secret
@@ -453,3 +379,46 @@ def test_customer_guides_list_only_reviewed_manual_titles_without_excerpts_or_an
     assert customer['guides'] == [{'id': 'E1', 'title': 'F400 매뉴얼', 'source': 'F400 매뉴얼 p.45', 'viewable': False}]  # no stored page reference
     assert 'ATC 구동부 점검' not in str(customer) and 'FSR-00001' not in str(customer)
     assert 'guides' not in item(clients, 'staff', identity)
+
+
+# ---------- customers file a request and watch it; they have no follow-up actions ----------
+
+@pytest.mark.parametrize('suffix,payload', [('replies', {'text': '답변'}), ('callback', None), ('close-request', {'reason': '해결됨'})])
+@pytest.mark.parametrize('who', ['alice', 'colleague', 'bob', 'staff', 'unassigned'])
+def test_customer_follow_up_actions_do_not_exist(setup, use_runner, who, suffix, payload):
+    clients, equipment = setup
+    use_runner(Runner())
+    identity = reviewed(clients, equipment)
+    before = item(clients, 'staff', identity)
+    answer = clients[who].post(f'{BASE}/{identity}/{suffix}', json=payload)
+    assert answer.status_code in (404, 405)
+    after = item(clients, 'staff', identity)
+    assert after['comments'] == before['comments'] and after['history'] == before['history']
+    assert 'closeRequested' not in after
+
+
+def test_insufficient_evidence_is_handled_by_operators_who_may_ask_publicly_and_reanalyse(setup, use_runner):
+    clients, equipment = setup
+    runner = use_runner(Runner(good_result(**INSUFFICIENT)))
+    identity = reviewed(clients, equipment)
+    staff_view = item(clients, 'staff', identity)
+    assert staff_view['status'] == '추가 정보 필요' and staff_view['revision'] == 1
+    assert item(clients, 'alice', identity)['status'] == '정보 요청'
+    assert post(clients, 'staff', identity, 'comments', kind='public', text='알람 번호를 알려주세요.').status_code == 201
+    assert [c['text'] for c in item(clients, 'alice', identity)['comments']] == ['알람 번호를 알려주세요.']
+    runner.result = good_result()
+    assert post(clients, 'staff', identity, 'reanalysis').status_code == 202
+    assert len(runner.inputs) == 2 and 'additional_info' not in runner.inputs[1] and 'contact' not in runner.inputs[1]
+    after = item(clients, 'staff', identity)
+    assert after['status'] == '검토 대기' and after['revision'] == 2
+    assert item(clients, 'alice', identity)['status'] == '확인 중'
+
+
+def test_the_only_comments_in_the_system_are_operator_notes_and_operator_replies(setup, use_runner):
+    clients, equipment = setup
+    use_runner(Runner())
+    identity = reviewed(clients, equipment)
+    post(clients, 'staff', identity, 'comments', kind='internal', text='메모')
+    post(clients, 'staff', identity, 'comments', kind='public', text='안내')
+    assert {c['kind'] for c in item(clients, 'staff', identity)['comments']} == {'internal', 'public'}
+    assert {c['kind'] for c in item(clients, 'alice', identity)['comments']} == {'public'}

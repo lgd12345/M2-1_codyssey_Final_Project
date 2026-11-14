@@ -428,19 +428,11 @@ test('customer list: company sharing, every filter, sorting and the customer-saf
   for (const hidden of ['AI 분석', 'E2E 통제된 분석 응답', '연결 업무', '내부 메모', '승인']) {
     await expect(page.getByText(hidden, { exact: false })).toHaveCount(0)
   }
-  // Information can be added; cancelling sends nothing; empty text cannot be sent.
-  await page.getByRole('button', { name: '정보 추가', exact: true }).first().click()
-  const info = page.getByRole('dialog', { name: '정보 추가' })
-  await expect(info.getByRole('button', { name: '전송', exact: true })).toBeDisabled()
-  await info.getByLabel('메시지 *', { exact: true }).fill('보낼 뻔한 메시지')
-  await info.getByRole('button', { name: '취소', exact: true }).click()
-  await expect(page.getByRole('dialog')).toHaveCount(0)
-  expect(JSON.stringify(await serverItem(page, first))).not.toContain('보낼 뻔한 메시지')
-  await page.getByRole('button', { name: '정보 추가', exact: true }).first().click()
-  await page.getByRole('dialog', { name: '정보 추가' }).getByLabel('메시지 *', { exact: true }).fill('알람은 2023 입니다. 추가 확인')
-  await page.getByRole('dialog', { name: '정보 추가' }).getByRole('button', { name: '전송', exact: true }).click()
+  // After filing there is nothing for a customer to press: no information, callback or close-request actions.
+  for (const name of ['정보 추가', '콜백 요청', '종결 요청']) await expect(page.getByRole('button', { name, exact: true })).toHaveCount(0)
+  await expect(page.locator('.pd-actions')).toHaveCount(0)
   await page.getByRole('tab', { name: '이력', exact: true }).click()
-  await expect(page.getByText('알람은 2023 입니다. 추가 확인')).toBeVisible()
+  await expect(page.getByText('서비스 요청이 접수되었습니다.')).toBeVisible()
   // Another company cannot open it.
   await bob.page.goto(`/#/portal/${first}`)
   await expect(bob.page.getByRole('heading', { name: /찾을 수 없습니다|불러오지 못했습니다/ })).toBeVisible()

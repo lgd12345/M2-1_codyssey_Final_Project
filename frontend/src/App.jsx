@@ -187,7 +187,7 @@ export function App({ theme }) {
   else if (route.name === 'list' || route.name === 'new') content = <CaseList cases={cases} onCreate={createRequest} equipment={equipment} modalOpen={route.name === 'new'} />
   else if (route.name === 'detail') content = <CaseDetail key={route.id} item={item} me={me} dispatch={dispatch} onAnalyze={startAnalysis} analyzing={analysisStarting} analysisError={analysisError} />
   else if (route.name === 'portal-list' || route.name === 'portal-new') content = <PortalList cases={cases} company={workspace.context?.company?.name} onCreate={createRequest} equipment={equipment} modalOpen={route.name === 'portal-new'} />
-  else if (route.name === 'portal-detail') content = <PortalDetail key={route.id} item={item} dispatch={dispatch} />
+  else if (route.name === 'portal-detail') content = <PortalDetail key={route.id} item={item} />
   else if (route.name === 'work-list') content = <WorkList cases={cases} deptKey={deptKey} onDeptChange={setDeptKey} />
   else if (route.name === 'work-detail') content = <WorkDetail key={route.workKey} cases={cases} workKey={route.workKey} deptKey={workDept} dispatch={dispatch} />
   else content = <section className="center-card"><h1>페이지를 찾을 수 없습니다</h1><a href={authed ? homeForRole(auth.user.role) : '#/home'}>처음으로</a></section>

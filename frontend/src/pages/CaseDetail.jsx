@@ -14,7 +14,6 @@ export function CaseDetail({ item, dispatch, me, onAnalyze, analyzing, analysisE
       <div className="issue-grid">
         <div className="issue-main">
           <h1 id="detail-title">{item.title}</h1>
-          {item.closeRequested && item.status !== '종결' && <p className="notice warn" role="status"><strong>고객이 종결을 요청했습니다.</strong> 활동의 고객 메시지를 확인하세요.</p>}
           <RequestCard item={item} />
           <AnalysisSection item={item} dispatch={dispatch} me={me} onAnalyze={onAnalyze} analyzing={analyzing} error={analysisError} />
           <DeptSection item={item} dispatch={dispatch} />

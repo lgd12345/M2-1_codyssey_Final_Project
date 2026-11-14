@@ -250,8 +250,6 @@ input[type='checkbox'] { width: auto; margin: 0.2rem 0.6rem 0 0; }
 .pd-meta dt { font-size: 0.75rem; color: var(--muted); }
 .pd-meta dd { margin: 0; font-weight: 500; }
 .pd-desc { margin: 0; }
-.pd-actions { display: flex; flex-direction: column; gap: 0.5rem; min-width: 9.5rem; }
-.pd-actions button { width: 100%; }
 .pd-panel { padding: 1rem 1.2rem; }
 .portal-events .event, .portal-events .comment { padding-left: 0; }
 .portal-events .comment { background: var(--sunken); margin-bottom: 0.4rem; }
