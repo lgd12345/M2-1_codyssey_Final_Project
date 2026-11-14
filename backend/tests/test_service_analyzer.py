@@ -78,9 +78,35 @@ def test_unretrieved_manual_page_or_case_is_rejected():
         run(bad_case)
 
 
-def test_answer_without_any_source_is_rejected():
+def test_answer_without_any_source_is_downgraded_not_trusted_and_not_an_error():
+    result = run(output(causes=[], parts=[], steps=['도어 인터락을 해제한다']))
+    assert result['status'] == 'insufficient_evidence'  # ungrounded conclusions are dropped, the request stays reviewable
+    assert result['causes'] == result['parts'] == result['evidence'] == result['departments'] == result['steps'] == []
+    assert result['summary'] == '요약' and result['questions'] == ['질문']
+
+
+def test_insufficient_output_that_still_carries_conclusions_drops_them():
+    result = run(output(status='insufficient_evidence'))
+    assert result['status'] == 'insufficient_evidence'
+    assert result['causes'] == result['parts'] == result['departments'] == result['evidence'] == []
+    validate_result(result)
+
+
+def test_hallucinated_sources_remain_hard_errors_even_when_other_content_is_fine():
     with pytest.raises(InvalidAnalysis):
-        run(output(causes=[], parts=[]))
+        run(output(causes=[{'title': 't', 'level': '높음', 'detail': 'd', 'sources': [{'kind': 'fsr', 'fsr_no': 'FSR-99999'}]}]))
+
+
+def test_model_connection_and_api_failures_are_reported_as_llm_unavailable():
+    from pydantic_ai.exceptions import ModelConnectionError, ModelRateLimitError
+    from app.service_requests.analysis import error_code_for
+    assert error_code_for(ModelConnectionError('model-x', 'no route')) == 'llm_unavailable'
+    assert error_code_for(ModelRateLimitError('model-x', 'slow down')) == 'llm_unavailable'
+    assert error_code_for(RuntimeError('secret')) == 'agent_error'
+
+
+def test_instructions_warn_that_case_machine_filters_use_fsr_codes_not_the_request_machine_name():
+    assert 'VMCT' in INSTRUCTIONS and '필터 없이' in INSTRUCTIONS
 
 
 def test_insufficient_evidence_has_no_conclusions_but_keeps_questions():

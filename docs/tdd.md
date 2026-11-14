@@ -104,3 +104,12 @@ python scripts/test_live_intake.py --allow-current-db service_poc_test --base-ur
 - 고객 응답은 서버가 고객용 상태(`접수됨/확인 중/정보 요청/처리 중/완료`)·고객용 이력 문구·공개 댓글·종결 메모·승인 이후 매뉴얼 제목만 내려준다. 내부 메모·반려 사유·분석·초안·업무·담당자는 포함하지 않는다.
 - 테스트: `backend/tests/test_service_workflow_api.py`(권한·상태 전이·동시성·고객 투영), `frontend/src/actions.test.js`, 격리 브라우저 E2E `frontend/e2e/workflow.spec.js`(모델만 대역), 현재 환경 인수 E2E `frontend/e2e-live`(실제 LLM·검색 포함 승인→업무→종결).
 - 초안 입력은 화면에서 잠시 뒤 또는 포커스를 잃을 때 저장하며, 화면 동작은 클릭 순서대로 서버에 전달해 승인이 항상 저장된 초안을 보게 한다.
+
+## 회귀 테스트가 DB를 지우지 않게 하는 규칙
+
+일부 테스트는 `TRUNCATE ... CASCADE`로 테이블을 비웁니다. 그래서 다음을 지킵니다.
+- 실행은 `scripts/test_isolated.py`로만 합니다. 이 스크립트가 만든 `rag_regression_<hex>_test` 임시 DB만 테스트 대상입니다.
+- `.env`의 `TEST_DATABASE_URL`이 앱이 쓰는 DB(예: `service_poc_test`)를 가리키면 `tests/conftest.py`가 이를 빈 값으로 바꿔 DB 테스트를 건너뜁니다. 이름이 `_test`로 끝난다는 이유만으로는 안전하지 않습니다.
+- 값을 삭제하지 않고 **빈 문자열로 바꾸는** 이유: 앱 모듈이 import될 때 `load_dotenv(override=False)`를 호출해 삭제된 값을 `.env`에서 되살립니다.
+- DB를 비우는 fixture는 한 번 더 `require_disposable_test_database`로 임시 DB가 아니면 실행 전에 거부합니다.
+- `pytest`를 직접 실행해도 DB 테스트는 건너뜁니다. 검증: `tests/test_database_guard.py`.

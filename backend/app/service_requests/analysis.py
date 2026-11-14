@@ -118,6 +118,9 @@ class InvalidAnalysis(ValueError):
 def error_code_for(error: BaseException) -> str:
     if isinstance(error, (ValidationError, InvalidAnalysis)):
         return 'invalid_analysis'
+    from pydantic_ai.exceptions import ModelAPIError
+    if isinstance(error, ModelAPIError):  # connection, timeout, rate limit, overload, quota: the model is not usable now
+        return 'llm_unavailable'
     from app.runs.service import error_code_for as run_error_code
     return run_error_code(error)
 
