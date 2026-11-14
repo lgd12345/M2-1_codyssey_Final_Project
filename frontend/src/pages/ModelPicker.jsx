@@ -1,7 +1,7 @@
 import React, { useEffect, useId, useRef, useState } from 'react'
 
 // A single editable select: input and arrow share one field and one popup.
-export function ModelPicker({ models, value, onChange }) {
+export function ModelPicker({ models, value, onChange, disabled: busy = false }) {
   const id = useId()
   const root = useRef(null)
   const input = useRef(null)
@@ -10,7 +10,7 @@ export function ModelPicker({ models, value, onChange }) {
   const [active, setActive] = useState(-1)
   const selected = models.find(model => model.id === value)
   const options = models.filter(model => model.machine.toLowerCase().includes(text.trim().toLowerCase()))
-  const disabled = !models.length
+  const disabled = busy || !models.length
 
   useEffect(() => {
     const outside = event => { if (!root.current?.contains(event.target)) setOpen(false) }
@@ -53,7 +53,7 @@ export function ModelPicker({ models, value, onChange }) {
       <button type="button" aria-label="기종 목록" aria-expanded={open} aria-controls={`${id}-list`}
         disabled={disabled} onClick={() => { setOpen(!open); setActive(-1); input.current?.focus() }}>▾</button>
     </div>
-    {open && <div className="model-picker-popup">
+    {open && !disabled && <div className="model-picker-popup">
       <ul id={`${id}-list`} role="listbox" aria-label="기종 목록">
         {options.map((model, index) => <li key={model.id} id={`${id}-option-${index}`} role="option"
           aria-selected={model.id === value} className={index === active ? 'active' : ''}

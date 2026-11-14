@@ -109,7 +109,7 @@ def run_live_e2e(cases: list[Case], args: argparse.Namespace) -> list[dict[str, 
                 pass
         with psycopg.connect(dsn, connect_timeout=5) as db:
             # Tagged requests of the real user only; deleting a request cascades to its analysis, comments and history.
-            removed = db.execute("DELETE FROM service_request WHERE contact->>'name'=%s AND created_by=%s",
-                                 (tag, user_id)).rowcount
+            removed = db.execute("DELETE FROM service_request WHERE starts_with(message,%s) AND created_by=%s",
+                                 (f'[{tag}] ', user_id)).rowcount
             db.execute('DELETE FROM service_equipment WHERE id=ANY(%s)', (temporary_models,))
         print(f'cleanup: removed {removed} tagged requests and {len(temporary_models)} temporary model rows ({tag})')

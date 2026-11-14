@@ -62,9 +62,8 @@ def run_case(case: Case, user, admin, equipment_id: str, *, tag: str, timeout: f
              clock: Callable[[], float] = time.monotonic, sleep: Callable[[float], None] = time.sleep) -> dict[str, Any]:
     started = clock()
     elapsed = lambda: round(clock() - started, 1)
-    created = user.post('', json={'equipment_id': equipment_id, 'reason': case.reason, 'message': case.message,
-                                  'alarm_numbers': list(case.alarm_numbers),
-                                  'contact': {'name': tag, 'phone': '010-0000-0000'}})
+    created = user.post('', json={'equipment_id': equipment_id, 'reason': case.reason, 'message': f'[{tag}] {case.message}',
+                                  'alarm_numbers': list(case.alarm_numbers)})
     if created.status_code != 201:
         return _record(case, error=f'submit_http_{created.status_code}', failed_checks=['error'], seconds=elapsed())
     identity = created.json()['id']

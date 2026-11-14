@@ -27,9 +27,6 @@ async function prepareForm(page, equipmentId, message) {
   await page.getByRole('listbox', { name: '기종 목록', exact: true }).getByRole('option', { name: model.machine, exact: true }).click()
   await page.getByLabel('메시지 *', { exact: true }).fill(message)
   await expect(page.locator('input[type=file]')).toBeDisabled()
-  await page.getByRole('button', { name: '계속', exact: true }).click()
-  await page.getByLabel('이름 *', { exact: true }).fill('E2E 검증 담당자')
-  await page.getByLabel('전화번호 *', { exact: true }).fill('010-0000-0000')
 }
 
 async function submit(page) {
@@ -73,7 +70,7 @@ test('current database: user intake, admin review and cross-company isolation', 
     await user.getByRole('button', { name: '전송', exact: true }).click()
     await expect(user.getByRole('alert')).toHaveText('서버에 연결하지 못했습니다.')
     await expect(user).toHaveURL(/#\/portal\/new$/)
-    await expect(user.getByLabel('이름 *', { exact: true })).toHaveValue('E2E 검증 담당자')
+    await expect(user.getByLabel('메시지 *', { exact: true })).not.toBeEmpty()
     await userContext.setOffline(false)
     const beforeSave = await user.request.get(base)
     expect((await beforeSave.json()).requests.filter(item => item.intake.symptom.startsWith(marker))).toHaveLength(0)
@@ -118,7 +115,6 @@ test('current database: user intake, admin review and cross-company isolation', 
     const payload = {
       equipment_id: process.env.LIVE_E2E_OTHER_EQUIPMENT_ID,
       reason: '알람·전장 이상', message: `${marker} denied submission`,
-      contact: { name: 'E2E 검증 담당자', phone: '010-0000-0000' },
     }
     const origin = new URL(user.url()).origin
     const forged = await user.request.post(base, { data: payload, headers: { Origin: origin, 'X-CSRF-Token': session.csrf_token } })

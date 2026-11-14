@@ -35,10 +35,10 @@ def test_a_case_runs_end_to_end_and_the_stored_analysis_is_scored(setup, use_run
     record = run_case(CASE, user, admin, str(equipment[0]), tag='QEVAL-1', timeout=30, interval=0.01)
     assert record['error'] is None and record['passed'] is True, record
     assert record['status'] == 'answered' and record['request'].startswith('CLM-')
-    assert runner.inputs[0]['message'] == CASE.message and runner.inputs[0]['alarm_numbers'] == ['2023']
+    assert runner.inputs[0]['message'] == '[QEVAL-1] ' + CASE.message and runner.inputs[0]['alarm_numbers'] == ['2023']
     # The request is tagged so it can be found and removed afterwards, without changing the case text.
     stored = clients['staff'].get(f"{BASE}/{record['request']}").json()
-    assert stored['intake']['contact']['name'] == 'QEVAL-1' and stored['intake']['symptom'] == CASE.message
+    assert 'contact' not in stored['intake'] and stored['intake']['symptom'] == '[QEVAL-1] ' + CASE.message
 
 
 def test_quality_failures_in_the_stored_result_are_reported_with_reasons(setup, use_runner):
@@ -75,7 +75,7 @@ def test_stored_result_maps_back_to_the_analysis_contract_losslessly(setup, use_
     use_runner(Runner())
     user, admin = apis(clients)
     created = clients['alice'].post(BASE, json={'equipment_id': str(equipment[0]), 'reason': '공구 교환 이상', 'message': 'm',
-                                                 'alarm_numbers': [], 'contact': {'name': 'n', 'phone': '1'}}).json()
+                                                 'alarm_numbers': []}).json()
     admin.post(f"/{created['id']}/analysis")
     item = admin.get(f"/{created['id']}").json()
     mapped = api_to_result(item)

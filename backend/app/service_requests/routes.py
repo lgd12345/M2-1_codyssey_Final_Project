@@ -7,7 +7,7 @@ from uuid import UUID
 import re
 
 from fastapi import APIRouter, BackgroundTasks, Depends
-from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 import psycopg
 from psycopg.rows import dict_row
 from psycopg.types.json import Jsonb
@@ -40,23 +40,11 @@ class Input(BaseModel):
     model_config = ConfigDict(extra='forbid', str_strip_whitespace=True)
 
 
-class Contact(Input):
-    name: str = Field(min_length=1, max_length=80)
-    phone: str = Field(min_length=1, max_length=40)
-    email: EmailStr | None = None
-
-    @field_validator('email', mode='before')
-    @classmethod
-    def empty_email(cls, value):
-        return None if isinstance(value, str) and not value.strip() else value
-
-
 class Intake(Input):
     equipment_id: UUID
     reason: Literal['공구 교환 이상', '스핀들 이상', '이송축 이상', '유압·공압·윤활 이상', '알람·전장 이상', '가공 정밀도 이상', '부품 교체·문의', '교육·기술지원', '기타 증상']
     message: str = Field(min_length=1, max_length=10000)
     alarm_numbers: list[str] = Field(default_factory=list, max_length=20)
-    contact: Contact
 
     @field_validator('alarm_numbers')
     @classmethod
@@ -116,11 +104,11 @@ def create(body: Intake, session: SessionInfo = Depends(require_csrf)):
                 raise RequestNotFound()
             snapshot = {'company': company['name'], 'machine': equipment['machine']}
             row = cursor.execute('''INSERT INTO service_request
-                (equipment_id,company_id,created_by,title,reason,message,alarm_numbers,contact,equipment_snapshot)
-                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING *''',
+                (equipment_id,company_id,created_by,title,reason,message,alarm_numbers,equipment_snapshot)
+                VALUES (%s,%s,%s,%s,%s,%s,%s,%s) RETURNING *''',
                                  (equipment['id'], company['id'], session.user.id, body.message[:80],
                                   body.reason, body.message, Jsonb(body.alarm_numbers),
-                                  Jsonb(body.contact.model_dump(mode='json')), Jsonb(snapshot))).fetchone()
+                                  Jsonb(snapshot))).fetchone()
         return views.fetch_items(connection, 'r.id=%s', (row['id'],), staff=session.user.role == 'admin')[0]
 
 

@@ -114,12 +114,6 @@ input[type='checkbox'] { width: auto; margin: 0.2rem 0.6rem 0 0; }
 .modal { position: relative; width: min(560px, 100%); background: var(--surface); border-radius: var(--radius); padding: 1.4rem 1.6rem; box-shadow: 0 8px 24px rgba(9, 30, 66, 0.3); }
 .modal h2 { font-size: 1.2rem; text-align: center; margin-bottom: 0.8rem; }
 .modal-x { position: absolute; top: 0.6rem; right: 0.8rem; font-size: 1.2rem; background: transparent; border: 0; line-height: 1; }
-.stepper { display: flex; justify-content: center; gap: 2.4rem; list-style: none; padding: 0; margin: 0 0 1.2rem; font-size: 0.8rem; color: var(--muted); }
-.stepper li { display: flex; flex-direction: column; align-items: center; gap: 0.2rem; }
-.stepper span { display: grid; place-items: center; width: 1.6rem; height: 1.6rem; border-radius: 50%; border: 2px solid var(--control); font-weight: 700; }
-.stepper li.on { color: var(--primary); font-weight: 600; }
-.stepper li.on span { border-color: var(--primary); }
-.stepper li.done span { background: var(--primary); border-color: var(--primary); color: var(--on-primary); }
 .model-picker { position: relative; margin-bottom: 0.8rem; }
 .model-picker-field { position: relative; }
 .model-picker-field input { padding-right: 2.7rem; margin: 0; }
@@ -131,7 +125,6 @@ input[type='checkbox'] { width: auto; margin: 0.2rem 0.6rem 0 0; }
 .model-picker-popup p { padding: 0.5rem 0.7rem; margin: 0; }
 .modal-actions { display: flex; justify-content: space-between; margin-top: 1rem; }
 .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0.8rem; }
-.recap { background: var(--sunken); padding: 0.5rem 0.8rem; border-radius: var(--radius); margin: 0 0 1rem; }
 
 /* 요청 상세(Jira work item view) */
 .crumbs { display: flex; gap: 0.8rem; align-items: center; margin-bottom: 0.2rem; }

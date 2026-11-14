@@ -5,9 +5,9 @@ import { formatDate, formatTime } from '../ui.jsx'
 import { SourcePageButton } from './SourcePage.jsx'
 
 const TONE = { 접수됨: 'neutral', '확인 중': 'blue', '정보 요청': 'yellow', '처리 중': 'blue', 완료: 'green' }
-const TABS = [['history', '이력'], ['guides', '기술 가이드'], ['contact', '연락처']]
+const TABS = [['history', '이력'], ['guides', '기술 가이드']]
 
-// TRUMPF 서비스 케이스 상세: 요청 번호·접수자·접수일·기계·설명과 기술 가이드·이력·연락처 탭.
+// TRUMPF 서비스 케이스 상세: 요청 번호·접수자·접수일·기계·설명과 기술 가이드·이력 탭.
 // 고객은 접수한 요청의 진행을 확인할 뿐 접수 이후에 하는 작업은 없다. AI 분석, 내부 메모, 부서 초안은 나오지 않는다.
 export function PortalDetail({ item }) {
   const [tab, setTab] = useState('history')
@@ -40,7 +40,6 @@ export function PortalDetail({ item }) {
         <div className="notice warn" role="status">
           <strong>서비스 담당자가 추가 정보를 요청했습니다.</strong>
           <p>{lastAsk.text}</p>
-          <p className="muted small">담당자가 저장된 연락처로 연락드립니다.</p>
         </div>
       )}
       {done && <div className="notice ok" role="status"><strong>이 서비스 요청은 완료되었습니다.</strong>{item.resolution?.note && <p>{item.resolution.note}</p>}</div>}
@@ -71,13 +70,6 @@ export function PortalDetail({ item }) {
                 <ul className="guides">{guides.map((g) => <li key={g.id}><div><strong>{g.title}</strong><small>{g.source}</small></div>{g.viewable ? <SourcePageButton itemId={item.id} evidenceId={g.id} title={g.title} /> : <span className="muted small">원본 페이지 정보 없음</span>}</li>)}</ul>
               </>
             )}
-          </>
-        )}
-        {tab === 'contact' && (
-          <>
-            <h2>저장된 연락처</h2>
-            <dl className="kv"><div><dt>이름</dt><dd>{item.intake.contact?.name || '-'}</dd></div><div><dt>전화번호</dt><dd>{item.intake.contact?.phone || '-'}</dd></div><div><dt>이메일</dt><dd>{item.intake.contact?.email || '-'}</dd></div></dl>
-            <p className="muted small">서비스 담당자가 이 연락처로 연락드립니다. 회사의 모든 직원이 이 요청을 확인할 수 있습니다.</p>
           </>
         )}
       </div>

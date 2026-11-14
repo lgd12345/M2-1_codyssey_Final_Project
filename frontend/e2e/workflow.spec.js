@@ -24,9 +24,6 @@ async function createRequest(page, message) {
   await page.getByRole('button', { name: '기종 목록', exact: true }).click()
   await page.getByRole('listbox', { name: '기종 목록', exact: true }).getByRole('option', { name: 'F400', exact: true }).click()
   await page.getByLabel('메시지 *', { exact: true }).fill(message)
-  await page.getByRole('button', { name: '계속', exact: true }).click()
-  await page.getByLabel('이름 *', { exact: true }).fill('접수 담당자')
-  await page.getByLabel('전화번호 *', { exact: true }).fill('010-0000-0000')
   const response = page.waitForResponse(r => r.url().endsWith('/api/v1/service-requests') && r.request().method() === 'POST')
   await page.getByRole('button', { name: '전송', exact: true }).click()
   const created = await (await response).json()
@@ -162,7 +159,7 @@ test('insufficient evidence is handled by the operator, who asks publicly and re
   await customer.page.reload()
   await expect(customer.page.getByText('서비스 담당자가 추가 정보를 요청했습니다.', { exact: false })).toBeVisible()
   await expect(customer.page.getByText('알람 번호를 알려 주세요.', { exact: false }).first()).toBeVisible()
-  await expect(customer.page.getByText('담당자가 저장된 연락처로 연락드립니다.')).toBeVisible()
+  await expect(customer.page.getByRole('tab', { name: '연락처', exact: true })).toHaveCount(0)
   await expect(customer.page.getByText('정보 요청', { exact: true }).first()).toBeVisible()
   await noFollowUp(customer.page)
 

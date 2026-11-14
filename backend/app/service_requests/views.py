@@ -12,8 +12,9 @@ CUSTOMER_STATUS = {'접수됨': '접수됨', '분석 중': '접수됨', '검토 
                    '추가 정보 필요': '정보 요청', '처리 중': '처리 중', '종결': '완료'}
 RECEIVED_PUBLIC = '서비스 요청이 접수되었습니다.'
 
-LATEST_RUN = '''SELECT r.*, run.status AS run_status, run.error_code AS run_error, ok.result AS ok_result
+LATEST_RUN = '''SELECT r.*, creator.login_id AS creator_login, run.status AS run_status, run.error_code AS run_error, ok.result AS ok_result
     FROM service_request r
+    JOIN app_user creator ON creator.id=r.created_by
     LEFT JOIN LATERAL (SELECT status,error_code FROM service_analysis WHERE request_id=r.id
                        ORDER BY created_at DESC, id DESC LIMIT 1) run ON TRUE
     LEFT JOIN LATERAL (SELECT result FROM service_analysis WHERE request_id=r.id AND status='succeeded'
@@ -58,15 +59,15 @@ def work_view(row: dict[str, Any]) -> dict[str, Any]:
 
 def serialize(row: dict[str, Any], related: dict[str, dict[int, list[dict[str, Any]]]], *, staff: bool) -> dict[str, Any]:
     number = row['id']
-    snapshot, contact = row['equipment_snapshot'], row['contact']
+    snapshot = row['equipment_snapshot']
     created = row['created_at'].isoformat()
     history = related['history'].get(number, [])
     item = {
         'id': f'CLM-{number:03d}', 'title': row['title'], 'createdAt': created,
         'intake': {'company': snapshot['company'], 'machine': snapshot['machine'],
                    'symptom': row['message'], 'alarm': ', '.join(row['alarm_numbers']), 'occurred': '',
-                   'type': row['reason'], 'creator': f"{contact['name']} ({snapshot['company']})",
-                   'contact': contact, 'asset': None},
+                   'type': row['reason'], 'creator': f"{row['creator_login']} ({snapshot['company']})",
+                   'asset': None},
     }
     comments = related['comments'].get(number, [])
     if not staff:

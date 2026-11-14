@@ -59,7 +59,7 @@ def setup(monkeypatch, service_schema):
 
 def body(equipment):
     return {'equipment_id': str(equipment), 'reason': '공구 교환 이상', 'message': 'ATC 교환 중 멈춥니다.',
-            'alarm_numbers': ['2023'], 'contact': {'name': '담당자', 'phone': '010-0000-0000', 'email': ''}}
+            'alarm_numbers': ['2023']}
 
 
 def test_customer_intake_is_durable_visible_to_company_and_staff_not_other_company(setup):
@@ -73,7 +73,9 @@ def test_customer_intake_is_durable_visible_to_company_and_staff_not_other_compa
     assert item['intake']['machine'] == 'F400'
     assert 'serial' not in item['intake']
     assert item['intake']['alarm'] == '2023'
-    assert item['intake']['contact']['phone'] == '010-0000-0000'
+    assert 'contact' not in item['intake']
+    me = clients['alice'].get('/api/v1/auth/me').json()['user']['login_id']
+    assert item['intake']['creator'].startswith(me + ' (')
     for who in ['alice', 'colleague', 'staff']:
         assert identity in [x['id'] for x in clients[who].get(BASE).json()['requests']]
         assert clients[who].get(f'{BASE}/{identity}').json()['intake']['symptom'] == 'ATC 교환 중 멈춥니다.'
