@@ -23,6 +23,7 @@ class AgentSettings:
     database_url: str
     pdf_render_cache_dir: Path
     pdf_render_dpi: int
+    llm_prompt_cache_key: str = ""  # optional; sent only when set, for gateways that route by prompt_cache_key
 
     @classmethod
     def from_env(cls) -> "AgentSettings":
@@ -37,6 +38,7 @@ class AgentSettings:
             database_url=os.getenv("RAG_DATABASE_URL", "").strip() or os.getenv("DATABASE_URL", "").strip(),
             pdf_render_cache_dir=cache_dir,
             pdf_render_dpi=int(os.getenv("PDF_RENDER_DPI", "150")),
+            llm_prompt_cache_key=os.getenv("LLM_PROMPT_CACHE_KEY", "").strip(),
         )
 
     def validate_llm(self) -> None:
