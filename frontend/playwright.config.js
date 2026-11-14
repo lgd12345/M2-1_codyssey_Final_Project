@@ -16,6 +16,7 @@ export default defineConfig({
     actionTimeout: 10000, // fail on the missing control instead of hanging until the test timeout
     baseURL: process.env.E2E_BASE_URL,
     headless: true,
+    screenshot: 'only-on-failure',
     launchOptions: process.env.PW_CHROMIUM_EXECUTABLE ? { executablePath: process.env.PW_CHROMIUM_EXECUTABLE } : {},
   },
 })

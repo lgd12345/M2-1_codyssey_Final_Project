@@ -97,7 +97,7 @@ input[type='checkbox'] { width: auto; margin: 0.2rem 0.6rem 0 0; }
 .active-filters { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem; margin-bottom: 0.7rem; }
 .chip { display: inline-block; font-size: 0.78rem; padding: 0.1rem 0.6rem; border-radius: 999px; background: var(--neutral-bg); color: var(--text); }
 .chip.link { border: 1px solid var(--border); cursor: pointer; }
-.table-wrap { overflow-x: auto; }
+.table-wrap { overflow-x: auto; position: relative; } /* absolutely positioned screen-reader text must be clipped by the scroller, not widen the page */
 .results { width: 100%; border-collapse: collapse; }
 .results th { text-align: left; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); padding: 0.6rem 0.8rem; border-bottom: 2px solid var(--border); white-space: nowrap; }
 .results td { padding: 0.65rem 0.8rem; border-bottom: 1px solid var(--border); vertical-align: middle; }
@@ -123,8 +123,6 @@ input[type='checkbox'] { width: auto; margin: 0.2rem 0.6rem 0 0; }
 .errors { border: 0; padding: 0; margin: 0 0 0.8rem; }
 .errors legend { font-size: 0.82rem; font-weight: 600; color: var(--muted); padding: 0; }
 .errors input { margin-bottom: 0.3rem; }
-.upload { display: grid; place-items: center; margin-top: 0.25rem; padding: 0.8rem; border: 2px dashed var(--control); border-radius: var(--radius); font-size: 1.4rem; color: var(--muted); }
-.upload input { border: 0; padding: 0.3rem 0; font-size: 0.8rem; }
 .modal-actions { display: flex; justify-content: space-between; margin-top: 1rem; }
 .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0.8rem; }
 .recap { background: var(--sunken); padding: 0.5rem 0.8rem; border-radius: var(--radius); margin: 0 0 1rem; }

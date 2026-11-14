@@ -15,14 +15,14 @@ test('real intake persists, is shared with company/staff and isolated from other
   await login(page, process.env.E2E_CUSTOMER)
   await expect(page).toHaveURL(/#\/portal$/)
   await expect(page.getByRole('heading', { name: '내 서비스 요청', exact: true })).toBeVisible()
-  await expect(page.locator('tbody tr')).toHaveText('조건에 맞는 서비스 요청이 없습니다.')
+  await expect(page.locator('tbody tr').first()).toBeVisible()  // the list has loaded (other specs may already have filed requests)
   await page.getByRole('link', { name: '새 서비스 요청', exact: true }).click()
   await page.getByRole('combobox', { name: '접수 사유 *', exact: true }).selectOption('기계 고장')
   const machines = page.getByRole('combobox', { name: '기계 · 호기 *', exact: true })
   await expect(machines.locator('option')).toHaveCount(2) // placeholder + own company's equipment
   await machines.selectOption({ index: 1 })
   await page.getByLabel('메시지 *', { exact: true }).fill('ATC 동작 중 정지합니다. 실제 접수 E2E 확인.')
-  await expect(page.locator('input[type=file]')).toBeDisabled()
+  await expect(page.locator('input[type=file]')).toHaveCount(0)  // attachments are not offered
   await page.getByRole('button', { name: '계속', exact: true }).click()
   await page.getByLabel('이름 *', { exact: true }).fill('접수 담당자')
   await page.getByLabel('전화번호 *', { exact: true }).fill('010-0000-0000')
@@ -53,7 +53,8 @@ test('real intake persists, is shared with company/staff and isolated from other
   const otherContext = await browser.newContext()
   const other = await otherContext.newPage()
   await login(other, process.env.E2E_OTHER_CUSTOMER)
-  await expect(other.locator('tbody tr')).toHaveText('조건에 맞는 서비스 요청이 없습니다.')
+  await expect(other.locator('tbody tr').first()).toBeVisible()
+  await expect(other.locator('tbody tr', { hasText: created.id })).toHaveCount(0)  // another company never sees it
   const denied = await other.request.get(`/api/v1/service-requests/${created.id}`)
   expect(denied.status()).toBe(404)
   await otherContext.close()

@@ -1,6 +1,7 @@
 """Opt-in local browser integration, always backed by a disposable database."""
 import os
 from pathlib import Path
+import shlex
 import shutil
 import socket
 import subprocess
@@ -64,7 +65,9 @@ def test_browser_intake_through_real_auth_api_and_database(setup, tmp_path):
                                         env=environment, stdout=log, stderr=subprocess.STDOUT)
             processes.append(frontend)
             wait_for(environment['E2E_BASE_URL'], frontend)
-            result = subprocess.run([node, 'node_modules/@playwright/test/cli.js', 'test'], cwd=ROOT / 'frontend',
+            # E2E_PLAYWRIGHT_ARGS narrows a run while iterating, e.g. "e2e/screens.spec.js -g mobile".
+            extra = shlex.split(os.getenv('E2E_PLAYWRIGHT_ARGS', ''))
+            result = subprocess.run([node, 'node_modules/@playwright/test/cli.js', 'test', *extra], cwd=ROOT / 'frontend',
                                     env=environment, capture_output=True, text=True, encoding='utf-8',
                                     errors='replace', timeout=600)
             assert result.returncode == 0, result.stdout + result.stderr

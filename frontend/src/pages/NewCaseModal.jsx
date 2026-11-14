@@ -57,8 +57,6 @@ export function NewCaseModal({ onCreate, equipment = [], portal = false }) {
             <button type="button" className="linkish" disabled={alarms.length >= 20} onClick={() => setAlarms([...alarms, ''])}>+ 오류 번호 추가</button>
           </fieldset>
           <label>메시지 *<textarea rows={4} maxLength={10000} value={message} onChange={event => setMessage(event.target.value)} placeholder="어떤 문제가 어떻게 나타나는지 적어 주세요." required /></label>
-          <label>사진·동영상<span className="upload"><span aria-hidden="true">+</span><input type="file" multiple disabled aria-describedby="upload-not-connected" /></span></label>
-          <p id="upload-not-connected" className="muted small">첨부 저장 기능은 아직 연결되지 않았습니다.</p>
           <p className="muted small">* 표시는 필수 항목입니다.</p>
           <div className="modal-actions"><button type="button" onClick={close}>취소</button><button type="button" className="primary" disabled={!step1Ready} onClick={() => setStep(2)}>계속</button></div>
         </> : <>
