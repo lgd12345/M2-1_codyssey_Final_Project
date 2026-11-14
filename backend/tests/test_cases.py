@@ -4,7 +4,6 @@ from pathlib import Path
 
 import pytest
 
-from app.agent_rag.agent import AgentAnswer, AgentOutputValidationError, CaseCitation, validate_agent_output
 from app.agent_rag.case_retrieval import search_cases
 from app.agent_rag.cases import ingest_cases, load_cases
 from app.agent_rag.settings import AgentSettings
@@ -110,22 +109,3 @@ def test_ingest_cases_is_idempotent_and_prunes_removed_rows(case_db, tmp_path):
 
 def _tools():
     return ManualAgentTools(AgentSettings("", "", "", 60, "", Path("cache"), 150))
-
-
-def test_agent_output_may_only_cite_retrieved_cases():
-    tools = _tools()
-    tools.available_cases["FSR-00001"] = {"fsr_no": "FSR-00001", "machine": "VMCT-02", "registered_on": "2012-01-01"}
-    ok = validate_agent_output(AgentAnswer(
-        status="answered", answer_markdown="과거 사례 [FSR-00001]에서는 설정값 재조정으로 해결했습니다.",
-        case_citations=[CaseCitation(fsr_no="FSR-00001")]), tools)
-    assert ok.case_citations == ({"fsr_no": "FSR-00001", "machine": "VMCT-02", "registered_on": "2012-01-01"},)
-    assert ok.to_dict()["case_citations"][0]["fsr_no"] == "FSR-00001"
-
-    with pytest.raises(AgentOutputValidationError):   # cited but never retrieved
-        validate_agent_output(AgentAnswer(status="answered", answer_markdown="근거",
-                                          case_citations=[CaseCitation(fsr_no="FSR-99999")]), tools)
-    with pytest.raises(AgentOutputValidationError):   # mentioned in prose but never retrieved
-        validate_agent_output(AgentAnswer(status="answered", answer_markdown="[FSR-12345] 참고",
-                                          case_citations=[CaseCitation(fsr_no="FSR-00001")]), tools)
-    with pytest.raises(AgentOutputValidationError):   # answered without any evidence
-        validate_agent_output(AgentAnswer(status="answered", answer_markdown="그냥 답"), tools)

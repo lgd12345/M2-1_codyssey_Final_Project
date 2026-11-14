@@ -6,6 +6,8 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
+from app.config import application_database_url
+
 BACKEND_ROOT = Path(__file__).resolve().parents[2]
 load_dotenv(BACKEND_ROOT / ".env", override=False)
 
@@ -35,7 +37,7 @@ class AgentSettings:
             llm_api_key=os.getenv("LLM_API_KEY", "").strip(),
             llm_model=os.getenv("LLM_MODEL", "").strip(),
             llm_timeout_seconds=float(os.getenv("LLM_TIMEOUT_SECONDS", "60")),
-            database_url=os.getenv("RAG_DATABASE_URL", "").strip() or os.getenv("DATABASE_URL", "").strip(),
+            database_url=application_database_url(),
             pdf_render_cache_dir=cache_dir,
             pdf_render_dpi=int(os.getenv("PDF_RENDER_DPI", "150")),
             llm_prompt_cache_key=os.getenv("LLM_PROMPT_CACHE_KEY", "").strip(),

@@ -133,13 +133,27 @@ class InvalidAnalysis(ValueError):
 
 
 def error_code_for(error: BaseException) -> str:
+    """Map an exception to a stable public code. The exception text is never stored."""
+    from pydantic_ai.exceptions import ModelAPIError, UnexpectedModelBehavior
+    from app.agent_rag.settings import AgentNotConfigured
+
     if isinstance(error, (ValidationError, InvalidAnalysis)):
         return 'invalid_analysis'
-    from pydantic_ai.exceptions import ModelAPIError
-    if isinstance(error, ModelAPIError):  # connection, timeout, rate limit, overload, quota: the model is not usable now
+    if isinstance(error, ModelAPIError):  # connection, timeout, HTTP status, rate limit, quota: the model is not usable now
         return 'llm_unavailable'
-    from app.runs.service import error_code_for as run_error_code
-    return run_error_code(error)
+    if isinstance(error, UnexpectedModelBehavior):
+        return 'invalid_agent_output'
+    if isinstance(error, AgentNotConfigured):
+        return 'agent_not_configured'
+    try:
+        import openai
+        if isinstance(error, openai.APIError):
+            return 'llm_unavailable'
+    except ImportError:  # pragma: no cover - openai ships with pydantic-ai[openai]
+        pass
+    if isinstance(error, psycopg.Error):
+        return 'database_unavailable'
+    return 'agent_error'
 
 
 def recover_orphans(connection) -> None:

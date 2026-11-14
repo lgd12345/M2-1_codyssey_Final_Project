@@ -224,3 +224,42 @@ def test_configuration_and_programming_errors_are_never_retried():
         with pytest.raises(type(error)):
             asyncio.run(run_with_retries(call, sleep=nap))
         assert len(calls) == 1 and naps == []
+
+
+# ---------- every failure ends as a stable public code; the message text is never stored ----------
+
+def _failures():
+    import openai
+    import psycopg
+    from pydantic import BaseModel, ValidationError
+    from pydantic_ai.exceptions import ModelHTTPError, UnexpectedModelBehavior
+    from app.agent_rag.settings import AgentNotConfigured
+
+    class Shape(BaseModel):
+        number: int
+
+    try:
+        Shape(number='x')
+    except ValidationError as invalid:
+        validation = invalid
+    request = openai.APIConnectionError(request=__import__('httpx').Request('POST', 'http://llm'))
+    return [
+        (validation, 'invalid_analysis'), (InvalidAnalysis('not retrieved'), 'invalid_analysis'),
+        (UnexpectedModelBehavior('bad output'), 'invalid_agent_output'),
+        (ModelHTTPError(500, 'm', {'error': 'x'}), 'llm_unavailable'), (request, 'llm_unavailable'),
+        (AgentNotConfigured('LLM_API_KEY missing'), 'agent_not_configured'),
+        (psycopg.OperationalError('server closed the connection'), 'database_unavailable'),
+        (RuntimeError('secret-token'), 'agent_error'), (KeyError('x'), 'agent_error'),
+    ]
+
+
+def test_every_failure_maps_to_a_stable_code_without_the_exception_text():
+    from app.service_requests.analysis import error_code_for
+    for error, code in _failures():
+        assert error_code_for(error) == code, repr(error)
+        assert 'secret' not in error_code_for(error)
+
+
+def test_failure_classification_does_not_depend_on_the_removed_run_system():
+    import importlib.util
+    assert importlib.util.find_spec('app.runs') is None

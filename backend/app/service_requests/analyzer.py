@@ -9,7 +9,7 @@ from pydantic import BaseModel, Field, ValidationError
 from pydantic_ai import Agent, Tool, UsageLimits
 from pydantic_ai.exceptions import ModelAPIError, ModelHTTPError
 
-from app.agent_rag.agent import make_llm
+from app.agent_rag.llm import make_llm
 from app.agent_rag.context import ContextPolicy
 from app.agent_rag.settings import AgentSettings
 from app.agent_rag.tools import ManualAgentTools
@@ -210,6 +210,6 @@ async def run_with_retries(call: Callable[[], Awaitable[dict[str, Any]]], *,
 
 
 async def analyze_request(request: dict[str, Any]) -> dict[str, Any]:
-    from app.agent_rag.runner import _embedder
+    from app.agent_rag.runtime import runtime_embedder
     settings = AgentSettings.from_env()
-    return await run_with_retries(lambda: run_analysis(request, settings=settings, embedder=_embedder(settings)))
+    return await run_with_retries(lambda: run_analysis(request, settings=settings, embedder=runtime_embedder(settings)))

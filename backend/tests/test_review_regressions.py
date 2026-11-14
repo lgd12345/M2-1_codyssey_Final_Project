@@ -1,5 +1,4 @@
 """Regressions reproduced during the second review; no real model or embedding calls."""
-import asyncio
 from functools import partial
 from pathlib import Path
 from unittest.mock import patch
@@ -7,7 +6,6 @@ from unittest.mock import patch
 import psycopg
 import pytest
 
-from app.agent_rag.agent import AgentAnswer, AgentOutputValidationError, run_agent, validate_agent_output
 from app.agent_rag.assets import AssetReferenceError, AssetRegistry
 from app.agent_rag.preprocess import extract_query_identifiers
 from app.agent_rag.retrieval import search_manual
@@ -136,100 +134,3 @@ def test_raw_style_block_cannot_load_external_media():
 ])
 def test_image_validation_does_not_treat_literal_code_as_media(markdown):
     assert AssetRegistry().validate_markdown(markdown) == markdown
-
-
-def test_answered_output_requires_evidence_even_when_no_search_was_performed():
-    tools = ManualAgentTools(settings())
-    with pytest.raises(AgentOutputValidationError, match="must cite retrieved"):
-        validate_agent_output(AgentAnswer(status="answered", answer_markdown="The pump is broken."), tools)
-
-
-def test_insufficient_evidence_output_does_not_require_irrelevant_citations():
-    tools = ManualAgentTools(settings())
-    tools.available_citations[("a" * 64, 1)] = {
-        "document_sha256": "a" * 64, "page": 1, "title": "Unrelated manual", "printed_page": None,
-    }
-    result = validate_agent_output(AgentAnswer(
-        status="insufficient_evidence", answer_markdown="The manual does not establish an answer."
-    ), tools)
-    assert result.to_dict()["status"] == "insufficient_evidence"
-    assert result.citations == ()
-
-
-def test_agent_can_complete_more_than_fifty_model_requests():
-    from pydantic_ai.messages import ModelResponse, ToolCallPart
-    from pydantic_ai.models.function import FunctionModel
-
-    count = 0
-
-    def model_function(_messages, info):
-        nonlocal count
-        count += 1
-        if count <= 51:
-            return ModelResponse(parts=[ToolCallPart("lookup_identifier", {"value": "X0006.3"})])
-        return ModelResponse(parts=[ToolCallPart(info.output_tools[0].name, {
-            "status": "insufficient_evidence", "answer_markdown": "No matching source.",
-            "citations": [], "asset_ids": [],
-        })])
-
-    with patch("app.agent_rag.tools.lookup_identifier", return_value={"found": False, "matches": []}):
-        result = asyncio.run(run_agent("Investigate", settings=settings(), model=FunctionModel(model_function)))
-    assert count == 52
-    assert len(result.tool_calls) == 51
-    assert result.status == "insufficient_evidence"
-
-
-def test_search_open_image_and_final_citation_round_trip(monkeypatch):
-    import io
-
-    from PIL import Image
-    from pydantic_ai import BinaryContent
-    from pydantic_ai.messages import ModelResponse, ToolCallPart, UserPromptPart
-    from pydantic_ai.models.function import FunctionModel
-
-    from app.agent_rag.pdf_source import SourcePage
-
-    digest = "d" * 64
-    tools = ManualAgentTools(settings())
-    output = io.BytesIO()
-    Image.new("RGB", (2, 2), "white").save(output, format="PNG")
-    png = output.getvalue()
-    source = {"document_sha256": digest, "pdf_page": 3, "title": "Manual",
-              "printed_page": "12", "verification": "needs_review"}
-    monkeypatch.setattr("app.agent_rag.tools.search_manual", lambda *_a, **_kw: {
-        "results": [{"sources": [source], "content": "converted text"}],
-        "search_status": {"keyword": "ok"},
-    })
-
-    def fake_open(_digest, page, *, asset_registry, **_kwargs):
-        asset_id = asset_registry.register(png, document_sha256=digest, pdf_page=page)
-        return SourcePage(digest, page, "12", "Manual", "converted text", "needs_review",
-                          "text", "PDF text layer", png, asset_id)
-
-    monkeypatch.setattr("app.agent_rag.tools.open_source_page", fake_open)
-    count = 0
-
-    def model_function(messages, info):
-        nonlocal count
-        count += 1
-        if count == 1:
-            return ModelResponse(parts=[ToolCallPart("search_manual", {"query": "motor"})])
-        if count == 2:
-            return ModelResponse(parts=[ToolCallPart("open_source", {"doc_sha256": digest, "pdf_page": 3})])
-        image_parts = [item for message in messages for part in message.parts
-                       if isinstance(part, UserPromptPart) and isinstance(part.content, (list, tuple))
-                       for item in part.content if isinstance(item, BinaryContent)]
-        assert any(item.data == png for item in image_parts)
-        asset_id = tools.assets.all()[0].asset_id
-        return ModelResponse(parts=[ToolCallPart(info.output_tools[0].name, {
-            "status": "answered", "answer_markdown": f"Confirmed source ![](asset:{asset_id})",
-            "citations": [{"document_sha256": digest, "page": 3, "title": "Manual", "printed_page": "12"}],
-            "asset_ids": [asset_id],
-        })])
-
-    result = asyncio.run(run_agent("Inspect the manual", settings=settings(), tools=tools,
-                                   model=FunctionModel(model_function)))
-    assert [call["tool"] for call in result.tool_calls] == ["search_manual", "open_source"]
-    assert result.citations[0]["page"] == 3
-    assert result.assets[0].data == png
-    assert result.status == "answered"

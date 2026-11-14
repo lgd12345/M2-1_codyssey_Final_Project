@@ -1,31 +1,9 @@
-import asyncio
-
 import pytest
-from pydantic import ValidationError
-from pydantic_ai import Agent
-from pydantic_ai.models.test import TestModel
 
-from app.agent_rag.agent import (
-    AgentAnswer,
-    AgentOutputValidationError,
-    Citation,
-    SYSTEM_INSTRUCTIONS,
-    build_agent,
-    validate_agent_output,
-)
 from app.agent_rag.assets import AssetRegistry, AssetReferenceError
 from app.agent_rag.settings import AgentSettings
 from app.agent_rag.tools import ManualAgentTools
 from app.agent_rag.pdf_source import SourcePage
-
-
-def test_agent_explains_text_is_converted_and_may_be_wrong():
-    assert "변환 텍스트" in SYSTEM_INSTRUCTIONS
-    assert "OCR" in SYSTEM_INSTRUCTIONS
-    assert "PDF 텍스트 레이어 추출" in SYSTEM_INSTRUCTIONS
-    assert "needs_review" in SYSTEM_INSTRUCTIONS
-    assert "open_source" in SYSTEM_INSTRUCTIONS
-    assert "OCR 결과" not in SYSTEM_INSTRUCTIONS
 
 
 def test_only_images_opened_in_current_run_can_be_referenced():
@@ -49,28 +27,6 @@ def test_only_inline_opened_asset_markdown_is_allowed(markdown):
         AssetRegistry().validate_markdown(markdown)
 
 
-def test_agent_output_citations_and_assets_must_be_grounded_in_tool_results():
-    settings = AgentSettings("", "", "", 60, "", __import__("pathlib").Path("cache"), 150)
-    tools = ManualAgentTools(settings)
-    digest = "c" * 64
-    tools.available_citations[(digest, 2)] = {
-        "document_sha256": digest, "page": 2, "printed_page": "PL-4", "title": "Parts list"
-    }
-    asset = tools.assets.register(b"png", document_sha256=digest, pdf_page=2)
-    answer = AgentAnswer(status="answered", answer_markdown=f"![](asset:{asset})", citations=[
-        Citation(document_sha256=digest, page=2, printed_page="PL-4", title="Parts list")
-    ], asset_ids=[asset])
-    result = validate_agent_output(answer, tools)
-    assert result.to_dict()["citations"][0]["page"] == 2
-    with pytest.raises(AgentOutputValidationError, match="must cite retrieved"):
-        validate_agent_output(AgentAnswer(status="answered", answer_markdown="펌프 고장입니다."), tools)
-    assert result.to_dict()["assets"][0]["asset_id"] == asset
-    with pytest.raises(AgentOutputValidationError, match="not retrieved or opened"):
-        validate_agent_output(AgentAnswer(status="answered", answer_markdown="근거", citations=[
-            Citation(document_sha256="d" * 64, page=99, title="fake")
-        ]), tools)
-
-
 def test_open_source_tool_returns_image_content_and_registers_the_asset(monkeypatch):
     settings = AgentSettings("", "", "", 60, "postgresql://test", __import__("pathlib").Path("cache"), 150)
     tools = ManualAgentTools(settings)
@@ -90,38 +46,6 @@ def test_open_source_tool_returns_image_content_and_registers_the_asset(monkeypa
     assert tools.tool_calls[-1]["tool"] == "open_source"
 
 
-def test_prompt_defines_analysis_statuses_without_chat_only_status():
-    for status in ("answered", "insufficient_evidence"):
-        assert status in SYSTEM_INSTRUCTIONS
-    assert "conversational" not in SYSTEM_INSTRUCTIONS
-
-
-def test_chat_only_output_status_is_not_an_analysis_result():
-    with pytest.raises(ValidationError):
-        AgentAnswer(status="conversational", answer_markdown="안녕하세요!")
-
-
-def test_agent_has_no_default_model_request_limit(monkeypatch):
-    from app.agent_rag.agent import run_agent
-
-    settings = AgentSettings("https://proxy.test/v1", "test-key", "test-model", 60,
-                             "postgresql://test", __import__("pathlib").Path("cache"), 150)
-    model = TestModel(call_tools=[], custom_output_args={
-        "status": "insufficient_evidence", "answer_markdown": "확인된 근거가 없습니다.",
-        "citations": [], "asset_ids": []
-    })
-    original_run = Agent.run
-    observed = {}
-
-    async def record_limits(self, *args, **kwargs):
-        observed["limits"] = kwargs.get("usage_limits")
-        return await original_run(self, *args, **kwargs)
-
-    monkeypatch.setattr(Agent, "run", record_limits)
-    asyncio.run(run_agent("테스트 질문", settings=settings, model=model))
-    assert observed["limits"].request_limit is None
-
-
 def test_tools_return_structured_operational_failures(monkeypatch):
     import psycopg
 
@@ -132,10 +56,6 @@ def test_tools_return_structured_operational_failures(monkeypatch):
     search_error = tools.search_manual("question")
     assert search_error == {"ok": False, "error": {"code": "database_unavailable"}}
     assert tools.tool_calls[-1]["status"] == "error"
-    failed_run = validate_agent_output(AgentAnswer(
-        status="insufficient_evidence", answer_markdown="검색 상태 확인"
-    ), tools).to_dict()
-    assert failed_run["retrieval_status"] == [{"status": "error", "code": "database_unavailable"}]
 
     monkeypatch.setattr("app.agent_rag.tools.lookup_identifier", lambda *_args, **_kwargs:
                         (_ for _ in ()).throw(psycopg.OperationalError("private db details")))
@@ -149,35 +69,6 @@ def test_tools_return_structured_operational_failures(monkeypatch):
     assert "private" not in repr(tools.tool_calls)
 
 
-def test_test_model_performs_a_real_tool_round_trip_and_validates_citation():
-    from app.agent_rag.agent import run_agent
-
-    settings = AgentSettings("https://proxy.test/v1", "test-key", "test-model", 60,
-                             "postgresql://test", __import__("pathlib").Path("cache"), 150)
-    tools = ManualAgentTools(settings)
-    digest = "f" * 64
-    called = []
-
-    def fake_lookup(value: str, kind: str | None = None):
-        called.append((value, kind))
-        citation = {"document_sha256": digest, "page": 7, "printed_page": "12", "title": "Manual"}
-        tools.available_citations[(digest, 7)] = citation
-        tools.tool_calls.append({"tool": "lookup_identifier", "status": "ok", "found": True})
-        return {"found": True, "value": value, "matches": [citation]}
-
-    fake_lookup.__name__ = "lookup_identifier"
-    tools.lookup_identifier = fake_lookup
-    model = TestModel(call_tools=["lookup_identifier"], custom_output_args={
-        "status": "answered", "answer_markdown": "확인된 출처입니다.",
-        "citations": [{"document_sha256": digest, "page": 7, "printed_page": "12", "title": "Manual"}],
-        "asset_ids": [],
-    })
-    result = asyncio.run(run_agent("PMC 주소를 찾아줘", settings=settings, tools=tools, model=model))
-    assert called
-    assert result.citations[0]["page"] == 7
-    assert result.tool_calls[0]["tool"] == "lookup_identifier"
-
-
 def test_agent_database_can_be_safely_overridden_from_application_database(monkeypatch):
     monkeypatch.setenv("DATABASE_URL", "postgresql://host/app")
     monkeypatch.setenv("RAG_DATABASE_URL", "postgresql://host/app_test")
@@ -189,17 +80,3 @@ def test_agent_requires_explicit_llm_proxy_and_key_configuration():
                              "postgresql://test", __import__("pathlib").Path("cache"), 150)
     with pytest.raises(ValueError, match="LLM_API_KEY"):
         settings.validate_llm()
-
-
-def test_pydantic_agent_runs_without_network_and_has_tools_registered():
-    settings = AgentSettings("https://proxy.test/v1", "test-key", "test-model", 60,
-                             "postgresql://test", __import__("pathlib").Path("cache"), 150)
-    tools = ManualAgentTools(settings)
-    model = TestModel(call_tools=[], custom_output_args={
-        "status": "insufficient_evidence", "answer_markdown": "확인된 근거가 없습니다.",
-        "citations": [], "asset_ids": []
-    })
-    agent, _ = build_agent(settings, tools=tools, model=model)
-    result = asyncio.run(agent.run("테스트 질문"))
-    assert result.output.answer_markdown == "확인된 근거가 없습니다."
-    assert set(agent._function_toolset.tools) == {"search_cases", "search_manual", "lookup_identifier", "open_source"}

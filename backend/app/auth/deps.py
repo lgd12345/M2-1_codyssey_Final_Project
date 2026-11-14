@@ -8,6 +8,7 @@ from urllib.parse import urlsplit
 import psycopg
 from fastapi import Depends, Header, Request
 
+from app.config import application_database_url
 from app.auth.service import (
     AuthError, BadCsrf, BadOrigin, LoginRequired, SessionInfo, csrf_matches, get_session,
 )
@@ -16,7 +17,7 @@ COOKIE_NAME = "manual_session"
 
 
 def database_url() -> str:
-    url = (os.getenv("RAG_DATABASE_URL", "") or os.getenv("DATABASE_URL", "")).strip()
+    url = application_database_url()
     if not url:
         raise RuntimeError("RAG_DATABASE_URL or DATABASE_URL must be configured")
     return url

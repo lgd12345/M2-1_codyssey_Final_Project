@@ -1,16 +1,17 @@
 from __future__ import annotations
 
-import os
 from functools import partial
 from typing import Any
+
+from app.config import application_database_url
 
 
 def connect_database(database_url: str | None = None):
     import psycopg
 
-    url = (database_url or os.getenv("DATABASE_URL", "")).strip()
+    url = (database_url or application_database_url()).strip()
     if not url:
-        raise RuntimeError("DATABASE_URL is not configured")
+        raise RuntimeError("RAG_DATABASE_URL or DATABASE_URL is not configured")
     return psycopg.connect(url, connect_timeout=5)
 
 

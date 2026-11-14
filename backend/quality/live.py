@@ -17,6 +17,7 @@ import psycopg
 from dotenv import load_dotenv
 
 from app.agent_rag.embedding import configured_embedder
+from app.config import application_database_url
 from app.agent_rag.embedding_readiness import embedding_readiness
 from quality.e2e import run_suite_e2e
 from quality.scoring import Case
@@ -65,7 +66,7 @@ def check_embedding_ready(snapshot: dict[str, Any], required: bool) -> None:
 
 def run_live_e2e(cases: list[Case], args: argparse.Namespace) -> list[dict[str, Any]]:
     load_dotenv(ROOT / '.env', override=False)
-    dsn = (os.getenv('RAG_DATABASE_URL', '') or os.getenv('DATABASE_URL', '')).strip()
+    dsn = application_database_url()
     base = validate_target(dsn, args.base_url, args.allow_current_db)
     passwords = {name: os.getenv(f'LIVE_E2E_{name.upper()}_PASSWORD') for name in ('user', 'admin')}
     if not all(passwords.values()):

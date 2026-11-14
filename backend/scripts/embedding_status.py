@@ -15,12 +15,13 @@ load_dotenv(ROOT / ".env", override=False)
 sys.path.insert(0, str(ROOT))
 
 from app.agent_rag.embedding import configured_embedder
+from app.config import application_database_url
 from app.agent_rag.embedding_readiness import embedding_readiness
 
 
 def connect_for_status():
     # Same database selection as the running app (RAG_DATABASE_URL first).
-    url = (os.getenv("RAG_DATABASE_URL", "") or os.getenv("DATABASE_URL", "")).strip()
+    url = application_database_url()
     if not url:
         raise ValueError("RAG_DATABASE_URL or DATABASE_URL is not configured")
     connection = psycopg.connect(url, connect_timeout=5)

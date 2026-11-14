@@ -10,6 +10,10 @@ from app.main import app
 
 
 RETIRED_PATHS = [
+    ("POST", "/api/v1/agent/runs"),
+    ("GET", "/api/v1/agent/runs"),
+    ("GET", "/api/v1/agent/runs/example"),
+    ("GET", "/api/v1/agent/runs/example/assets/example"),
     ("GET", "/api/db-status"),
     ("GET", "/api/v1/admin/db-inspection"),
     ("GET", "/api/v1/documents"),
@@ -86,10 +90,6 @@ def test_only_current_screen_and_analysis_routes_remain():
         ("GET", "/api/v1/auth/me"),
         ("POST", "/api/v1/auth/login"),
         ("POST", "/api/v1/auth/logout"),
-        ("POST", "/api/v1/agent/runs"),
-        ("GET", "/api/v1/agent/runs"),
-        ("GET", "/api/v1/agent/runs/{run_id}"),
-        ("GET", "/api/v1/agent/runs/{run_id}/assets/{asset_id}"),
     }
 
 
@@ -107,22 +107,3 @@ def test_customer_roles_cannot_access_operator_analysis(role):
 def test_admin_can_access_operator_analysis():
     session = SessionInfo(AuthUser(uuid4(), "operator", "admin"), "csrf")
     assert require_operator(session) is session
-
-
-@pytest.mark.parametrize("role", [None, "user", "customer"])
-@pytest.mark.parametrize("method,path", [
-    ("POST", "/api/v1/agent/runs"),
-    ("GET", "/api/v1/agent/runs"),
-    ("GET", "/api/v1/agent/runs/example"),
-    ("GET", "/api/v1/agent/runs/example/assets/example"),
-])
-def test_analysis_api_rejects_anonymous_and_customers_before_database_or_llm(
-    client, monkeypatch, role, method, path,
-):
-    session = SessionInfo(AuthUser(uuid4(), "customer", role), "csrf") if role else None
-    monkeypatch.setattr("app.auth.deps.current_session", lambda _request: session)
-    response = client.request(method, path, json={"question": "sample"}, headers={
-        "Origin": "http://testserver", "X-CSRF-Token": "csrf",
-    })
-    assert response.status_code == (403 if role else 401)
-    assert response.json()["code"] == ("OPERATOR_REQUIRED" if role else "LOGIN_REQUIRED")
