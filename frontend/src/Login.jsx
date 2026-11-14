@@ -1,7 +1,7 @@
 import React, { useState } from 'react'
 import { call } from './api.js'
 
-// 이전 로그인 화면(이미지 분할)과 "AI 생성 콘텐츠 안내"를 그대로 쓴다. 과제 요구: AI 생성 콘텐츠임을 사용자에게 명시.
+// 이전 로그인 화면(이미지 분할)을 그대로 쓴다. 고객은 AI 결과를 직접 받지 않으므로 AI의 역할만 알린다(AI 생성 표시는 결과가 나오는 화면에 둔다).
 export function Login({ onDone }) {
   const [loginId, setLoginId] = useState('')
   const [password, setPassword] = useState('')
@@ -23,9 +23,9 @@ export function Login({ onDone }) {
         <a className="back-link" href="#/support">← 고객센터</a>
         <h1 id="login-title">로그인</h1>
         <p className="login-description muted">발급받은 아이디 또는 가입하신 이메일로 로그인해 주세요.</p>
-        <p className="ai-notice" role="note" aria-label="AI 생성 콘텐츠 안내">
-          <strong>AI 생성 콘텐츠 안내</strong><br />
-          로그인 후 제공되는 답변은 AI가 생성합니다. 내용이 부정확할 수 있으니 인용된 근거와 원본 매뉴얼을 함께 확인해 주세요.
+        <p className="ai-notice" role="note" aria-label="AI 활용 안내">
+          <strong>AI 활용 안내</strong><br />
+          서비스 요청은 AI가 먼저 분석하고, 서비스 담당자가 검토한 뒤 답변합니다.
         </p>
         <label>아이디 또는 이메일<input name="login_id" value={loginId} onChange={(e) => setLoginId(e.target.value)} autoComplete="username" autoCapitalize="none" spellCheck={false} disabled={busy} required autoFocus /></label>
         <label>비밀번호<input name="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="current-password" disabled={busy} required /></label>

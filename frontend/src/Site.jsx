@@ -57,7 +57,7 @@ export function SiteHeader({ preference, theme, session, route, pending = false,
 export function SiteFooter({ staff = false }) {
   return <footer className="site-footer">
     <div><a className="footer-wordmark" href={staff ? HOME.quality : '#/home'}>MORRONO</a><span>{staff ? '운영진 업무 지원' : '공작기계 고객지원'}</span></div>
-    <p>AI가 생성한 답변은 인용된 근거와 원본 매뉴얼을 함께 확인해 주세요.</p>
+    <p>{staff ? 'AI 분석은 검토용 초안입니다. 인용된 근거와 원본 매뉴얼을 확인해 주세요.' : 'A/S 요청 분석에 AI를 활용하며, 고객께 드리는 답변은 서비스 담당자가 검토해 작성합니다.'}</p>
     {!staff && <details className="photo-credits"><summary>사진 출처</summary><div>
       <p>공작기계 사진: <a href="https://unsplash.com/photos/O5rSp_U-Pa0" target="_blank" rel="noreferrer noopener">Jelifer Maniago</a> · <a href="https://unsplash.com/photos/sxtClAGwRck" target="_blank" rel="noreferrer noopener">aluminum Zheng ji</a> / Unsplash</p>
       <a href="https://unsplash.com/license" target="_blank" rel="noreferrer noopener">Unsplash License</a><span> · 소개를 위한 예시 사진입니다.</span>

@@ -43,6 +43,13 @@ def startup_notes(env: Mapping[str, str] | None = None) -> list[tuple[str, str]]
     if test and _name(test) == _name(used):
         notes.append(('warning', 'TEST_DATABASE_URL names the application database; regression tests refuse it '
                                  'and only scripts/test_isolated.py (a disposable database) may run them'))
+    if env.get('SMTP_USERNAME', '').strip() or env.get('SMTP_PASSWORD', '').strip():  # silent when mail is not in use
+        from app.mail.settings import MailConfigError, MailSettings
+        try:
+            MailSettings.from_env(env)
+            notes.append(('info', 'mail notifications: on (SMTP_USERNAME and SMTP_PASSWORD are set)'))
+        except MailConfigError as error:  # names the variable, never its value
+            notes.append(('warning', f'mail notifications are off: {error}'))
     try:
         workers = int(env.get('WEB_CONCURRENCY', '').strip() or 1)
     except ValueError:

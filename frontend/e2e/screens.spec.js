@@ -95,8 +95,9 @@ test('public home, support and login pages work without an account', async ({ pa
   await expect(page.locator('dt', { hasText: '머시닝센터' })).toBeVisible()
   await expect(page.locator('dt', { hasText: 'CNC 선반' })).toBeVisible()
 
-  // Footer: AI notice and image credits.
-  await expect(page.getByText('AI가 생성한 답변은 인용된 근거와 원본 매뉴얼을 함께 확인해 주세요.')).toBeVisible()
+  // Footer: how AI is used (customers never read raw AI output) and image credits.
+  await expect(page.getByText('A/S 요청 분석에 AI를 활용하며, 고객께 드리는 답변은 서비스 담당자가 검토해 작성합니다.')).toBeVisible()
+  await expect(page.getByText('AI가 생성한 답변은', { exact: false })).toHaveCount(0)
   await page.getByText('사진 출처', { exact: true }).click()
   await expect(page.getByRole('link', { name: 'Unsplash License' })).toBeVisible()
 
@@ -109,7 +110,10 @@ test('public home, support and login pages work without an account', async ({ pa
   await expect(page.getByRole('link', { name: /회원가입/ })).toHaveCount(0)  // not offered, so no dead link
   await page.getByRole('link', { name: /로그인하기/ }).click()
   await expect(page).toHaveURL(/#\/login$/)
-  await expect(page.getByRole('note', { name: 'AI 생성 콘텐츠 안내' })).toContainText('AI가 생성합니다')
+  // Customers never receive raw AI answers, so the login page explains the AI's role instead of claiming it writes the answers.
+  const aiUse = page.getByRole('note', { name: 'AI 활용 안내' })
+  await expect(aiUse).toContainText('AI가 먼저 분석하고, 서비스 담당자가 검토한 뒤 답변합니다.')
+  await expect(page.getByText('로그인 후 제공되는 답변은 AI가 생성합니다', { exact: false })).toHaveCount(0)
   await expect(page.getByRole('button', { name: '로그인', exact: true })).toBeDisabled()
   await page.getByRole('link', { name: '← 고객센터' }).click()
   await expect(page).toHaveURL(/#\/support$/)
@@ -192,6 +196,7 @@ test('private pages need a session, wrong credentials are refused, roles are rou
   await expect(staff.page).toHaveURL(/#\/work$/)
   await expect(ops.getByRole('link', { name: '받은 업무' })).toHaveAttribute('aria-current', 'page')
   await expect(staff.page.getByRole('navigation', { name: '고객 메뉴' })).toHaveCount(0)
+  await expect(staff.page.getByText('AI 분석은 검토용 초안입니다. 인용된 근거와 원본 매뉴얼을 확인해 주세요.')).toBeVisible()  // operator footer
   await staff.page.goto('/#/login')
   await expect(staff.page).toHaveURL(/#\/cases$/)
 
@@ -508,7 +513,7 @@ test('operator detail: AI tabs and evidence, original pages, notes, department p
   await expect(page.getByText('분석 중입니다.', { exact: false })).toHaveCount(0)
   await expect(page.getByText('E2E 통제된 분석 응답', { exact: false })).toBeVisible()
   await expect(page.getByText('✦ AI 생성')).toBeVisible()
-  await expect(page.getByText('AI를 사용합니다. 결과를 확인해 주세요.', { exact: false })).toBeVisible()
+  await expect(page.getByText('AI가 작성한 검토용 초안입니다. 인용된 근거와 원본 매뉴얼을 확인한 뒤 판단해 주세요.', { exact: false })).toBeVisible()
 
   // Tab 1: causes with their sources, steps and open questions.
   await expect(page.getByRole('tab', { name: '문제 해결 단계', exact: true })).toHaveAttribute('aria-selected', 'true')
@@ -711,8 +716,14 @@ test('four-team approval, department inbox, work detail and what the customer se
   await customer.page.goto(`/#/portal/${id}`)
   await customer.page.reload()
   await expect(customer.page.locator('.pd-meta').getByText('처리 중', { exact: true })).toBeVisible()
-  await customer.page.getByRole('tab', { name: '기술 가이드', exact: true }).click()
+  const guidesTab = customer.page.getByRole('tab', { name: '기술 가이드', exact: true })
+  await guidesTab.click()
+  await guidesTab.hover()  // the pointer stays on the tab it just chose; its label must stay readable
+  const tabColors = await guidesTab.evaluate(el => { const s = getComputedStyle(el); return [s.color, s.backgroundColor] })
+  expect(tabColors[0], 'selected tab text vs background').not.toBe(tabColors[1])
+  expect(tabColors[1], 'selected tab keeps its selected background while hovered').toBe(await guidesTab.evaluate(el => getComputedStyle(el).borderTopColor))
   await expect(customer.page.getByText('E2E 매뉴얼', { exact: true })).toBeVisible()
+  await expect(customer.page.getByText('AI가 접수 내용을 바탕으로 찾고 서비스 담당자가 확인한 자료입니다.', { exact: false })).toBeVisible()
   await customer.page.getByRole('button', { name: '원본 페이지 보기', exact: true }).click()
   const guide = customer.page.getByRole('dialog', { name: /원본 페이지 · E2E 매뉴얼/ })
   await expect(guide.getByRole('img')).toBeVisible()
@@ -761,6 +772,10 @@ test('every screen fits a phone-sized viewport without sideways scrolling and ke
 
   await analyse(staff.page, id)
   expect(await overflowing(staff.page), 'operator detail').toEqual([])
+  // The AI notice is long; it must wrap below the heading instead of squeezing "AI 분석" onto two lines.
+  const aiHeading = staff.page.getByRole('heading', { name: 'AI 분석' })
+  const lines = await aiHeading.evaluate(h => Math.round(h.getBoundingClientRect().height / parseFloat(getComputedStyle(h).lineHeight)))
+  expect(lines, 'AI 분석 heading lines').toBe(1)
   await expect(staff.page.getByRole('button', { name: '승인', exact: true })).toBeAttached()
   for (const hash of ['cases', 'work']) {
     await staff.page.goto(`/#/${hash}`)

@@ -5,6 +5,7 @@ Auth, sessions, CSRF, authorization, DB, validation, persistence and the UI stay
 import asyncio
 import base64
 
+from app.mail.deps import get_mail_sender
 from app.main import app
 from app.service_requests.analysis import get_analysis_runner
 from app.service_requests.pages import get_page_renderer
@@ -43,5 +44,15 @@ async def controlled_model(request):
     }
 
 
+
+class NoMail:
+    """The browser tests never reach a real mail server, whatever the environment holds."""
+    from_address = 'noreply@test.invalid'
+
+    async def send(self, message):
+        return None
+
+
+app.dependency_overrides[get_mail_sender] = lambda: NoMail()
 app.dependency_overrides[get_analysis_runner] = lambda: controlled_model
 app.dependency_overrides[get_page_renderer] = lambda: (lambda document_sha256, page: PAGE_PNG)

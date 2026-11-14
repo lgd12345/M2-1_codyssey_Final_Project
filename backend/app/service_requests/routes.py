@@ -14,6 +14,8 @@ from psycopg.types.json import Jsonb
 
 from app.auth.deps import database, require_user, require_csrf, require_operator_csrf
 from app.auth.service import AuthError, SessionInfo
+from app.mail import outbox as mail_outbox
+from app.mail.deps import get_mail_sender
 from app.service_requests import analysis as analysis_flow
 from app.service_requests import views
 
@@ -92,7 +94,8 @@ def context(session: SessionInfo = Depends(require_user)):
 
 
 @router.post('', status_code=201)
-def create(body: Intake, session: SessionInfo = Depends(require_csrf)):
+def create(body: Intake, background: BackgroundTasks, session: SessionInfo = Depends(require_csrf),
+           sender=Depends(get_mail_sender)):
     with request_database() as connection:
         company = membership(connection, session)
         if not company:
@@ -109,6 +112,7 @@ def create(body: Intake, session: SessionInfo = Depends(require_csrf)):
                                  (equipment['id'], company['id'], session.user.id, body.message[:80],
                                   body.reason, body.message, Jsonb(body.alarm_numbers),
                                   Jsonb(snapshot))).fetchone()
+        queue_mail(connection, background, sender, row['id'], 'received')
         return views.fetch_items(connection, 'r.id=%s', (row['id'],), staff=session.user.role == 'admin')[0]
 
 
@@ -120,6 +124,14 @@ def list_requests(session: SessionInfo = Depends(require_user)):
         items = views.fetch_items(connection, '(%s OR r.company_id=%s)', (session.user.role == 'admin', company_id),
                                   staff=session.user.role == 'admin', order='ORDER BY r.created_at DESC,r.id DESC')
         return {'requests': items}
+
+
+def queue_mail(connection, background: BackgroundTasks, sender, number: int, kind: str) -> None:
+    """Queue a status mail with the change that caused it; it is sent only after that change has committed."""
+    if sender is None:  # mail is off: the workflow is unaffected
+        return
+    mail_outbox.enqueue(connection, number, kind)
+    background.add_task(mail_outbox.dispatch, sender)
 
 
 def request_number(identity: str) -> int:

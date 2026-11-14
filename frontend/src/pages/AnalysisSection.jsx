@@ -20,7 +20,7 @@ export function AnalysisSection({ item, dispatch, onAnalyze, analyzing, error })
     <section className="block" aria-labelledby="ai-title">
       <div className="block-head">
         <h2 id="ai-title"><span className="spark" aria-hidden="true">✦</span> AI 분석</h2>
-        <span className="muted small">ⓘ AI를 사용합니다. 결과를 확인해 주세요.</span>
+        <span className="muted small">ⓘ AI가 작성한 검토용 초안입니다. 인용된 근거와 원본 매뉴얼을 확인한 뒤 판단해 주세요.</span>
       </div>
       <div className="ai-box">
         <div className="quick" role="tablist" aria-label="AI 분석 메뉴">

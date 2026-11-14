@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react'
+import React, { useLayoutEffect, useRef, useState } from 'react'
 import { CALL_REASONS } from '../domain/catalog.js'
 import { caseHref, portalHref } from '../navigation.js'
 import { ModelPicker } from './ModelPicker.jsx'
@@ -14,7 +14,8 @@ export function NewCaseModal({ onCreate, equipment = [], portal = false }) {
   const close = () => { if (!submitting.current) window.location.hash = home }
   const ready = reason && equipment.some(item => item.id === equipmentId) && message.trim()
 
-  useEffect(() => {
+  // Layout effect: the Escape handler is in place before the dialog is painted, so a key pressed the moment it appears closes it.
+  useLayoutEffect(() => {
     const onKey = event => { if (event.key === 'Escape') close() }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)

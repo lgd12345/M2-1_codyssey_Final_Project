@@ -7,6 +7,9 @@ from dotenv import load_dotenv
 from db_safety import assign_worker_database, guard_test_database
 
 load_dotenv(Path(__file__).resolve().parents[1] / ".env", override=False)
+# A developer's real mail account must never be reachable from a test (or from the E2E server subprocess it starts).
+for _name in ('SMTP_USERNAME', 'SMTP_PASSWORD', 'SMTP_HOST', 'SMTP_PORT', 'MAIL_FROM'):
+    os.environ.pop(_name, None)
 # Must run before test modules read TEST_DATABASE_URL at import time.
 assign_worker_database(os.environ)  # parallel runs: each worker has its own disposable database
 _warning = guard_test_database(os.environ)
@@ -22,6 +25,33 @@ from pwdlib.hashers.argon2 import Argon2Hasher  # noqa: E402
 _auth_service._HASHER = PasswordHash((Argon2Hasher(time_cost=1, memory_cost=8, parallelism=1),))
 
 import pytest  # noqa: E402
+
+
+class RecordingMailer:
+    """Stands in for the SMTP transport: records messages; can fail or be slow on demand."""
+    from_address = 'noreply@test.invalid'
+
+    def __init__(self):
+        self.messages, self.error, self.delay = [], None, 0.0
+
+    async def send(self, message):
+        import asyncio
+        if self.delay:
+            await asyncio.sleep(self.delay)
+        if self.error:
+            raise self.error
+        self.messages.append(message)
+
+
+@pytest.fixture(autouse=True)
+def recorded_mail():
+    """Every test gets a recording transport; none can reach a real mail server."""
+    from app.mail.deps import get_mail_sender
+    from app.main import app
+    mailer = RecordingMailer()
+    app.dependency_overrides[get_mail_sender] = lambda: mailer
+    yield mailer
+    app.dependency_overrides.pop(get_mail_sender, None)
 
 
 @pytest.fixture(scope='session')

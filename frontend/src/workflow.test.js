@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { analysisRunNotice, canApprove, canReanalyze, canStartAnalysis, isAnalysisRunning, canResolve, customerStatus, isEditable, isEdited, statusCounts, workItems, identifierCheckLine, canAddInfo } from './domain/workflow.js'
+import { analysisRunNotice, canApprove, canReanalyze, canStartAnalysis, isAnalysisRunning, canResolve, customerStatus, isEditable, isEdited, statusCounts, workItems, identifierCheckLine, canAddInfo, mailLines } from './domain/workflow.js'
 
 const request = (extra = {}) => ({ id: 'CLM-1000', status: '검토 대기', analysis: { summary: '실제 분석 결과' },
   departments: [{ key: 'service', selected: true, aiDraft: '원본', draft: '원본' }], linked: [], ...extra })
@@ -95,4 +95,12 @@ test('identifier checks read as one line each and never call a miss a verified a
 test('operators can add information only while the request can still be analysed again', () => {
   const states = ['접수됨', '분석 중', '검토 대기', '추가 정보 필요', '반려됨', '처리 중', '종결']
   assert.deepEqual(states.map(status => canAddInfo({ status })), [false, false, true, true, true, false, false])
+})
+
+test('operators read mail delivery as one line per notification, failures and skips included', () => {
+  assert.deepEqual(mailLines([
+    { kind: 'received', status: 'sent' }, { kind: 'approved', status: 'failed' }, { kind: 'resolved', status: 'skipped' },
+  ]), ['접수 확인: 발송됨', '처리 시작: 발송 실패', '완료 안내: 이메일 주소가 없어 보내지 않음'])
+  assert.deepEqual(mailLines(undefined), [])
+  assert.deepEqual(mailLines([{ kind: 'received', status: 'pending' }, { kind: 'received', status: 'sending' }]), ['접수 확인: 발송 대기', '접수 확인: 발송 중'])
 })

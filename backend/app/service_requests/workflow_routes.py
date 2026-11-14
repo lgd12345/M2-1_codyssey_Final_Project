@@ -10,10 +10,11 @@ from pydantic import ConfigDict, Field, StrictBool, model_validator
 
 from app.auth.deps import require_operator_csrf
 from app.auth.service import SessionInfo
+from app.mail.deps import get_mail_sender
 from app.service_requests import analysis as analysis_flow
 from app.service_requests import views, workflow
 from app.service_requests.routes import (
-    Input, NoBody, execute_analysis, request_database, request_number,
+    Input, NoBody, execute_analysis, queue_mail, request_database, request_number,
 )
 
 router = APIRouter(prefix='/api/v1/service-requests', tags=['service-requests-workflow'])
@@ -94,10 +95,12 @@ def add_additional_info(identity: str, body: AdditionalInfoIn, session: SessionI
 
 
 @router.post('/{identity}/approval')
-def approve(identity: str, body: NoBody | None = None, session: SessionInfo = Depends(require_operator_csrf)):
+def approve(identity: str, background: BackgroundTasks, body: NoBody | None = None,
+            session: SessionInfo = Depends(require_operator_csrf), sender=Depends(get_mail_sender)):
     number = request_number(identity)
     with request_database() as connection:
         workflow.approve(connection, number, session.user)
+        queue_mail(connection, background, sender, number, 'approved')
         return _operator_item(connection, number)
 
 
@@ -148,8 +151,10 @@ def work_complete(identity: str, work_key: str, body: CompleteIn, session: Sessi
 
 
 @router.post('/{identity}/resolution')
-def resolve(identity: str, body: ResolveIn | None = None, session: SessionInfo = Depends(require_operator_csrf)):
+def resolve(identity: str, background: BackgroundTasks, body: ResolveIn | None = None,
+            session: SessionInfo = Depends(require_operator_csrf), sender=Depends(get_mail_sender)):
     number = request_number(identity)
     with request_database() as connection:
         workflow.resolve(connection, number, session.user, (body.note if body else '').strip())
+        queue_mail(connection, background, sender, number, 'resolved')
         return _operator_item(connection, number)

@@ -59,7 +59,7 @@ export function PortalDetail({ item }) {
             <h2>기술 가이드</h2>
             {guides.length === 0 ? <p className="muted">입력하신 내용에 해당하는 기술 가이드가 아직 없습니다.</p> : (
               <>
-                <p className="muted small">접수한 증상과 오류 번호를 기준으로 스스로 확인해 볼 수 있는 자료입니다.</p>
+                <p className="muted small">AI가 접수 내용을 바탕으로 찾고 서비스 담당자가 확인한 자료입니다. 스스로 점검해 볼 때 참고해 주세요.</p>
                 <ul className="guides">{guides.map((g) => <li key={g.id}><div><strong>{g.title}</strong><small>{g.source}</small></div>{g.viewable ? <SourcePageButton itemId={item.id} evidenceId={g.id} title={g.title} /> : <span className="muted small">원본 페이지 정보 없음</span>}</li>)}</ul>
               </>
             )}

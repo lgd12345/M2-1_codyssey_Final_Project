@@ -44,3 +44,8 @@ const IDENTIFIER_OUTCOMES = { found: '색인된 매뉴얼에서 찾음', not_fou
 // "Not found" only says the indexed manuals have no exact match, so the wording never claims the number does not exist.
 export const identifierCheckLine = check =>
   `${IDENTIFIER_KINDS[check.kind] || '식별자'} ${check.value}: ${IDENTIFIER_OUTCOMES[check.status]}${check.source === 'agent' ? ' (AI 추가 조회)' : ''}`
+
+const MAIL_KINDS = { received: '접수 확인', approved: '처리 시작', resolved: '완료 안내' }
+const MAIL_STATES = { pending: '발송 대기', sending: '발송 중', sent: '발송됨', failed: '발송 실패', skipped: '이메일 주소가 없어 보내지 않음' }
+// Delivery state of the customer notifications, for operators only (the address itself is never sent to the browser).
+export const mailLines = mail => (mail ?? []).map(entry => `${MAIL_KINDS[entry.kind]}: ${MAIL_STATES[entry.status]}`)

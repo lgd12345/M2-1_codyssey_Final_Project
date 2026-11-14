@@ -22,7 +22,8 @@ export function Lozenge({ status }) {
 
 // TRUMPF식 모달: 제목, 닫기(×), 본문. 배경을 누르거나 Esc를 누르면 닫힌다.
 export function Modal({ title, onClose, children }) {
-  React.useEffect(() => {
+  // Layout effect: Escape works from the moment the dialog is painted.
+  React.useLayoutEffect(() => {
     const onKey = (e) => { if (e.key === 'Escape') onClose() }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)

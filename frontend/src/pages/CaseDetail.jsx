@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { canApprove, canReanalyze, canResolve, isEditable } from '../domain/workflow.js'
+import { canApprove, canReanalyze, canResolve, isEditable, mailLines } from '../domain/workflow.js'
 import { Avatar, formatTime } from '../ui.jsx'
 import { AnalysisSection } from './AnalysisSection.jsx'
 import { DeptSection } from './DeptSection.jsx'
@@ -147,6 +147,7 @@ function DetailsPanel({ item, dispatch, me }) {
         <div><dt>기종</dt><dd>{intake.machine}</dd></div>
         <div><dt>지식 근거</dt><dd>{analysis ? `${manual + cases}건 (매뉴얼 ${manual}, 과거 사례 ${cases})` : '미분석'}</dd></div>
         <div><dt>대상 부서</dt><dd>{targets.length ? targets.join(', ') : '없음'}</dd></div>
+        {mailLines(item.mail).length > 0 && <div><dt>알림 메일</dt><dd><ul className="mail-lines">{mailLines(item.mail).map((line) => <li key={line}>{line}</li>)}</ul></dd></div>}
       </dl>
       <p className="muted small">생성 {formatTime(item.createdAt)}{item.revision > 1 ? ` · 재분석 ${item.revision - 1}회` : ''}</p>
     </div>
