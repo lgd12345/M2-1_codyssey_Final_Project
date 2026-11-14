@@ -4,7 +4,6 @@ const ID = /^CLM-\d{3,19}$/
 const WORK = /^(SVC|QLT|PRT|SAL)-\d{3,19}$/
 const KEYS = ['service', 'quality', 'parts', 'sales']
 const EVIDENCE = /^E\d{1,3}$/
-const RATINGS = ['helpful', 'not_helpful']
 
 export function requestFor(action, item) {
   if (!ID.test(action.id ?? '')) throw new Error('올바르지 않은 요청 번호입니다.')
@@ -35,11 +34,6 @@ export function requestFor(action, item) {
     case 'WORK_START': return post(`${work()}/start`)
     case 'WORK_COMPLETE': return post(`${work()}/complete`, { summary: action.result?.summary, hours: action.result?.hours ?? '' })
     case 'RESOLVE': return post(`${base}/resolution`, { note: action.note ?? '' })
-    case 'RATE_ANALYSIS': {
-      if (!RATINGS.includes(action.rating)) throw new Error('올바르지 않은 평가입니다.')
-      return { method: 'PUT', path: `${base}/analysis/feedback`, body: { rating: action.rating }, result: 'item' }
-    }
-    case 'CLEAR_RATING': return { method: 'DELETE', path: `${base}/analysis/feedback`, body: undefined, result: 'item' }
     default: throw new Error('지원하지 않는 작업입니다.')
   }
 }
@@ -51,8 +45,6 @@ export function evidencePageUrl(id, evidenceId) {
   return `/api/v1/service-requests/${id}/evidence/${evidenceId}/page`
 }
 
-// Ratings are visible to operators only; each person sees their own as pressed.
-export const myRating = (analysis, me) => analysis?.feedback?.ratings?.find(rating => rating.by === me)?.rating ?? null
 
 // The server already filtered history and comments to customer-safe content and wording.
 export function customerEvents(item) {

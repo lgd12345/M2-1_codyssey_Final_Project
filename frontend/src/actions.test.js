@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { requestFor, customerEvents, evidencePageUrl, myRating } from './domain/actions.js'
+import { requestFor, customerEvents, evidencePageUrl } from './domain/actions.js'
 
 const item = { id: 'CLM-005', departments: [{ key: 'service', selected: true }, { key: 'sales', selected: false }] }
 
@@ -52,25 +52,10 @@ test('customer history shows only server-provided customer wording and never int
   assert.equal(events.filter(event => event.message).length, 1)
 })
 
-test('rating an analysis and taking the rating back are server requests with a fixed vocabulary', () => {
-  assert.deepEqual(requestFor({ type: 'RATE_ANALYSIS', id: 'CLM-005', rating: 'helpful' }, item),
-    { method: 'PUT', path: '/service-requests/CLM-005/analysis/feedback', body: { rating: 'helpful' }, result: 'item' })
-  assert.deepEqual(requestFor({ type: 'RATE_ANALYSIS', id: 'CLM-005', rating: 'not_helpful' }, item).body, { rating: 'not_helpful' })
-  assert.deepEqual(requestFor({ type: 'CLEAR_RATING', id: 'CLM-005' }, item),
-    { method: 'DELETE', path: '/service-requests/CLM-005/analysis/feedback', body: undefined, result: 'item' })
-  for (const rating of ['great', '', undefined, 'HELPFUL']) {
-    assert.throws(() => requestFor({ type: 'RATE_ANALYSIS', id: 'CLM-005', rating }, item), /평가/)
+test('AI answers cannot be rated: those action types are not supported', () => {
+  for (const type of ['RATE_ANALYSIS', 'CLEAR_RATING']) {
+    assert.throws(() => requestFor({ type, id: 'CLM-005', rating: 'helpful' }, item), /지원하지 않는 작업/, type)
   }
-  assert.throws(() => requestFor({ type: 'RATE_ANALYSIS', id: '../x', rating: 'helpful' }, item), /요청 번호/)
-})
-
-test('a person sees only their own rating as pressed', () => {
-  const analysis = { feedback: { helpful: 1, notHelpful: 1, ratings: [{ by: 'kim', rating: 'helpful' }, { by: 'lee', rating: 'not_helpful' }] } }
-  assert.equal(myRating(analysis, 'kim'), 'helpful')
-  assert.equal(myRating(analysis, 'lee'), 'not_helpful')
-  assert.equal(myRating(analysis, 'park'), null)
-  assert.equal(myRating({}, 'kim'), null)
-  assert.equal(myRating(undefined, 'kim'), null)
 })
 
 test('the original-page address is built only from a request number and a citation id', () => {

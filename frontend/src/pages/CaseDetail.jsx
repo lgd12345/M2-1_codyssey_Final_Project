@@ -15,7 +15,7 @@ export function CaseDetail({ item, dispatch, me, onAnalyze, analyzing, analysisE
         <div className="issue-main">
           <h1 id="detail-title">{item.title}</h1>
           <RequestCard item={item} />
-          <AnalysisSection item={item} dispatch={dispatch} me={me} onAnalyze={onAnalyze} analyzing={analyzing} error={analysisError} />
+          <AnalysisSection item={item} dispatch={dispatch} onAnalyze={onAnalyze} analyzing={analyzing} error={analysisError} />
           <DeptSection item={item} dispatch={dispatch} />
           <Activity item={item} dispatch={dispatch} me={me} />
         </div>

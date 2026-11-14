@@ -1,6 +1,5 @@
 import React, { useState } from 'react'
 import { analysisRunNotice, canStartAnalysis, isAnalysisRunning } from '../domain/workflow.js'
-import { myRating } from '../domain/actions.js'
 import { SourcePageButton } from './SourcePage.jsx'
 
 // 위치는 Jira의 "Agent sessions"(Uses AI. Verify results.), 내용 구성은 Siemens Maintenance Copilot의
@@ -12,7 +11,7 @@ const TABS = [
   { key: 'manual', label: '매뉴얼 열람' },
 ]
 
-export function AnalysisSection({ item, dispatch, me, onAnalyze, analyzing, error }) {
+export function AnalysisSection({ item, dispatch, onAnalyze, analyzing, error }) {
   const [tab, setTab] = useState('steps')
   const [open, setOpen] = useState(null)
   const a = item.analysis
@@ -39,7 +38,6 @@ export function AnalysisSection({ item, dispatch, me, onAnalyze, analyzing, erro
           <div className="ai-foot">
             <span className="ai-chip">✦ AI 생성</span>
             <button className="ghost small" disabled={!dispatch} onClick={() => dispatch({ type: 'ADD_COMMENT', id: item.id, kind: 'internal', text: a.summary })}>내부 메모로 복사</button>
-            <Rating item={item} analysis={a} dispatch={dispatch} me={me} />
           </div>
         </>}
       </div>
@@ -114,19 +112,6 @@ function EvidenceRow({ e, open, setOpen, itemId }) {
       {isOpen && <div className="evidence-body"><pre>{e.excerpt}</pre><p className="note">적용 시 주의: {e.note}</p>
         {e.ref && <SourcePageButton itemId={itemId} evidenceId={e.id} title={e.title} />}</div>}
     </li>
-  )
-}
-
-// Operators rate the analysis they reviewed. Pressing the rating again takes it back; ratings are not shown to customers.
-function Rating({ item, analysis, dispatch, me }) {
-  const feedback = analysis.feedback ?? { helpful: 0, notHelpful: 0 }
-  const mine = myRating(analysis, me)
-  const choose = (rating) => dispatch(mine === rating ? { type: 'CLEAR_RATING', id: item.id } : { type: 'RATE_ANALYSIS', id: item.id, rating })
-  return (
-    <span className="rating" role="group" aria-label="분석 평가">
-      <button className={mine === 'helpful' ? 'ghost small on' : 'ghost small'} disabled={!dispatch} aria-pressed={mine === 'helpful'} aria-label="도움이 됨" onClick={() => choose('helpful')}>👍 <span>{feedback.helpful}</span></button>
-      <button className={mine === 'not_helpful' ? 'ghost small on' : 'ghost small'} disabled={!dispatch} aria-pressed={mine === 'not_helpful'} aria-label="도움이 안 됨" onClick={() => choose('not_helpful')}>👎 <span>{feedback.notHelpful}</span></button>
-    </span>
   )
 }
 

@@ -527,7 +527,7 @@ test('operator queue: counts per status, search, every filter, empty state and n
 // Operator detail: AI panels, evidence, department proposals, notes, approval, department inbox
 // ---------------------------------------------------------------------------------------------------------------
 
-test('operator detail: AI tabs and evidence, original pages, ratings, notes, department proposals and reset', async ({ browser }) => {
+test('operator detail: AI tabs and evidence, original pages, notes, department proposals and reset', async ({ browser }) => {
   const customer = await session(browser, process.env.E2E_CUSTOMER, 'portal')
   const staff = await session(browser, process.env.E2E_STAFF, 'cases')
   const id = await createRequest(customer.page, { message: 'ATC 교환 중 정지합니다. 화면 점검용.', name: '상세 점검' })
@@ -597,29 +597,9 @@ test('operator detail: AI tabs and evidence, original pages, ratings, notes, dep
   await page.keyboard.press('Escape')
   await page.unroute('**/evidence/E1/page')
 
-  // Rating: pressing sets it, another rating replaces it, pressing again takes it back. It is durable and operator-only.
-  const up = page.getByRole('button', { name: '도움이 됨', exact: true })
-  const down = page.getByRole('button', { name: '도움이 안 됨', exact: true })
-  await expect(up).toBeEnabled()
-  await expect(up).toHaveAttribute('aria-pressed', 'false')
-  await up.click()
-  await expect(up).toHaveAttribute('aria-pressed', 'true')
-  await expect(up).toContainText('1')
-  await page.reload()
-  await expect(page.getByRole('button', { name: '도움이 됨', exact: true })).toHaveAttribute('aria-pressed', 'true')
-  await down.click()
-  await expect(up).toHaveAttribute('aria-pressed', 'false')
-  await expect(down).toHaveAttribute('aria-pressed', 'true')
-  await expect(up).toContainText('0')
-  await expect(down).toContainText('1')
-  expect((await serverItem(page, id)).analysis.feedback.ratings).toEqual([{ by: process.env.E2E_STAFF, rating: 'not_helpful' }])
-  await down.click()
-  await expect(down).toHaveAttribute('aria-pressed', 'false')
-  await expect(down).toContainText('0')
-  expect((await serverItem(page, id)).analysis.feedback).toEqual({ helpful: 0, notHelpful: 0, ratings: [] })
-  await up.click()  // leave one rating so the customer check below proves it stays internal
-  await expect(up).toHaveAttribute('aria-pressed', 'true')
-  expect(JSON.stringify(await serverItem(customer.page, id))).not.toContain('feedback')
+  // The AI answer cannot be rated: no rating buttons, and nothing rating-related is stored with the analysis.
+  for (const name of ['도움이 됨', '도움이 안 됨']) await expect(page.getByRole('button', { name, exact: true })).toHaveCount(0)
+  expect(await serverItem(page, id)).not.toHaveProperty('analysis.feedback')
   await expect(page.getByText('지식 근거', { exact: true })).toBeVisible()
   await expect(page.getByText('2건 (매뉴얼 1, 과거 사례 1)', { exact: true })).toBeVisible()
 

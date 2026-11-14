@@ -8,12 +8,12 @@ def exists(connection, table):
     return connection.execute('SELECT to_regclass(%s)', (f'public.{table}',)).fetchone()[0] is not None
 
 
-@pytest.mark.parametrize('table', ['agent_run', 'agent_run_asset'])
+@pytest.mark.parametrize('table', ['agent_run', 'agent_run_asset', 'service_analysis_feedback'])
 def test_the_retired_agent_run_store_is_gone(test_db, table):
     assert not exists(test_db, table)
 
 
-@pytest.mark.parametrize('table', ['service_request', 'service_analysis', 'service_analysis_feedback', 'service_work',
+@pytest.mark.parametrize('table', ['service_request', 'service_analysis', 'service_work',
                                    'rag_document', 'rag_page', 'rag_case', 'app_user'])
 def test_what_the_product_uses_is_still_there(test_db, table):
     assert exists(test_db, table)

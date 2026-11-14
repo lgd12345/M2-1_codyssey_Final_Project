@@ -304,5 +304,4 @@ input:not([type='checkbox']), select, textarea { border-radius: 8px; }
 .results td:has(> .title-link) { white-space: normal; min-width: 14em; }
 .source-page { display: block; max-width: 100%; height: auto; margin: 0 auto; border: 1px solid var(--border); }
 .modal:has(.source-page) { width: min(960px, 100%); }
-.rating { display: inline-flex; align-items: center; gap: 0.15rem; }
 .source-page[hidden] { display: none; }

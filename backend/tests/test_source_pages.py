@@ -1,4 +1,4 @@
-"""AI answer feedback and original manual pages: real sessions, CSRF, authorization and PostgreSQL.
+"""Original manual pages behind citations: real sessions, CSRF, authorization and PostgreSQL.
 
 The model runner and the PDF renderer are controlled doubles. Run ONLY through scripts/test_isolated.py.
 """
@@ -41,100 +41,6 @@ def renderer():
 
     yield install
     app.dependency_overrides.pop(get_page_renderer, None)
-
-
-def put_rating(clients, who, identity, rating):
-    return clients[who].put(f'{BASE}/{identity}/analysis/feedback', json={'rating': rating})
-
-
-def mine(clients, identity):
-    return item(clients, 'staff', identity)['analysis']['feedback']
-
-
-# ---------- feedback ----------
-
-def test_operator_rating_is_stored_replaced_and_cleared_per_person(setup, use_runner):
-    clients, equipment = setup
-    use_runner(Runner(result_with_ref()))
-    identity = reviewed(clients, equipment)
-    login = clients['staff'].get('/api/v1/auth/me').json()['user']['login_id']
-    assert item(clients, 'staff', identity)['analysis']['feedback'] == {'helpful': 0, 'notHelpful': 0, 'ratings': []}
-
-    saved = put_rating(clients, 'staff', identity, 'helpful')
-    assert saved.status_code == 200
-    assert saved.json()['analysis']['feedback'] == {'helpful': 1, 'notHelpful': 0, 'ratings': [{'by': login, 'rating': 'helpful'}]}
-    assert mine(clients, identity)['helpful'] == 1  # durable, not just echoed
-
-    switched = put_rating(clients, 'staff', identity, 'not_helpful').json()['analysis']['feedback']
-    assert switched == {'helpful': 0, 'notHelpful': 1, 'ratings': [{'by': login, 'rating': 'not_helpful'}]}  # one rating per person
-
-    cleared = clients['staff'].delete(f'{BASE}/{identity}/analysis/feedback')
-    assert cleared.status_code == 200 and cleared.json()['analysis']['feedback'] == {'helpful': 0, 'notHelpful': 0, 'ratings': []}
-    assert clients['staff'].delete(f'{BASE}/{identity}/analysis/feedback').status_code == 200  # clearing nothing is fine
-
-
-def test_rating_input_and_state_are_validated(setup, use_runner):
-    clients, equipment = setup
-    use_runner(Runner(result_with_ref()))
-    identity = reviewed(clients, equipment)
-    for bad in ('great', '', None, 1, ['helpful']):
-        assert put_rating(clients, 'staff', identity, bad).status_code == 422
-    assert clients['staff'].put(f'{BASE}/{identity}/analysis/feedback', json={'rating': 'helpful', 'extra': 1}).status_code == 422
-    assert put_rating(clients, 'staff', 'CLM-999999', 'helpful').status_code == 404
-    assert put_rating(clients, 'staff', 'not-an-id', 'helpful').status_code == 404
-    fresh = submit(clients, equipment)  # filed but never analysed: nothing to rate
-    answer = put_rating(clients, 'staff', fresh, 'helpful')
-    assert answer.status_code == 409 and answer.json()['code'] == 'NO_ANALYSIS'
-
-
-def test_only_operators_with_session_csrf_and_origin_can_rate_and_customers_never_see_ratings(setup, use_runner):
-    clients, equipment = setup
-    use_runner(Runner(result_with_ref()))
-    identity = reviewed(clients, equipment)
-    assert put_rating(clients, 'staff', identity, 'helpful').status_code == 200
-    for who in ('alice', 'colleague', 'bob', 'unassigned'):
-        assert put_rating(clients, who, identity, 'not_helpful').status_code == 403
-        assert clients[who].delete(f'{BASE}/{identity}/analysis/feedback').status_code == 403
-    anonymous = TestClient(app)
-    assert anonymous.put(f'{BASE}/{identity}/analysis/feedback', json={'rating': 'helpful'}).status_code == 401
-    with TestClient(app, cookies=clients['staff'].cookies) as no_csrf:
-        assert no_csrf.put(f'{BASE}/{identity}/analysis/feedback', json={'rating': 'helpful'},
-                           headers={'Origin': 'http://testserver'}).status_code == 403
-    assert clients['staff'].put(f'{BASE}/{identity}/analysis/feedback', json={'rating': 'helpful'},
-                                headers={'Origin': 'https://evil.example'}).status_code == 403
-    assert mine(clients, identity)['helpful'] == 1  # none of the refused calls changed anything
-    for who in ('alice', 'colleague'):
-        seen = json.dumps(item(clients, who, identity), ensure_ascii=False)
-        assert 'feedback' not in seen and 'helpful' not in seen.lower() and 'ratings' not in seen
-
-
-def test_a_new_analysis_starts_without_the_previous_ratings(setup, use_runner):
-    clients, equipment = setup
-    use_runner(Runner(result_with_ref()))
-    identity = reviewed(clients, equipment)
-    put_rating(clients, 'staff', identity, 'not_helpful')
-    assert post(clients, 'staff', identity, 'reanalysis').status_code in (200, 202)
-    assert mine(clients, identity) == {'helpful': 0, 'notHelpful': 0, 'ratings': []}
-    with psycopg.connect(DSN) as db:  # the earlier rating is kept with the analysis it judged
-        assert db.execute('SELECT count(*) FROM service_analysis_feedback').fetchone()[0] >= 1
-
-
-def test_without_the_feedback_table_requests_still_load_and_rating_reports_not_ready(setup, use_runner):
-    clients, equipment = setup
-    use_runner(Runner(result_with_ref()))
-    identity = reviewed(clients, equipment)
-    migration = (Path(__file__).resolve().parents[1] / 'migrations' / '015_analysis_feedback.sql').read_text(encoding='utf-8')
-    with psycopg.connect(DSN, autocommit=True) as db:
-        db.execute('DROP TABLE service_analysis_feedback')
-    try:
-        loaded = clients['staff'].get(f'{BASE}/{identity}')
-        assert loaded.status_code == 200 and loaded.json()['analysis']['feedback'] == {'helpful': 0, 'notHelpful': 0, 'ratings': []}
-        assert clients['staff'].get(BASE).status_code == 200
-        answer = put_rating(clients, 'staff', identity, 'helpful')
-        assert answer.status_code == 503 and answer.json()['code'] == 'REQUESTS_NOT_READY'
-    finally:
-        with psycopg.connect(DSN, autocommit=True) as db:
-            db.execute(migration)
 
 
 # ---------- original manual pages ----------
@@ -306,3 +212,16 @@ def test_the_original_file_is_hashed_once_while_it_is_unchanged(tmp_path, monkey
         pdf_source.render_indexed_page(digest, 4, database_url='x', connect=lambda _u: Index((str(path),)),
                                        cache_dir=tmp_path / 'cache', renderer=lambda *_: b'png')
     assert len(hashed) == 2  # a changed file is noticed
+
+
+# ---------- there is no rating of AI answers ----------
+
+@pytest.mark.parametrize('method', ['put', 'delete'])
+@pytest.mark.parametrize('who', ['alice', 'staff', 'unassigned'])
+def test_the_rating_endpoint_does_not_exist_and_analyses_carry_no_ratings(setup, use_runner, who, method):
+    clients, equipment = setup
+    use_runner(Runner(result_with_ref()))
+    identity = reviewed(clients, equipment)
+    answer = getattr(clients[who], method)(f'{BASE}/{identity}/analysis/feedback', **({'json': {'rating': 'helpful'}} if method == 'put' else {}))
+    assert answer.status_code in (404, 405)
+    assert 'feedback' not in item(clients, 'staff', identity)['analysis']
