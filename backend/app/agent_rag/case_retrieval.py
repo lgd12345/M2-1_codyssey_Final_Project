@@ -1,6 +1,7 @@
 """Hybrid search over past service cases: keyword + trigram + vector fused with reciprocal-rank fusion."""
 from __future__ import annotations
 
+import re
 from typing import Any, Callable, Sequence
 
 from app.agent_rag.cases import normalize_part_no
@@ -134,3 +135,38 @@ def search_cases(query: str, *, machines: Sequence[str] | None = None, top_k: in
             except Exception:
                 connection.rollback()
             connection.close()
+
+
+_FSR_NO = re.compile(r"FSR-[0-9]{1,12}")
+MAX_HANDLERS = 10
+
+
+def lookup_case(fsr_no: str, *, connection=None, database_url: str | None = None,
+                connect: Callable[..., Any] = connect_database) -> dict[str, Any]:
+    """Exact lookup of one past case by its FSR number (the primary or any merged duplicate) with who handled it.
+
+    Never matches by similarity or by worker: a number that is not stored is reported as not found.
+    """
+    value = normalize_text(fsr_no).upper()
+    if not _FSR_NO.fullmatch(value):
+        return {"found": False, "fsr_no": normalize_text(fsr_no)[:40], "status": "invalid_fsr_no"}
+    own = connection is None
+    connection = connection or connect(database_url)
+    try:
+        row = connection.execute(
+            "SELECT fsr_no,machine,registered_on,duplicate_fsr_nos,handlers FROM rag_case "
+            "WHERE fsr_no=%s OR %s=ANY(duplicate_fsr_nos) ORDER BY (fsr_no=%s) DESC LIMIT 1",
+            (value, value, value)).fetchone()
+    finally:
+        if own:
+            connection.rollback()
+            connection.close()
+    if row is None:
+        return {"found": False, "fsr_no": value, "status": "not_found"}
+    primary, machine, registered_on, duplicates, handlers = row
+    result = {"found": True, "fsr_no": primary, "matched_fsr_no": value, "machine": machine,
+              "registered_on": registered_on.isoformat() if registered_on else None,
+              "same_case_count": 1 + len(duplicates or []), "handlers": list(handlers)[:MAX_HANDLERS]}
+    if len(handlers) > MAX_HANDLERS:
+        result["handlers_omitted"] = len(handlers) - MAX_HANDLERS
+    return result

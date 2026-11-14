@@ -2,11 +2,13 @@
 from __future__ import annotations
 
 import csv
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 from datetime import date, timedelta
 from pathlib import Path
 import re
 from typing import Any
+
+from psycopg.types.json import Jsonb
 
 from app.agent_rag.db import connect_database
 from app.agent_rag.preprocess import lexical_text, normalize_text, stable_content_hash
@@ -14,6 +16,15 @@ from app.agent_rag.preprocess import lexical_text, normalize_text, stable_conten
 MIN_RESOLUTION_CHARS = 20   # shorter resolutions cannot tell an engineer what was done
 FULL_RESOLUTION_CHARS = 50  # at or above this a resolution is rich enough to rank normally
 _EXCEL_EPOCH = date(1899, 12, 30)
+
+
+@dataclass(frozen=True)
+class CaseHandler:
+    """Who handled one FSR. Worker IDs are pseudonymised in the source (EMP-nnnn); a blank means not recorded."""
+    fsr_no: str
+    worker: str
+    center: str   # 작업수행처명
+    branch: str   # 거점
 
 
 @dataclass(frozen=True)
@@ -39,6 +50,7 @@ class CaseRecord:
     content: str
     search_text: str
     content_hash: str
+    handlers: tuple[CaseHandler, ...] = ()
 
 
 @dataclass
@@ -81,6 +93,11 @@ def build_content(*, machine: str, symptoms: list[str], complaint: str, resoluti
     return "\n".join(lines)
 
 
+def _handler(fsr_no: str, row: dict[str, Any]) -> CaseHandler:
+    cell = lambda name: normalize_text(row.get(name, "") or "")  # noqa: E731
+    return CaseHandler(fsr_no, cell("작업자"), cell("작업수행처명"), cell("거점"))
+
+
 def load_cases(csv_path: str | Path) -> tuple[list[CaseRecord], CaseLoadStats]:
     stats = CaseLoadStats()
     kept: dict[tuple[str, str, str], dict[str, Any]] = {}
@@ -105,9 +122,11 @@ def load_cases(csv_path: str | Path) -> tuple[list[CaseRecord], CaseLoadStats]:
             key = (machine, complaint, resolution)
             if key in kept:
                 kept[key]["duplicates"].append(fsr_no)
+                kept[key]["handlers"].append(_handler(fsr_no, row))
                 stats.duplicates_merged += 1
                 continue
-            kept[key] = {"fsr_no": fsr_no, "duplicates": [], "row": row, "complaint": complaint,
+            kept[key] = {"fsr_no": fsr_no, "duplicates": [], "handlers": [_handler(fsr_no, row)],
+                         "row": row, "complaint": complaint,
                          "resolution": resolution, "machine": machine,
                          "quality": "full" if length >= FULL_RESOLUTION_CHARS else "brief"}
     records = []
@@ -131,7 +150,8 @@ def load_cases(csv_path: str | Path) -> tuple[list[CaseRecord], CaseLoadStats]:
             requested_part_no=req_no, requested_part_name=req_name,
             replacement_part_no=alt_no, replacement_part_name=alt_name,
             part_numbers=part_numbers, quality=item["quality"], content=content,
-            search_text=lexical_text(content), content_hash=stable_content_hash(content)))
+            search_text=lexical_text(content), content_hash=stable_content_hash(content),
+            handlers=tuple(item["handlers"])))
     stats.kept = len(records)
     for record in records:
         stats.by_quality[record.quality] = stats.by_quality.get(record.quality, 0) + 1
@@ -148,8 +168,8 @@ def ingest_cases(records: list[CaseRecord], *, database_url: str | None = None, 
                     """INSERT INTO rag_case(fsr_no,duplicate_fsr_nos,machine,warranty,repair_type,fault_party,
                            registered_on,symptom_major,symptom_mid,symptom_minor,complaint,resolution,
                            requested_part_no,requested_part_name,replacement_part_no,replacement_part_name,
-                           part_numbers,quality,content,search_text,content_hash)
-                       VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                           part_numbers,quality,content,search_text,content_hash,handlers)
+                       VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
                        ON CONFLICT(fsr_no) DO UPDATE SET duplicate_fsr_nos=EXCLUDED.duplicate_fsr_nos,
                          machine=EXCLUDED.machine,warranty=EXCLUDED.warranty,repair_type=EXCLUDED.repair_type,
                          fault_party=EXCLUDED.fault_party,registered_on=EXCLUDED.registered_on,
@@ -160,12 +180,13 @@ def ingest_cases(records: list[CaseRecord], *, database_url: str | None = None, 
                          replacement_part_no=EXCLUDED.replacement_part_no,
                          replacement_part_name=EXCLUDED.replacement_part_name,
                          part_numbers=EXCLUDED.part_numbers,quality=EXCLUDED.quality,content=EXCLUDED.content,
-                         search_text=EXCLUDED.search_text,content_hash=EXCLUDED.content_hash""",
+                         search_text=EXCLUDED.search_text,content_hash=EXCLUDED.content_hash,
+                         handlers=EXCLUDED.handlers""",
                     (r.fsr_no, list(r.duplicate_fsr_nos), r.machine, r.warranty, r.repair_type, r.fault_party,
                      r.registered_on, r.symptom_major, r.symptom_mid, r.symptom_minor, r.complaint,
                      r.resolution, r.requested_part_no, r.requested_part_name, r.replacement_part_no,
                      r.replacement_part_name, list(r.part_numbers), r.quality, r.content, r.search_text,
-                     r.content_hash))
+                     r.content_hash, Jsonb([asdict(h) for h in r.handlers])))
             connection.execute("DELETE FROM rag_case WHERE NOT (fsr_no = ANY(%s))",
                                ([r.fsr_no for r in records],))
         return len(records)
