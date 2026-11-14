@@ -4,7 +4,7 @@ import { customerEvents } from '../domain/actions.js'
 import { formatDate, formatTime } from '../ui.jsx'
 import { SourcePageButton } from './SourcePage.jsx'
 
-const TONE = { 접수됨: 'neutral', '확인 중': 'blue', '정보 요청': 'yellow', '처리 중': 'blue', 완료: 'green' }
+const TONE = { 접수됨: 'neutral', '확인 중': 'blue', '처리 중': 'blue', 완료: 'green' }
 const TABS = [['history', '이력'], ['guides', '기술 가이드']]
 
 // TRUMPF 서비스 케이스 상세: 요청 번호·접수자·접수일·기계·설명과 기술 가이드·이력 탭.
@@ -16,7 +16,6 @@ export function PortalDetail({ item }) {
   const status = customerStatus(item)
   const done = status === '완료'
   const guides = item.guides ?? []
-  const lastAsk = [...item.comments].reverse().find((c) => c.kind === 'public')
   const events = customerEvents(item)
 
   return (
@@ -36,12 +35,6 @@ export function PortalDetail({ item }) {
         </div>
       </div>
 
-      {status === '정보 요청' && lastAsk && (
-        <div className="notice warn" role="status">
-          <strong>서비스 담당자가 추가 정보를 요청했습니다.</strong>
-          <p>{lastAsk.text}</p>
-        </div>
-      )}
       {done && <div className="notice ok" role="status"><strong>이 서비스 요청은 완료되었습니다.</strong>{item.resolution?.note && <p>{item.resolution.note}</p>}</div>}
 
       <div className="quick" role="tablist" aria-label="요청 상세">

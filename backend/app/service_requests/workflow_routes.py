@@ -39,6 +39,10 @@ class CommentIn(Input):
     text: str = Field(min_length=1, max_length=4000)
 
 
+class AdditionalInfoIn(Input):
+    text: str = Field(min_length=1, max_length=2000)
+
+
 class DeclineIn(Input):
     reason: str = Field(min_length=1, max_length=2000)
 
@@ -78,6 +82,14 @@ def add_comment(identity: str, body: CommentIn, session: SessionInfo = Depends(r
     number = request_number(identity)
     with request_database() as connection:
         workflow.comment(connection, number, session.user, body.kind, body.text)
+        return _operator_item(connection, number)
+
+
+@router.post('/{identity}/additional-info', status_code=201)
+def add_additional_info(identity: str, body: AdditionalInfoIn, session: SessionInfo = Depends(require_operator_csrf)):
+    number = request_number(identity)
+    with request_database() as connection:
+        workflow.add_additional_info(connection, number, session.user, body.text)
         return _operator_item(connection, number)
 
 

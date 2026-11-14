@@ -403,12 +403,12 @@ def test_insufficient_evidence_is_handled_by_operators_who_may_ask_publicly_and_
     identity = reviewed(clients, equipment)
     staff_view = item(clients, 'staff', identity)
     assert staff_view['status'] == '추가 정보 필요' and staff_view['revision'] == 1
-    assert item(clients, 'alice', identity)['status'] == '정보 요청'
+    assert item(clients, 'alice', identity)['status'] == '확인 중'
     assert post(clients, 'staff', identity, 'comments', kind='public', text='알람 번호를 알려주세요.').status_code == 201
     assert [c['text'] for c in item(clients, 'alice', identity)['comments']] == ['알람 번호를 알려주세요.']
     runner.result = good_result()
     assert post(clients, 'staff', identity, 'reanalysis').status_code == 202
-    assert len(runner.inputs) == 2 and 'additional_info' not in runner.inputs[1] and 'contact' not in runner.inputs[1]
+    assert len(runner.inputs) == 2 and runner.inputs[1]['additional_info'] == [] and 'contact' not in runner.inputs[1]
     after = item(clients, 'staff', identity)
     assert after['status'] == '검토 대기' and after['revision'] == 2
     assert item(clients, 'alice', identity)['status'] == '확인 중'

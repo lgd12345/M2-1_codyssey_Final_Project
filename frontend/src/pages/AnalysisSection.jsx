@@ -1,6 +1,7 @@
 import React, { useState } from 'react'
-import { analysisRunNotice, canStartAnalysis, identifierCheckLine, isAnalysisRunning } from '../domain/workflow.js'
+import { analysisRunNotice, canStartAnalysis, canAddInfo, identifierCheckLine, isAnalysisRunning } from '../domain/workflow.js'
 import { SourcePageButton } from './SourcePage.jsx'
+import { formatTime } from '../ui.jsx'
 
 // 위치는 Jira의 "Agent sessions"(Uses AI. Verify results.), 내용 구성은 Siemens Maintenance Copilot의
 // 4개 메뉴(Troubleshooting steps / Check maintenance history / Find recommended spare parts / Access repair manual)를 따른다.
@@ -40,6 +41,7 @@ export function AnalysisSection({ item, dispatch, onAnalyze, analyzing, error })
             {tab === 'parts' && <Parts a={a} />}
             {tab === 'manual' && <Manual a={a} open={open} setOpen={setOpen} itemId={item.id} />}
           </div>
+          <AdditionalInfo item={item} dispatch={dispatch} />
           <div className="ai-foot">
             <span className="ai-chip">✦ AI 생성</span>
             <button className="ghost small" disabled={!dispatch} onClick={() => dispatch({ type: 'ADD_COMMENT', id: item.id, kind: 'internal', text: a.summary })}>내부 메모로 복사</button>
@@ -47,6 +49,33 @@ export function AnalysisSection({ item, dispatch, onAnalyze, analyzing, error })
         </>}
       </div>
     </section>
+  )
+}
+
+// What the operator learned by phone or on site. It is not shown to customers and feeds the next analysis.
+function AdditionalInfo({ item, dispatch }) {
+  const [text, setText] = useState('')
+  const notes = item.additionalInfo ?? []
+  const can = Boolean(dispatch) && canAddInfo(item)
+  if (!can && notes.length === 0) return null
+  return (
+    <div className="additional-info">
+      <h3>추가 정보</h3>
+      {notes.length > 0 && (
+        <ul className="info-notes" aria-label="운영진이 입력한 추가 정보">
+          {notes.map((note) => <li key={note.id}><span className="muted small">{note.by} · {formatTime(note.at)}</span><p>{note.text}</p></li>)}
+        </ul>
+      )}
+      {can && (
+        <>
+          <p className="muted small">전화·현장 확인 등 앱 밖에서 알게 된 내용을 입력하면 다음 재분석에 반영됩니다. 고객에게는 표시되지 않습니다.</p>
+          <textarea rows={3} maxLength={2000} value={text} aria-label="추가 정보 입력" onChange={(e) => setText(e.target.value)} />
+          <div className="actions">
+            <button className="primary" disabled={!text.trim()} onClick={() => { dispatch({ type: 'ADD_INFO', id: item.id, text }); setText('') }}>추가 정보 저장</button>
+          </div>
+        </>
+      )}
+    </div>
   )
 }
 
@@ -69,7 +98,7 @@ function Steps({ a }) {
       )}
       <h3>점검 순서</h3>
       <ol className="steps-list">{a.steps.map((s) => <li key={s}>{s}</li>)}</ol>
-      {a.questions.length > 0 && (<><h3>추가 확인이 필요한 사항</h3><ul className="questions">{a.questions.map((q) => <li key={q}>{q}</li>)}</ul></>)}
+      {a.questions.length > 0 && (<><h3>운영진이 확인할 사항</h3><ul className="questions">{a.questions.map((q) => <li key={q}>{q}</li>)}</ul></>)}
     </>
   )
 }

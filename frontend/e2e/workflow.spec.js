@@ -143,33 +143,45 @@ test('decline keeps its reason internal and re-analysis restores a reviewable re
   await staff.context.close()
 })
 
-test('insufficient evidence is handled by the operator, who asks publicly and re-analyses', async ({ browser }) => {
+test('insufficient evidence: questions are for operators, who add information they gathered and re-analyse', async ({ browser }) => {
   const customer = await newContext(browser, process.env.E2E_CUSTOMER, 'portal')
   const staff = await newContext(browser, process.env.E2E_STAFF, 'cases')
   const id = await createRequest(customer.page, '근거부족 증상 설명입니다.')
   await analyse(staff.page, id)
   await expect(statusButton(staff.page, '추가 정보 필요')).toBeVisible({ timeout: 15000 })
   await expect(staff.page.getByText('E2E 근거 부족 응답', { exact: false })).toBeVisible()
+  // The AI's questions are for the operator, who gathers the answers outside the app.
+  await expect(staff.page.getByRole('heading', { name: '운영진이 확인할 사항', exact: true })).toBeVisible()
+  await expect(staff.page.getByText('알람 번호를 알려주세요.', { exact: false })).toBeVisible()
   await staff.page.getByRole('button', { name: '고객에게 답변', exact: true }).click()
-  await staff.page.getByLabel('고객 답변', { exact: true }).fill('알람 번호를 알려 주세요.')
-  await staff.page.getByRole('button', { name: '저장', exact: true }).click()
-  await expect(staff.page.getByText('알람 번호를 알려 주세요.', { exact: false }).first()).toBeVisible()
+  await expect(staff.page.getByRole('button', { name: '추가 정보 요청', exact: true })).toHaveCount(0)  // no pre-filled question for the customer
+  await staff.page.getByRole('button', { name: '취소', exact: true }).click()
 
-  // The customer sees the request for information and how it will continue, but nothing to press.
+  // The customer is asked nothing: the request just reads as being checked.
   await customer.page.reload()
-  await expect(customer.page.getByText('서비스 담당자가 추가 정보를 요청했습니다.', { exact: false })).toBeVisible()
-  await expect(customer.page.getByText('알람 번호를 알려 주세요.', { exact: false }).first()).toBeVisible()
-  await expect(customer.page.getByRole('tab', { name: '연락처', exact: true })).toHaveCount(0)
-  await expect(customer.page.getByText('정보 요청', { exact: true }).first()).toBeVisible()
+  await expect(customer.page.getByText('확인 중', { exact: true }).first()).toBeVisible()
+  await expect(customer.page.getByText('정보 요청', { exact: true })).toHaveCount(0)
+  await expect(customer.page.getByText('서비스 담당자가 추가 정보를 요청했습니다.', { exact: false })).toHaveCount(0)
+  await expect(customer.page.getByText('알람 번호를 알려주세요.', { exact: false })).toHaveCount(0)
   await noFollowUp(customer.page)
 
-  // The operator re-analyses on their own decision (the customer's request is not an automatic trigger).
+  // The operator enters what they learned by phone or on site; it is recorded with who and when.
+  const note = '전화 확인: 알람 2023이 스핀들 정지 직후 발생'
+  await staff.page.getByLabel('추가 정보 입력', { exact: true }).fill(note)
+  await staff.page.getByRole('button', { name: '추가 정보 저장', exact: true }).click()
+  const entry = staff.page.getByRole('list', { name: '운영진이 입력한 추가 정보' }).getByRole('listitem')
+  await expect(entry).toHaveCount(1)
+  await expect(entry).toContainText(note)
+  await expect(entry).toContainText(process.env.E2E_STAFF)
+  await expect(staff.page.getByText('추가 정보 입력', { exact: false }).first()).toBeVisible()  // history
+
+  // Re-analysis is the operator's own decision and now receives the information.
   await statusButton(staff.page, '추가 정보 필요').click()
   await staff.page.getByRole('menuitem', { name: '재분석 요청', exact: true }).click()
   await expect(statusButton(staff.page, '검토 대기')).toBeVisible({ timeout: 15000 })
-  await expect(staff.page.getByText('재분석 1회', { exact: false })).toBeVisible()
+  await expect(staff.page.getByText('추가 정보 1건 반영', { exact: false })).toBeVisible()
   await customer.page.reload()
-  await expect(customer.page.getByText('확인 중', { exact: true }).first()).toBeVisible()
+  await expect(customer.page.getByText(note, { exact: false })).toHaveCount(0)
   await customer.context.close()
   await staff.context.close()
 })

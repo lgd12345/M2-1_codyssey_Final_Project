@@ -6,7 +6,7 @@ import { formatDate } from '../ui.jsx'
 import { NewCaseModal } from './NewCaseModal.jsx'
 
 const unique = (items) => [...new Set(items)]
-const TONE = { 접수됨: 'neutral', '확인 중': 'blue', '정보 요청': 'yellow', '처리 중': 'blue', 완료: 'green' }
+const TONE = { 접수됨: 'neutral', '확인 중': 'blue', '처리 중': 'blue', 완료: 'green' }
 const COLUMNS = [
   ['machine', '기계'], ['status', '상태'], ['type', '유형'], ['id', '요청 번호'], ['creator', '접수자'], ['createdAt', '접수일'],
 ]

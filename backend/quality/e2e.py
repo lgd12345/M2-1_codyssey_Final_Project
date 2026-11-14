@@ -12,10 +12,10 @@ from typing import Any, Callable, Mapping
 
 from quality.scoring import Case, Check, case_passed, score
 
-CUSTOMER_STATUS = {'접수됨', '확인 중', '정보 요청', '처리 중', '완료'}
-INTERNAL_FIELDS = ('analysis', 'analysisRun', 'departments', 'linked', 'approval', 'assignee', 'revision')
+CUSTOMER_STATUS = {'접수됨', '확인 중', '처리 중', '완료'}
+INTERNAL_FIELDS = ('analysis', 'analysisRun', 'departments', 'linked', 'approval', 'assignee', 'revision', 'additionalInfo')
 EXPECTED_REQUEST_STATUS = {'answered': '검토 대기', 'insufficient_evidence': '추가 정보 필요'}
-EXPECTED_CUSTOMER_STATUS = {'answered': '확인 중', 'insufficient_evidence': '정보 요청'}
+EXPECTED_CUSTOMER_STATUS = {'answered': '확인 중', 'insufficient_evidence': '확인 중'}
 
 
 def customer_leaks(item: Mapping[str, Any]) -> list[str]:

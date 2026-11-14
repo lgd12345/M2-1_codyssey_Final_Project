@@ -9,7 +9,7 @@ from app.service_requests import analysis as analysis_flow
 
 DEPARTMENT_NAMES = {'service': '서비스', 'quality': '품질', 'parts': '부품·자재', 'sales': '영업'}
 CUSTOMER_STATUS = {'접수됨': '접수됨', '분석 중': '접수됨', '검토 대기': '확인 중', '반려됨': '확인 중',
-                   '추가 정보 필요': '정보 요청', '처리 중': '처리 중', '종결': '완료'}
+                   '추가 정보 필요': '확인 중', '처리 중': '처리 중', '종결': '완료'}
 RECEIVED_PUBLIC = '서비스 요청이 접수되었습니다.'
 
 LATEST_RUN = '''SELECT r.*, creator.login_id AS creator_login, run.status AS run_status, run.error_code AS run_error, ok.result AS ok_result
@@ -30,7 +30,7 @@ def _group(rows, key='request_id'):
 
 def load_related(connection, ids: list[int], *, staff: bool) -> dict[str, dict[int, list[dict[str, Any]]]]:
     if not ids:
-        return {'comments': {}, 'history': {}, 'departments': {}, 'works': {}}
+        return {'comments': {}, 'history': {}, 'departments': {}, 'works': {}, 'info': {}}
     with connection.cursor(row_factory=dict_row) as cursor:
         kinds = ['internal', 'public'] if staff else ['public']
         comments = cursor.execute(
@@ -39,12 +39,14 @@ def load_related(connection, ids: list[int], *, staff: bool) -> dict[str, dict[i
         history = cursor.execute(
             f"SELECT * FROM service_history WHERE request_id=ANY(%s) {'' if staff else 'AND public_text IS NOT NULL'} ORDER BY at,id",
             (ids,)).fetchall()
-        departments = works = []
+        departments = works = info = []
         if staff:
+            info = cursor.execute('SELECT * FROM service_additional_info WHERE request_id=ANY(%s) ORDER BY created_at,id',
+                                  (ids,)).fetchall()
             departments = cursor.execute('SELECT * FROM service_request_department WHERE request_id=ANY(%s)', (ids,)).fetchall()
             works = cursor.execute('SELECT * FROM service_work WHERE request_id=ANY(%s) ORDER BY created_at,dept', (ids,)).fetchall()
     return {'comments': _group(comments), 'history': _group(history), 'departments': _group(departments),
-            'works': _group(works)}
+            'works': _group(works), 'info': _group(info)}
 
 
 def _iso(value) -> str | None:
@@ -90,6 +92,8 @@ def serialize(row: dict[str, Any], related: dict[str, dict[int, list[dict[str, A
         comments=[{'id': str(c['id']), 'by': c['author'], 'kind': c['kind'], 'text': c['text'], 'at': _iso(c['created_at'])}
                   for c in comments],
         history=[{'at': created, 'text': '접수'}] + [{'at': _iso(h['at']), 'text': h['text']} for h in history],
+        additionalInfo=[{'id': str(n['id']), 'by': n['author'], 'text': n['text'], 'at': _iso(n['created_at'])}
+                        for n in related['info'].get(number, [])],
         resolution=row['resolution'], assignee=row['assignee'], revision=row['revision'], approval=row['approval'],
         analysis=analysis_flow.analysis_view(ok) if ok else None,
         analysisRun={'status': row['run_status'], 'errorCode': row['run_error']} if row.get('run_status') else None,

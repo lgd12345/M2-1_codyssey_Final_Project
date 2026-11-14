@@ -25,7 +25,8 @@ async def controlled_model(request):
         return {'status': 'insufficient_evidence', 'summary': 'E2E 근거 부족 응답', 'causes': [], 'steps': [],
                 'questions': ['알람 번호를 알려주세요.'], 'parts': [], 'evidence': [], 'departments': [], 'case_search': 'ok'}
     return {
-        'status': 'answered', 'summary': 'E2E 통제된 분석 응답: ' + request['machine'],
+        'status': 'answered', 'summary': 'E2E 통제된 분석 응답: ' + request['machine']
+        + (f" · 추가 정보 {len(request['additional_info'])}건 반영" if request.get('additional_info') else ''),
         'causes': [{'title': 'ATC 암 구동 불량', 'level': '높음', 'detail': '교환 중 정지 증상', 'evidence': ['E1', 'E2']}],
         'steps': ['알람 이력 확인', 'ATC 암 점검'], 'questions': ['정지 위치를 알려주세요.'],
         'parts': [{'name': 'ATC 암 모터', 'note': '마모 시 교체', 'source': 'E2E 매뉴얼 p.45'}],

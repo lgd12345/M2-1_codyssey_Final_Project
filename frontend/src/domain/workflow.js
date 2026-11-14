@@ -5,6 +5,8 @@ export const STATUSES = ['접수됨', '분석 중', '검토 대기', '추가 정
 export const WORK_STATUSES = ['전달됨', '진행 중', '완료']
 export const isEditable = item => ['검토 대기', '추가 정보 필요'].includes(item.status)
 export const canReanalyze = item => ['검토 대기', '추가 정보 필요', '반려됨'].includes(item.status)
+// Information gathered outside the app feeds the next analysis, so it can be added exactly while re-analysis is possible.
+export const canAddInfo = canReanalyze
 export const allWorkDone = item => item.linked.length > 0 && item.linked.every(work => work.status === '완료')
 export const canResolve = item => item.status === '처리 중' && allWorkDone(item)
 export const canStartAnalysis = item => Boolean(item) && item.status === '접수됨'
@@ -28,7 +30,7 @@ export function canApprove(item) {
   return selected.length > 0 && selected.every(department => department.draft.trim().length > 0)
 }
 export const statusCounts = cases => Object.fromEntries(STATUSES.map(status => [status, cases.filter(item => item.status === status).length]))
-const CUSTOMER_STATUS = { '접수됨': '접수됨', '분석 중': '접수됨', '검토 대기': '확인 중', '반려됨': '확인 중', '추가 정보 필요': '정보 요청', '처리 중': '처리 중', '종결': '완료' }
+const CUSTOMER_STATUS = { '접수됨': '접수됨', '분석 중': '접수됨', '검토 대기': '확인 중', '반려됨': '확인 중', '추가 정보 필요': '확인 중', '처리 중': '처리 중', '종결': '완료' }
 export const customerStatus = item => CUSTOMER_STATUS[item.status] ?? item.status
 export function workItems(cases, deptKey) {
   const name = DEPARTMENTS.find(department => department.key === deptKey)?.name

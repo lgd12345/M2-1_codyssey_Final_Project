@@ -82,6 +82,7 @@ def test_only_current_screen_and_analysis_routes_remain():
         ("POST", "/api/v1/service-requests/{identity}/approval"),
         ("POST", "/api/v1/service-requests/{identity}/decline"),
         ("POST", "/api/v1/service-requests/{identity}/reanalysis"),
+        ("POST", "/api/v1/service-requests/{identity}/additional-info"),
         ("PATCH", "/api/v1/service-requests/{identity}/departments/{key}"),
         ("POST", "/api/v1/service-requests/{identity}/work/{work_key}/assignee"),
         ("POST", "/api/v1/service-requests/{identity}/work/{work_key}/start"),

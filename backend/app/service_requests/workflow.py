@@ -96,6 +96,16 @@ def comment(connection, number: int, actor, kind: str, text: str) -> None:
     add_comment(connection, number, actor, kind, text)
 
 
+def add_additional_info(connection, number: int, actor, text: str) -> None:
+    """Operator-entered facts from outside the app. Only while the request can still be analysed again."""
+    row = lock(connection, number)
+    if row['status'] not in REANALYZABLE:
+        raise InvalidState()
+    connection.execute('INSERT INTO service_additional_info(request_id,author_id,author,text) VALUES (%s,%s,%s,%s)',
+                       (number, actor.id, actor.login_id, text))
+    add_history(connection, number, f'추가 정보 입력 · {actor.login_id}')  # internal only: no public wording
+
+
 def approve(connection, number: int, actor) -> None:
     row = lock(connection, number)
     departments = _departments(connection, number)

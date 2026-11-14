@@ -21,6 +21,7 @@ export function requestFor(action, item) {
     case 'REANALYZE': return post(`${base}/reanalysis`, undefined, 'accepted')
     case 'ASSIGN': return post(`${base}/assignee`)
     case 'ADD_COMMENT': return post(`${base}/comments`, { kind: action.kind, text: action.text })
+    case 'ADD_INFO': return post(`${base}/additional-info`, { text: action.text })
     case 'APPROVE': return post(`${base}/approval`)
     case 'DECLINE': return post(`${base}/decline`, { reason: action.reason })
     case 'TOGGLE_DEPT': {

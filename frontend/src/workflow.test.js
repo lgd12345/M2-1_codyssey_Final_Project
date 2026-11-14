@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { analysisRunNotice, canApprove, canReanalyze, canStartAnalysis, isAnalysisRunning, canResolve, customerStatus, isEditable, isEdited, statusCounts, workItems, identifierCheckLine } from './domain/workflow.js'
+import { analysisRunNotice, canApprove, canReanalyze, canStartAnalysis, isAnalysisRunning, canResolve, customerStatus, isEditable, isEdited, statusCounts, workItems, identifierCheckLine, canAddInfo } from './domain/workflow.js'
 
 const request = (extra = {}) => ({ id: 'CLM-1000', status: '검토 대기', analysis: { summary: '실제 분석 결과' },
   departments: [{ key: 'service', selected: true, aiDraft: '원본', draft: '원본' }], linked: [], ...extra })
@@ -40,7 +40,7 @@ test('closing requires processing state and at least one linked work, all comple
 })
 test('public status projection does not expose internal review and decline states', () => {
   const states = ['접수됨', '분석 중', '검토 대기', '추가 정보 필요', '반려됨', '처리 중', '종결']
-  assert.deepEqual(states.map(status => customerStatus({ status })), ['접수됨', '접수됨', '확인 중', '정보 요청', '확인 중', '처리 중', '완료'])
+  assert.deepEqual(states.map(status => customerStatus({ status })), ['접수됨', '접수됨', '확인 중', '확인 중', '확인 중', '처리 중', '완료'])  // nothing is ever asked of the customer
 })
 test('department work lists contain only work actually returned by the server', () => {
   assert.deepEqual(workItems([], 'sales'), [])
@@ -90,4 +90,9 @@ test('identifier checks read as one line each and never call a miss a verified a
   assert.equal(line('pmc_address', 'check_failed'), 'PMC 주소 2023: 조회하지 못함')
   assert.equal(line('drawing_no', 'found', 'agent'), '도면번호 2023: 색인된 매뉴얼에서 찾음 (AI 추가 조회)')
   assert.equal(line('mystery', 'found'), '식별자 2023: 색인된 매뉴얼에서 찾음')
+})
+
+test('operators can add information only while the request can still be analysed again', () => {
+  const states = ['접수됨', '분석 중', '검토 대기', '추가 정보 필요', '반려됨', '처리 중', '종결']
+  assert.deepEqual(states.map(status => canAddInfo({ status })), [false, false, true, true, true, false, false])
 })

@@ -308,3 +308,9 @@ input:not([type='checkbox']), select, textarea { border-radius: 8px; }
 .identifier-checks { list-style: none; margin: 0 0 0.7rem; padding: 0; font-size: 0.86rem; display: grid; gap: 0.15rem; }
 .identifier-checks li::before { content: '✓ '; color: var(--green-fg); }
 .identifier-checks li.not_found::before, .identifier-checks li.check_failed::before { content: '! '; color: var(--yellow-fg); }
+
+.additional-info { margin-top: 1rem; display: grid; gap: 0.4rem; }
+.additional-info textarea { width: 100%; }
+.info-notes { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.4rem; }
+.info-notes li { border-left: 3px solid var(--blue-fg, #0052cc); padding-left: 0.6rem; }
+.info-notes p { margin: 0.1rem 0 0; white-space: pre-wrap; }

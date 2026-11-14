@@ -9,10 +9,8 @@ export function Activity({ item, dispatch, me }) {
   const [show, setShow] = useState('all')
   const [mode, setMode] = useState(null) // 'internal' | 'public'
   const [text, setText] = useState('')
-  const a = item.analysis
 
   const pills = mode === 'public' ? [
-    item.status === '추가 정보 필요' && a?.questions.length ? { label: '추가 정보 요청', text: `안녕하세요. 정확한 확인을 위해 아래 내용을 알려 주세요.\n${a.questions.map((q) => `- ${q}`).join('\n')}` } : null,
     { label: '후속 연락', text: '안녕하세요. 접수하신 건의 진행 상황을 안내드립니다. 추가로 확인이 필요한 내용이 있으면 연락드리겠습니다.' },
   ].filter(Boolean) : []
 
