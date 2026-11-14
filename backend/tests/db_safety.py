@@ -36,3 +36,30 @@ def require_disposable_test_database(url: str) -> None:
     if not is_disposable_test_database(url):
         raise RuntimeError('refusing to run destructive tests: the database is not a disposable one created by '
                            'scripts/test_isolated.py')
+
+
+def assign_worker_database(environment: MutableMapping[str, str]) -> None:
+    """Point this test process at ITS disposable database.
+
+    The runner creates one rag_regression_<hex>_test database per worker and lists them in REGRESSION_DATABASES (JSON).
+    Parallel workers must never share a database: the tests TRUNCATE tables. Without that variable (not started by the
+    runner) nothing is changed here, and guard_test_database still decides whether database tests may run at all.
+    """
+    import json
+    import os
+
+    raw = environment.get('REGRESSION_DATABASES', '')
+    if not raw:
+        return
+    try:
+        urls = json.loads(raw)
+    except ValueError:
+        raise RuntimeError('REGRESSION_DATABASES is not valid JSON') from None
+    if not isinstance(urls, list) or not urls or not all(isinstance(u, str) and is_disposable_test_database(u) for u in urls):
+        raise RuntimeError('REGRESSION_DATABASES must list only disposable databases created by scripts/test_isolated.py')
+    worker = environment.get('PYTEST_XDIST_WORKER', 'gw0')
+    index = int(worker[2:]) if re.fullmatch(r'gw\d+', worker) else 0
+    if index >= len(urls):
+        raise RuntimeError('more workers than disposable databases')
+    environment['TEST_DATABASE_URL'] = urls[index]
+    environment['DATABASE_URL'] = urls[index]  # the application under test uses the same disposable database
