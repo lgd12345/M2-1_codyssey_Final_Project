@@ -94,9 +94,13 @@ def compact_manual(raw: dict[str, Any], query: str, policy: ContextPolicy) -> di
     for result in raw['results']:
         sources = result['sources']
         text = result['content']
+        excerpt_query = raw['search_status'].get('symptom_query', query) if result.get('match_type') == 'symptom_context' else query
         entry: dict[str, Any] = {
-            'excerpt': make_excerpt(text, query, policy.excerpt_chars), 'excerpt_truncated': len(text) > policy.excerpt_chars,
+            'excerpt': make_excerpt(text, excerpt_query, policy.excerpt_chars), 'excerpt_truncated': len(text) > policy.excerpt_chars,
             'sources': [_location(source) for source in sources[:policy.max_sources_per_result]]}
+        for key in ('match_type', 'matched_identifiers'):
+            if key in result:
+                entry[key] = result[key]
         if len(sources) > policy.max_sources_per_result:
             entry['sources_omitted'] = len(sources) - policy.max_sources_per_result
         related = sources[0].get('related_pages') or []

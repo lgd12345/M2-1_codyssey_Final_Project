@@ -55,14 +55,24 @@ class ManualAgentTools:
         self.available_cases: dict[str, dict[str, Any]] = {}
         self.tool_calls: list[dict[str, Any]] = []
 
-    def _remember(self, source: dict[str, Any]) -> None:
+    def _remember(self, source: dict[str, Any], *, match_type: str | None = None,
+                  matched_identifiers: list[dict[str, str]] | None = None) -> None:
         digest = source.get("document_sha256")
-        page = source.get("pdf_page")
+        page = source.get("pdf_page") or source.get("page")
         if digest and page:
-            self.available_citations[(str(digest), int(page))] = {
-                "document_sha256": str(digest), "page": int(page),
-                "printed_page": source.get("printed_page"), "title": str(source.get("title", "")),
-            }
+            key = (str(digest), int(page))
+            previous = self.available_citations.get(key, {})
+            citation = {**previous, "document_sha256": str(digest), "page": int(page),
+                        "printed_page": source.get("printed_page") or previous.get("printed_page"),
+                        "title": str(source.get("title") or previous.get("title", ""))}
+            matched = [*previous.get('matched_identifiers', []), *(matched_identifiers or [])]
+            if source.get('kind') and source.get('normalized'):  # lookup_identifier is itself exact-only
+                matched.append({'kind': source['kind'], 'value': source['normalized']})
+            if matched:
+                citation['matched_identifiers'] = list({(item['kind'], item['value']): item for item in matched}.values())
+            if match_type:
+                citation['retrieval_types'] = list(dict.fromkeys([*previous.get('retrieval_types', []), match_type]))
+            self.available_citations[key] = citation
 
     @staticmethod
     def _call_key(tool: str, arguments: dict[str, Any]) -> tuple[str, str]:
@@ -105,7 +115,8 @@ class ManualAgentTools:
             return self._failure("search_manual", "database_unavailable", arguments=arguments)
         for candidate in result["results"]:
             for source in candidate["sources"]:
-                self._remember(source)
+                self._remember(source, match_type=candidate.get('match_type'),
+                               matched_identifiers=candidate.get('matched_identifiers'))
         self.tool_calls.append({"tool": "search_manual", "status": "ok", "arguments": arguments,
                                 "result_count": len(result["results"]),
                                 "search_status": result["search_status"]})
@@ -186,7 +197,7 @@ class ManualAgentTools:
                                                          document_sha256=doc_sha256, pdf_page=pdf_page))
         citation = {"document_sha256": page.document_sha256, "page": page.pdf_page,
                     "printed_page": page.printed_page, "title": page.title}
-        self.available_citations[(page.document_sha256, page.pdf_page)] = citation
+        self._remember(citation)  # opening an image must not erase the search evidence classification
         self.tool_calls.append({"tool": "open_source", "document_sha256": page.document_sha256,
                                 "pdf_page": page.pdf_page, "verification": page.verification})
         self._served_ok("open_source", arguments)

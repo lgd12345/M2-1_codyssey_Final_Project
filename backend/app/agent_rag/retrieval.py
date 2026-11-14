@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections import defaultdict
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 import hashlib
 import json
@@ -10,7 +11,7 @@ from uuid import uuid4
 
 from app.agent_rag.db import connect_database, pgvector_literal
 from app.agent_rag.embedding import EmbeddingUnavailable, GeminiEmbedder
-from app.agent_rag.preprocess import extract_query_identifiers, lexical_query, normalize_text
+from app.agent_rag.preprocess import extract_query_identifiers, lexical_query, normalize_text, symptom_query
 from app.agent_rag.tables import table_evidence
 
 RRF_K = 60
@@ -139,7 +140,8 @@ def _fetch_rows(connection, *, machines: Sequence[str] | None,
     return rows
 
 
-def _fetch_exact_rows(connection, query: str, *, machines: Sequence[str] | None) -> list[tuple]:
+def _fetch_exact_rows(connection, query: str, *, machines: Sequence[str] | None,
+                      identifier_matches: dict | None = None) -> list[tuple]:
     machine_args = _machine_filter(machines)
     found: list[tuple] = []
     for identifier in extract_query_identifiers(query):
@@ -157,6 +159,8 @@ def _fetch_exact_rows(connection, query: str, *, machines: Sequence[str] | None)
             (kinds_for(identifier.kind), identifier.normalized, machine_args, machine_args),
         ).fetchall()
         found.extend(rows)
+        if identifier_matches is not None:
+            identifier_matches[(identifier.kind, identifier.normalized)] = rows
     return found
 
 
@@ -243,7 +247,50 @@ def _candidate_groups(connection, legs: dict[str, list[tuple]], *, machines: Seq
         candidate.pages = refs.get(content_hash, [])
         for page in candidate.pages:
             page["related_pages"] = related.get(page["page_id"], [])
-    return sorted(grouped.values(), key=lambda candidate: candidate.score, reverse=True)[:top_k]
+    ranked = sorted(grouped.values(), key=lambda candidate: candidate.score, reverse=True)
+    exact = [candidate for candidate in ranked if 'exact' in candidate.ranks]
+    context = [candidate for candidate in ranked if 'exact' not in candidate.ranks]
+    if top_k > 1 and exact and context:
+        # Exact scores are intentionally strong, but must not consume every slot in a mixed query.
+        # Reserve half for exact hits and half for distinct symptom evidence; fill unused slots by rank.
+        selected = exact[:max(1, top_k // 2)] + context[:top_k - max(1, top_k // 2)]
+        seen = {candidate.content_hash for candidate in selected}
+        selected.extend(candidate for candidate in ranked if candidate.content_hash not in seen)
+        return selected[:top_k]
+    return ranked[:top_k]
+
+
+def _hybrid_rows(connection, query: str, *, machines: Sequence[str] | None,
+                 top_k: int, embedder: GeminiEmbedder | None) -> tuple[dict, dict]:
+    """Symptom leg: the identifier-free text drives ALL three retrieval methods and the query cache."""
+    legs = _fetch_rows(connection, machines=machines, lexical=lexical_query(query) or None,
+                       query_text=query, limit=max(30, top_k * 4))
+    legs.setdefault('keyword', [])
+    legs.setdefault('trigram', [])
+    vector_status: dict[str, Any] = {'status': 'not_configured'}
+    if embedder is not None:
+        active = connection.execute(
+            "SELECT config_id,provider,model,dimension,endpoint,input_format FROM rag_embedding_config WHERE active=TRUE"
+        ).fetchone()
+        if not active:
+            vector_status = {'status': 'not_indexed', 'code': 'no_active_embedding_config'}
+        else:
+            config_id = str(active[0])
+            actual = {'provider': active[1], 'model': active[2], 'dimension': active[3],
+                      'endpoint': active[4], 'input_format': active[5]}
+            if actual != embedder.identity:
+                vector_status = {'status': 'unavailable', 'code': 'embedding_config_mismatch'}
+            else:
+                try:
+                    vector = _query_vector(connection, embedder, query)
+                    legs['vector'] = _fetch_rows(connection, machines=machines, query_vector=vector,
+                                                  config_id=config_id, limit=max(30, top_k * 4)).get('vector', [])
+                    vector_status = {'status': 'ok', 'model': embedder.model,
+                                     'dimension': embedder.dimension, 'retry_attempts': embedder.last_retry_attempts}
+                except EmbeddingUnavailable as exc:
+                    vector_status = {'status': 'unavailable', 'code': exc.category,
+                                     'http_status': exc.http_status, 'retry_attempts': exc.retry_attempts}
+    return legs, vector_status
 
 
 def search_manual(query: str, *, machines: Sequence[str] | None = None,
@@ -251,71 +298,72 @@ def search_manual(query: str, *, machines: Sequence[str] | None = None,
                   database_url: str | None = None, connect: Callable[..., Any] = connect_database) -> dict[str, Any]:
     query = normalize_text(query)
     if not query:
-        return {"query": query, "results": [], "search_status": {
-            "keyword": "empty_query", "trigram": "empty_query", "vector": {"status": "not_requested"}}}
+        return {'query': query, 'results': [], 'search_status': {
+            'keyword': 'empty_query', 'trigram': 'empty_query', 'vector': {'status': 'not_requested'}}}
     if not 1 <= top_k <= 20:
-        raise ValueError("top_k must be between 1 and 20")
+        raise ValueError('top_k must be between 1 and 20')
+    identifiers = extract_query_identifiers(query)
+    context_query = symptom_query(query)
     own_connection = connection is None
     connection = connection or connect(database_url)
-    vector_status: dict[str, Any] = {"status": "not_configured"}
+    exact_matches: dict[tuple[str, str], list[tuple]] = {}
     try:
-        detected_identifiers = extract_query_identifiers(query)
-        if detected_identifiers:
-            # Identifier-shaped queries are exact-only: do not let lexical/vector similarity substitute a nearby code.
-            legs = {"exact": _fetch_exact_rows(connection, query, machines=machines),
-                    "keyword": [], "trigram": []}
-            vector_status = {"status": "bypassed_exact_identifier"}
-        else:
-            query_terms = lexical_query(query)
-            legs = _fetch_rows(connection, machines=machines,
-                               lexical=query_terms or None, query_text=query, limit=max(30, top_k * 4))
-            legs["exact"] = []
-            if "keyword" not in legs:
-                legs["keyword"] = []
-            if "trigram" not in legs:
-                legs["trigram"] = []
-        if embedder is not None and not detected_identifiers:
-            active = connection.execute(
-                "SELECT config_id,provider,model,dimension,endpoint,input_format FROM rag_embedding_config WHERE active=TRUE"
-            ).fetchone()
-            if not active:
-                vector_status = {"status": "not_indexed", "code": "no_active_embedding_config"}
-            else:
-                config_id = str(active[0])
-                expected = embedder.identity
-                actual = {"provider": active[1], "model": active[2], "dimension": active[3],
-                          "endpoint": active[4], "input_format": active[5]}
-                if actual != expected:
-                    vector_status = {"status": "unavailable", "code": "embedding_config_mismatch"}
-                else:
+        exact_rows = []
+        hybrid_legs = {'keyword': [], 'trigram': []}
+        vector_status = {'status': 'bypassed_exact_identifier'}
+        if identifiers and context_query and own_connection:
+            def contextual_search():
+                # Never issue concurrent SQL or transaction operations on the same connection.
+                secondary = connect(database_url)
+                try:
+                    return _hybrid_rows(secondary, context_query, machines=machines, top_k=top_k, embedder=embedder)
+                finally:
                     try:
-                        vector = _query_vector(connection, embedder, query)
-                        legs["vector"] = _fetch_rows(connection, machines=machines,
-                                                      query_vector=vector, config_id=config_id,
-                                                      limit=max(30, top_k * 4)).get("vector", [])
-                        vector_status = {"status": "ok", "model": embedder.model,
-                                         "dimension": embedder.dimension,
-                                         "retry_attempts": embedder.last_retry_attempts}
-                    except EmbeddingUnavailable as exc:
-                        vector_status = {"status": "unavailable", "code": exc.category,
-                                         "http_status": exc.http_status,
-                                         "retry_attempts": exc.retry_attempts}
+                        secondary.commit()
+                    except Exception:
+                        secondary.rollback()
+                    finally:
+                        secondary.close()
+
+            with ThreadPoolExecutor(max_workers=1) as pool:
+                pending = pool.submit(contextual_search)
+                exact_rows = _fetch_exact_rows(connection, query, machines=machines, identifier_matches=exact_matches)
+                connection.commit()  # no read transaction is held open while the embedding server responds
+                hybrid_legs, vector_status = pending.result()
+        else:
+            # Explicit connections can carry uncommitted fixtures/caller work: keep that transaction sequential.
+            if identifiers:
+                exact_rows = _fetch_exact_rows(connection, query, machines=machines, identifier_matches=exact_matches)
+            if context_query:
+                hybrid_legs, vector_status = _hybrid_rows(connection, context_query, machines=machines,
+                                                         top_k=top_k, embedder=embedder)
+        legs = {'exact': exact_rows, **hybrid_legs}
         candidates = _candidate_groups(connection, legs, machines=machines, top_k=top_k)
         results = []
         for candidate in candidates:
             pages = candidate.pages
             if not pages:
                 continue
-            results.append({"content_hash": candidate.content_hash, "content": pages[0]["content"],
-                            "score": candidate.score, "ranks": candidate.ranks,
-                            "table_evidence": table_evidence(pages[0]["content"], query=query),
-                            "sources": pages})
-        return {"query": query, "results": results,
-                "search_status": {"exact_identifier": "matched" if legs["exact"] else
-                                                       "no_match" if detected_identifiers else "not_detected",
-                                  "keyword": "ok" if legs["keyword"] else "no_match",
-                                  "trigram": "ok" if legs["trigram"] else "no_match",
-                                  "vector": vector_status}}
+            page_ids = {page['page_id'] for page in pages}
+            matched = [{'kind': item.kind, 'value': item.normalized} for item in identifiers
+                       if any(row[0] in page_ids for row in exact_matches.get((item.kind, item.normalized), []))]
+            results.append({'content_hash': candidate.content_hash, 'content': pages[0]['content'],
+                            'score': candidate.score, 'ranks': candidate.ranks,
+                            'match_type': 'exact_identifier' if 'exact' in candidate.ranks else
+                                          'symptom_context' if identifiers else 'hybrid',
+                            'matched_identifiers': matched,
+                            'table_evidence': table_evidence(pages[0]['content'], query=query), 'sources': pages})
+        return {'query': query, 'results': results,
+                'search_status': {'exact_identifier': 'matched' if exact_rows else
+                                                       'no_match' if identifiers else 'not_detected',
+                                  'identifier_matches': [
+                                      {'kind': item.kind, 'value': item.normalized,
+                                       'status': 'matched' if exact_matches.get((item.kind, item.normalized)) else 'no_match'}
+                                      for item in identifiers],
+                                  'symptom_query': context_query,
+                                  'keyword': ('ok' if legs['keyword'] else 'no_match') if context_query else 'not_requested',
+                                  'trigram': ('ok' if legs['trigram'] else 'no_match') if context_query else 'not_requested',
+                                  'vector': vector_status}}
     finally:
         if own_connection:
             try:

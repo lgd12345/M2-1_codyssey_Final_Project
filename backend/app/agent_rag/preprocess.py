@@ -19,8 +19,8 @@ _PART_NO = re.compile(r"^[A-Z0-9][A-Z0-9._/-]{4,}$", re.IGNORECASE)
 _ALARM_HEADING = re.compile(r"^\s*(\d{4})\s+[A-Z][A-Z0-9 /()_.-]{4,}\s*$")
 _ALARM_LABEL = r"(?:\b(?:ALARM|ERROR)(?:\s+(?:NUMBER|NO\.?|CODE))?|알람(?:\s*번호)?|오류\s*코드)"
 _ALARM_QUERY_NUMBER = re.compile(
-    rf"{_ALARM_LABEL}\s*[:#-]?\s*(\d{{4}})(?![A-Z0-9_/-]|\.[A-Z0-9])"
-    rf"|(?<![A-Z0-9._/-])(\d{{4}})(?![A-Z0-9_/-]|\.[A-Z0-9])\s*(?:번\s*)?{_ALARM_LABEL}",
+    rf"{_ALARM_LABEL}\s*[:#-]?\s*(\d{{4,8}})(?![A-Z0-9_/-]|\.[A-Z0-9])"
+    rf"|(?<![A-Z0-9._/-])(\d{{4,8}})(?![A-Z0-9_/-]|\.[A-Z0-9])\s*(?:번\s*)?{_ALARM_LABEL}",
     re.IGNORECASE,
 )
 _EXCLUDED_PAGE_CLASSES = {"blank_cover", "toc_index"}
@@ -114,6 +114,29 @@ def extract_query_identifiers(query: str) -> list[Identifier]:
         value = match.group(1) or match.group(2)
         found[("alarm_number", value)] = Identifier("alarm_number", value, value)
     return list(found.values())
+
+
+# Lookup phrasing is not a symptom: a code followed by '찾아줘' must remain exact-only.
+# Keep operating values (rpm, dimensions, temperatures) and actual symptom words intact.
+_QUERY_BOILERPLATE = frozenset('''
+    이 가 은 는 을 를 의 와 과 에 에서 으로 로 도 부품 부품번호 도면 도면번호 번호 코드 알람 오류
+    찾아줘 찾아주세요 찾아 알려줘 알려주세요 조회 조회해줘 조회해주세요 검색 검색해줘 검색해주세요
+    설명 설명해줘 설명해주세요 원인 원인을 의미 의미를 발생
+    part parts number no drawing code alarm error find search lookup please explain
+'''.split())
+
+
+def symptom_query(query: str) -> str:
+    """Remove detected identifiers and standalone lookup phrasing, not arbitrary numeric operating values."""
+    text = normalize_text(query)
+    identifiers = extract_query_identifiers(text)
+    if not identifiers:
+        return text
+    codes = {item.normalized for item in identifiers if item.kind != 'alarm_number'}
+    text = _CODE_TOKEN.sub(lambda match: ' ' if match.group(0).rstrip('.').upper() in codes else match.group(0), text)
+    text = _ALARM_QUERY_NUMBER.sub(' ', text)
+    words = [word.strip(',.!?;:()[]{}\"\'') for word in text.split()]
+    return ' '.join(word for word in words if word and word.casefold() not in _QUERY_BOILERPLATE)
 
 
 def _table_part_numbers(text: str) -> Iterable[str]:
