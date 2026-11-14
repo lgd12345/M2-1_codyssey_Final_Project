@@ -18,8 +18,9 @@ logger = logging.getLogger(__name__)
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     # Database schema changes are explicit migrations; app startup is read-only (it never connects).
+    shown = logging.getLogger("uvicorn.error")  # the logger uvicorn prints at INFO; the app logger would hide info notes
     for level, message in startup_notes():
-        logger.log(logging.WARNING if level == 'warning' else logging.INFO, message)
+        shown.log(logging.WARNING if level == 'warning' else logging.INFO, message)
     yield
 
 

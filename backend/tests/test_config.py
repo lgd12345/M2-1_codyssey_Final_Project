@@ -78,3 +78,19 @@ def test_more_than_one_worker_is_flagged_because_analysis_recovery_assumes_a_sin
     assert bool(warnings) is warns
     if warns:
         assert 'single' in warnings[0] and 'analysis' in warnings[0] and workers in warnings[0]
+
+
+def test_startup_notes_are_logged_where_uvicorn_shows_them_including_info(monkeypatch, caplog):
+    import logging
+    from fastapi.testclient import TestClient
+    from app.main import app
+    monkeypatch.setenv('RAG_DATABASE_URL', RAG)
+    monkeypatch.setenv('DATABASE_URL', APP)
+    monkeypatch.delenv('WEB_CONCURRENCY', raising=False)
+    with caplog.at_level(logging.INFO, logger='uvicorn.error'):
+        with TestClient(app):
+            pass
+    messages = [record.getMessage() for record in caplog.records if record.name == 'uvicorn.error']
+    assert 'application database: service_poc_test (RAG_DATABASE_URL)' in messages
+    assert any('service_prod' in message and 'ignored' in message for message in messages)
+    assert not [m for m in messages if 's3cret' in m or 't0ken' in m or 'db.internal' in m]
