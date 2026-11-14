@@ -235,3 +235,6 @@ __marimo__/
 # Streamlit
 .streamlit/secrets.toml
 /backend/quality/reports/
+
+# 과제 원문 (로컬 전용)
+과제내용.txt
