@@ -109,7 +109,8 @@ class _Evidence:
                 raise InvalidAnalysis('manual page was not retrieved in this run')
             label = f"{citation['title']} p.{citation.get('printed_page') or citation['page']}"
             entry = {'kind': 'manual', 'title': citation['title'], 'source': label,
-                     'excerpt': self.excerpts('manual', key), 'note': MANUAL_NOTE}
+                     'excerpt': self.excerpts('manual', key), 'note': MANUAL_NOTE,
+                     'ref': {'document_sha256': key[0], 'page': key[1]}}  # taken from the retrieved citation, never from the model
             identity = ('manual', key)
         else:
             case = self.tools.available_cases.get(source.fsr_no or '')

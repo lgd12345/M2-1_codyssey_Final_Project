@@ -59,6 +59,8 @@ def test_grounded_output_becomes_evidence_from_stored_sources_and_validates():
     assert [(e['id'], e['kind']) for e in result['evidence']] == [('E1', 'manual'), ('E2', 'fsr')]
     assert result['evidence'][0]['excerpt'] == f'DB 본문 {(DIGEST, 45)[1]}'
     assert result['evidence'][1]['source'].startswith('FSR-00001')
+    assert result['evidence'][0]['ref'] == {'document_sha256': DIGEST, 'page': 45}  # from the retrieved citation
+    assert 'ref' not in result['evidence'][1]  # a past case has no page
     assert 'F400 매뉴얼' in result['evidence'][0]['source'] and '2-31' in result['evidence'][0]['source']
     assert result['causes'][0]['evidence'] == ['E1', 'E2']
     assert result['parts'][0]['source'] == result['evidence'][0]['source']

@@ -6,6 +6,7 @@ from typing import Any
 from psycopg.rows import dict_row
 
 from app.service_requests import analysis as analysis_flow
+from app.service_requests import feedback
 
 DEPARTMENT_NAMES = {'service': '서비스', 'quality': '품질', 'parts': '부품·자재', 'sales': '영업'}
 CUSTOMER_STATUS = {'접수됨': '접수됨', '분석 중': '접수됨', '검토 대기': '확인 중', '반려됨': '확인 중',
@@ -29,7 +30,7 @@ def _group(rows, key='request_id'):
 
 def load_related(connection, ids: list[int], *, staff: bool) -> dict[str, dict[int, list[dict[str, Any]]]]:
     if not ids:
-        return {'comments': {}, 'history': {}, 'departments': {}, 'works': {}}
+        return {'comments': {}, 'history': {}, 'departments': {}, 'works': {}, 'feedback': {}}
     with connection.cursor(row_factory=dict_row) as cursor:
         kinds = ['internal', 'public', 'customer'] if staff else ['public', 'customer']
         comments = cursor.execute(
@@ -43,7 +44,7 @@ def load_related(connection, ids: list[int], *, staff: bool) -> dict[str, dict[i
             departments = cursor.execute('SELECT * FROM service_request_department WHERE request_id=ANY(%s)', (ids,)).fetchall()
             works = cursor.execute('SELECT * FROM service_work WHERE request_id=ANY(%s) ORDER BY created_at,dept', (ids,)).fetchall()
     return {'comments': _group(comments), 'history': _group(history), 'departments': _group(departments),
-            'works': _group(works)}
+            'works': _group(works), 'feedback': feedback.load(connection, ids) if staff else {}}
 
 
 def _iso(value) -> str | None:
@@ -79,10 +80,14 @@ def serialize(row: dict[str, Any], related: dict[str, dict[int, list[dict[str, A
         item['resolution'] = {'note': row['resolution']['note']} if row['resolution'] else None
         # Titles of manuals behind a reviewed (approved) analysis; never excerpts, causes or drafts.
         reviewed = row['status'] in ('처리 중', '종결') and row.get('ok_result')
-        item['guides'] = [{'id': e['id'], 'title': e['title'], 'source': e['source']}
+        # `viewable` says the original page can be opened; the stored reference itself is internal.
+        item['guides'] = [{'id': e['id'], 'title': e['title'], 'source': e['source'], 'viewable': bool(e.get('ref'))}
                           for e in reviewed['evidence'] if e['kind'] == 'manual'] if reviewed else []
         return item
     ok = row.get('ok_result')
+    analysis = analysis_flow.analysis_view(ok) if ok else None
+    if analysis:
+        analysis['feedback'] = feedback.summary(related['feedback'].get(number, []))
     departments = {d['key']: d for d in related['departments'].get(number, [])}
     item.update(
         status=row['status'],
@@ -90,7 +95,7 @@ def serialize(row: dict[str, Any], related: dict[str, dict[int, list[dict[str, A
                   for c in comments],
         history=[{'at': created, 'text': '접수'}] + [{'at': _iso(h['at']), 'text': h['text']} for h in history],
         resolution=row['resolution'], assignee=row['assignee'], revision=row['revision'], approval=row['approval'],
-        analysis=analysis_flow.analysis_view(ok) if ok else None,
+        analysis=analysis,
         analysisRun={'status': row['run_status'], 'errorCode': row['run_error']} if row.get('run_status') else None,
         departments=[{'key': key, 'selected': d['selected'], 'aiSelected': d['ai_selected'], 'reason': d['reason'],
                       'draft': d['draft'], 'aiDraft': d['ai_draft']}

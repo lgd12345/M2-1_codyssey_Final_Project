@@ -103,6 +103,47 @@ def extract_pdf_text(pdf_path: str | Path, page_number: int) -> str:
         document.close()
 
 
+# (resolved path, mtime_ns, size) -> SHA-256. Manuals are tens of megabytes: hash a file once while it is unchanged.
+_verified: dict[tuple[str, int, int], str] = {}
+
+
+def _verified_sha256(path: str | Path) -> str:
+    stat = Path(path).stat()
+    key = (str(Path(path).resolve()), stat.st_mtime_ns, stat.st_size)
+    if key not in _verified:
+        _verified[key] = file_sha256(path)
+    return _verified[key]
+
+
+def render_indexed_page(document_sha256: str, page_number: int, *, database_url: str | None = None, dpi: int | None = None,
+                        connect=None, cache_dir: str | Path | None = None,
+                        renderer: Callable[[Path, int, int], bytes] | None = None) -> bytes:
+    """PNG of one original page, only for a page that is in the index and whose file still matches its SHA-256.
+
+    LookupError: not indexed. FileNotFoundError: the file is missing. ValueError: invalid hash or the file changed.
+    """
+    from app.agent_rag.db import connect_database
+
+    if not re.fullmatch(r"[0-9a-f]{64}", document_sha256):
+        raise ValueError("invalid PDF SHA-256")
+    connection = (connect or connect_database)(database_url)
+    try:
+        row = connection.execute(
+            """SELECT d.pdf_path FROM rag_document d JOIN rag_page p USING(source_sha256)
+               WHERE d.source_sha256=%s AND p.pdf_page=%s""", (document_sha256, page_number)).fetchone()
+    finally:
+        connection.close()
+    if not row:
+        raise LookupError("source document page was not found")
+    pdf_path = row[0]
+    if not Path(pdf_path).is_file():
+        raise FileNotFoundError("source PDF is missing")
+    if _verified_sha256(pdf_path) != document_sha256:
+        raise ValueError("source PDF SHA-256 no longer matches the indexed document")
+    return render_pdf_page(pdf_path, document_sha256, page_number, dpi or int(os.getenv("PDF_RENDER_DPI", "150")),
+                           cache_dir=cache_dir, renderer=renderer)
+
+
 def open_source_page(document_sha256: str, page_number: int, *, asset_registry,
                      database_url: str | None = None, dpi: int | None = None, connect=None) -> SourcePage:
     from app.agent_rag.db import connect_database

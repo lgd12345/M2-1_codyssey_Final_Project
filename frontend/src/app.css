@@ -304,3 +304,7 @@ input:not([type='checkbox']), select, textarea { border-radius: 8px; }
 /* 표: 옛 본문 규칙(overflow-wrap: anywhere) 때문에 글자 중간에서 끊기지 않게 한다. */
 .results th, .results td { overflow-wrap: normal; word-break: keep-all; white-space: nowrap; }
 .results td:has(> .title-link) { white-space: normal; min-width: 14em; }
+.source-page { display: block; max-width: 100%; height: auto; margin: 0 auto; border: 1px solid var(--border); }
+.modal:has(.source-page) { width: min(960px, 100%); }
+.rating { display: inline-flex; align-items: center; gap: 0.15rem; }
+.source-page[hidden] { display: none; }

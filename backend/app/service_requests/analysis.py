@@ -45,6 +45,12 @@ class _Model(BaseModel):
     model_config = ConfigDict(extra='forbid', str_strip_whitespace=True)
 
 
+class EvidenceRef(_Model):
+    """Where a manual citation lives in the indexed corpus. Only the server uses it, to render the original page."""
+    document_sha256: str = Field(pattern=r'^[0-9a-f]{64}$')
+    page: int = Field(ge=1, le=100000)
+
+
 class Evidence(_Model):
     id: str = Field(min_length=1, max_length=20)
     kind: Literal['fsr', 'manual']
@@ -52,6 +58,13 @@ class Evidence(_Model):
     source: str = Field(min_length=1)
     excerpt: str
     note: str
+    ref: EvidenceRef | None = None
+
+    @model_validator(mode='after')
+    def only_manuals_have_pages(self):
+        if self.ref is not None and self.kind != 'manual':
+            raise ValueError('only a manual citation can reference a page')
+        return self
 
 
 class Cause(_Model):
@@ -108,7 +121,11 @@ class AnalysisResult(_Model):
 
 
 def validate_result(raw: Any) -> dict[str, Any]:
-    return AnalysisResult.model_validate(raw).model_dump(mode='json')
+    result = AnalysisResult.model_validate(raw).model_dump(mode='json')
+    for evidence in result['evidence']:
+        if evidence['ref'] is None:
+            del evidence['ref']  # absent rather than null: citations without a page look exactly as before
+    return result
 
 
 class InvalidAnalysis(ValueError):

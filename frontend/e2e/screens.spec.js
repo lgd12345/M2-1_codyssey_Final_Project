@@ -535,7 +535,7 @@ test('operator queue: counts per status, search, every filter, empty state and n
 // Operator detail: AI panels, evidence, department proposals, notes, approval, department inbox
 // ---------------------------------------------------------------------------------------------------------------
 
-test('operator detail: AI tabs and evidence, honest unconnected controls, notes, department proposals and reset', async ({ browser }) => {
+test('operator detail: AI tabs and evidence, original pages, ratings, notes, department proposals and reset', async ({ browser }) => {
   const customer = await session(browser, process.env.E2E_CUSTOMER, 'portal')
   const staff = await session(browser, process.env.E2E_STAFF, 'cases')
   const id = await createRequest(customer.page, { message: 'ATC 교환 중 정지합니다. 화면 점검용.', name: '상세 점검' })
@@ -591,12 +591,43 @@ test('operator detail: AI tabs and evidence, honest unconnected controls, notes,
   await page.getByRole('button', { name: /E2E 매뉴얼/ }).click()
   await expect(page.getByText('ATC 구동부 점검 절차', { exact: true })).toBeVisible()
   await expect(page.getByText('적용 시 주의: 변환 텍스트입니다.', { exact: false })).toBeVisible()
-  // Unconnected features say so and cannot be clicked.
-  for (const [label, title] of [['도움이 됨', '평가 저장 기능 미연결'], ['도움이 안 됨', '평가 저장 기능 미연결']]) {
-    const feedback = page.getByRole('button', { name: label, exact: true })
-    await expect(feedback).toBeDisabled()
-    await expect(feedback).toHaveAttribute('title', title)
-  }
+  // The original page of a manual citation opens as an image; a refused or missing page is explained.
+  await page.getByRole('button', { name: '원본 페이지 보기', exact: true }).click()
+  const original = page.getByRole('dialog', { name: /원본 페이지 · E2E 매뉴얼/ })
+  await expect(original.getByRole('img', { name: /원본 페이지/ })).toBeVisible()
+  expect(await original.getByRole('img').evaluate(image => image.complete && image.naturalWidth > 0)).toBe(true)
+  await expect(original.getByText('원본 PDF를 이미지로 변환한 페이지입니다.')).toBeVisible()
+  await page.keyboard.press('Escape')
+  await expect(page.getByRole('dialog')).toHaveCount(0)
+  await page.route('**/evidence/E1/page', route => route.fulfill({ status: 404, contentType: 'application/json', body: '{"detail":"x","code":"SOURCE_UNAVAILABLE"}' }))  // network stub
+  await page.getByRole('button', { name: '원본 페이지 보기', exact: true }).click()
+  await expect(page.getByRole('alert')).toContainText('원본 PDF 페이지를 열 수 없습니다')
+  await page.keyboard.press('Escape')
+  await page.unroute('**/evidence/E1/page')
+
+  // Rating: pressing sets it, another rating replaces it, pressing again takes it back. It is durable and operator-only.
+  const up = page.getByRole('button', { name: '도움이 됨', exact: true })
+  const down = page.getByRole('button', { name: '도움이 안 됨', exact: true })
+  await expect(up).toBeEnabled()
+  await expect(up).toHaveAttribute('aria-pressed', 'false')
+  await up.click()
+  await expect(up).toHaveAttribute('aria-pressed', 'true')
+  await expect(up).toContainText('1')
+  await page.reload()
+  await expect(page.getByRole('button', { name: '도움이 됨', exact: true })).toHaveAttribute('aria-pressed', 'true')
+  await down.click()
+  await expect(up).toHaveAttribute('aria-pressed', 'false')
+  await expect(down).toHaveAttribute('aria-pressed', 'true')
+  await expect(up).toContainText('0')
+  await expect(down).toContainText('1')
+  expect((await serverItem(page, id)).analysis.feedback.ratings).toEqual([{ by: process.env.E2E_STAFF, rating: 'not_helpful' }])
+  await down.click()
+  await expect(down).toHaveAttribute('aria-pressed', 'false')
+  await expect(down).toContainText('0')
+  expect((await serverItem(page, id)).analysis.feedback).toEqual({ helpful: 0, notHelpful: 0, ratings: [] })
+  await up.click()  // leave one rating so the customer check below proves it stays internal
+  await expect(up).toHaveAttribute('aria-pressed', 'true')
+  expect(JSON.stringify(await serverItem(customer.page, id))).not.toContain('feedback')
   await expect(page.getByText('지식 근거', { exact: true })).toBeVisible()
   await expect(page.getByText('2건 (매뉴얼 1, 과거 사례 1)', { exact: true })).toBeVisible()
 
@@ -682,6 +713,8 @@ test('four-team approval, department inbox, work detail and what the customer se
   const keys = { service: `SVC-${number}`, quality: `QLT-${number}`, parts: `PRT-${number}`, sales: `SAL-${number}` }
   const page = staff.page
   await analyse(page, id)
+  // Before approval a customer cannot open the page, and the refusal looks like "does not exist".
+  expect((await customer.page.request.get(`/api/v1/service-requests/${id}/evidence/E1/page`)).status()).toBe(404)
   for (const [department, draft] of [['품질', '품질 지시'], ['부품·자재', '부품 지시'], ['영업', '영업 지시']]) {
     await page.getByRole('checkbox', { name: new RegExp(`^${department}`) }).click()
     await page.getByLabel(`${department} 초안`, { exact: true }).fill(draft)
@@ -753,8 +786,16 @@ test('four-team approval, department inbox, work detail and what the customer se
   await expect(customer.page.locator('.pd-meta').getByText('처리 중', { exact: true })).toBeVisible()
   await customer.page.getByRole('tab', { name: '기술 가이드', exact: true }).click()
   await expect(customer.page.getByText('E2E 매뉴얼', { exact: true })).toBeVisible()
-  await expect(customer.page.getByText('PDF 열람 미연결')).toBeVisible()  // the PDF link is not offered, and says so
-  await expect(customer.page.getByRole('link', { name: /PDF/ })).toHaveCount(0)
+  await customer.page.getByRole('button', { name: '원본 페이지 보기', exact: true }).click()
+  const guide = customer.page.getByRole('dialog', { name: /원본 페이지 · E2E 매뉴얼/ })
+  await expect(guide.getByRole('img')).toBeVisible()
+  expect(await guide.getByRole('img').evaluate(image => image.complete && image.naturalWidth > 0)).toBe(true)
+  await customer.page.keyboard.press('Escape')
+  const pageApi = `/api/v1/service-requests/${id}/evidence/E1/page`
+  const opened = await customer.page.request.get(pageApi)
+  expect(opened.status()).toBe(200)
+  expect(opened.headers()['content-type']).toBe('image/png')
+  expect((await customer.page.request.get(`/api/v1/service-requests/${id}/evidence/E2/page`)).status()).toBe(404)  // cases are not guides
   const seen = JSON.stringify(await serverItem(customer.page, id))
   for (const secret of ['부품 지시', '영업 지시', keys.parts, 'ATC 구동부 점검 절차', 'E2E 통제된 분석 응답']) expect(seen).not.toContain(secret)
   expect(customer.errors.concat(staff.errors)).toEqual([])

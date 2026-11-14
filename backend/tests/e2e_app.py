@@ -3,9 +3,14 @@
 Auth, sessions, CSRF, authorization, DB, validation, persistence and the UI stay real.
 """
 import asyncio
+import base64
 
 from app.main import app
 from app.service_requests.analysis import get_analysis_runner
+from app.service_requests.pages import get_page_renderer
+
+# 1x1 PNG: stands in for the rendered PDF page, so the browser really decodes an image. No PDF is used here.
+PAGE_PNG = base64.b64decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==')
 
 
 async def controlled_model(request):
@@ -20,7 +25,7 @@ async def controlled_model(request):
         'parts': [{'name': 'ATC 암 모터', 'note': '마모 시 교체', 'source': 'E2E 매뉴얼 p.45'}],
         'evidence': [
             {'id': 'E1', 'kind': 'manual', 'title': 'E2E 매뉴얼', 'source': 'E2E 매뉴얼 p.45',
-             'excerpt': 'ATC 구동부 점검 절차', 'note': '변환 텍스트입니다.'},
+             'excerpt': 'ATC 구동부 점검 절차', 'note': '변환 텍스트입니다.', 'ref': {'document_sha256': 'e' * 64, 'page': 45}},
             {'id': 'E2', 'kind': 'fsr', 'title': 'FSR-00001', 'source': 'FSR-00001 · VMCT-05',
              'excerpt': '공구 교환 중 정지', 'note': '과거 사례는 참고용입니다.'}],
         'departments': [{'key': 'service', 'reason': '현장 점검 필요', 'draft': 'ATC 점검 방문 초안'}],
@@ -29,3 +34,4 @@ async def controlled_model(request):
 
 
 app.dependency_overrides[get_analysis_runner] = lambda: controlled_model
+app.dependency_overrides[get_page_renderer] = lambda: (lambda document_sha256, page: PAGE_PNG)

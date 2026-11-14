@@ -450,6 +450,6 @@ def test_customer_guides_list_only_reviewed_manual_titles_without_excerpts_or_an
     assert item(clients, 'alice', identity)['guides'] == []  # unreviewed AI output is not shown to customers
     post(clients, 'staff', identity, 'approval')
     customer = item(clients, 'alice', identity)
-    assert customer['guides'] == [{'id': 'E1', 'title': 'F400 매뉴얼', 'source': 'F400 매뉴얼 p.45'}]
+    assert customer['guides'] == [{'id': 'E1', 'title': 'F400 매뉴얼', 'source': 'F400 매뉴얼 p.45', 'viewable': False}]  # no stored page reference
     assert 'ATC 구동부 점검' not in str(customer) and 'FSR-00001' not in str(customer)
     assert 'guides' not in item(clients, 'staff', identity)

@@ -3,6 +3,8 @@
 const ID = /^CLM-\d{3,19}$/
 const WORK = /^(SVC|QLT|PRT|SAL)-\d{3,19}$/
 const KEYS = ['service', 'quality', 'parts', 'sales']
+const EVIDENCE = /^E\d{1,3}$/
+const RATINGS = ['helpful', 'not_helpful']
 
 export function requestFor(action, item) {
   if (!ID.test(action.id ?? '')) throw new Error('올바르지 않은 요청 번호입니다.')
@@ -33,12 +35,27 @@ export function requestFor(action, item) {
     case 'WORK_START': return post(`${work()}/start`)
     case 'WORK_COMPLETE': return post(`${work()}/complete`, { summary: action.result?.summary, hours: action.result?.hours ?? '' })
     case 'RESOLVE': return post(`${base}/resolution`, { note: action.note ?? '' })
+    case 'RATE_ANALYSIS': {
+      if (!RATINGS.includes(action.rating)) throw new Error('올바르지 않은 평가입니다.')
+      return { method: 'PUT', path: `${base}/analysis/feedback`, body: { rating: action.rating }, result: 'item' }
+    }
+    case 'CLEAR_RATING': return { method: 'DELETE', path: `${base}/analysis/feedback`, body: undefined, result: 'item' }
     case 'CUSTOMER_REPLY': return post(`${base}/replies`, { text: action.text })
     case 'CUSTOMER_CALLBACK': return post(`${base}/callback`)
     case 'CUSTOMER_CLOSE_REQUEST': return post(`${base}/close-request`, { reason: action.reason })
     default: throw new Error('지원하지 않는 작업입니다.')
   }
 }
+
+// Original page of a manual citation. Only a request number and a citation id go into the address; the server
+// decides which document page that is and whether this person may open it.
+export function evidencePageUrl(id, evidenceId) {
+  if (!ID.test(id ?? '') || !EVIDENCE.test(evidenceId ?? '')) throw new Error('올바르지 않은 원본 페이지 주소입니다.')
+  return `/api/v1/service-requests/${id}/evidence/${evidenceId}/page`
+}
+
+// Ratings are visible to operators only; each person sees their own as pressed.
+export const myRating = (analysis, me) => analysis?.feedback?.ratings?.find(rating => rating.by === me)?.rating ?? null
 
 // The server already filtered history and comments to customer-safe content and wording.
 export function customerEvents(item) {

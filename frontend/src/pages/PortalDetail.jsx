@@ -2,6 +2,7 @@ import React, { useState } from 'react'
 import { customerStatus } from '../domain/workflow.js'
 import { customerEvents } from '../domain/actions.js'
 import { Modal, formatDate, formatTime } from '../ui.jsx'
+import { SourcePageButton } from './SourcePage.jsx'
 
 const TONE = { 접수됨: 'neutral', '확인 중': 'blue', '정보 요청': 'yellow', '처리 중': 'blue', 완료: 'green' }
 const TABS = [['history', '이력'], ['guides', '기술 가이드'], ['contact', '연락처']]
@@ -78,7 +79,7 @@ export function PortalDetail({ item, dispatch }) {
             {guides.length === 0 ? <p className="muted">입력하신 내용에 해당하는 기술 가이드가 아직 없습니다.</p> : (
               <>
                 <p className="muted small">접수한 증상과 오류 번호를 기준으로 스스로 확인해 볼 수 있는 자료입니다.</p>
-                <ul className="guides">{guides.map((g) => <li key={g.id}><div><strong>{g.title}</strong><small>{g.source}</small></div><span className="muted">PDF 열람 미연결</span></li>)}</ul>
+                <ul className="guides">{guides.map((g) => <li key={g.id}><div><strong>{g.title}</strong><small>{g.source}</small></div>{g.viewable ? <SourcePageButton itemId={item.id} evidenceId={g.id} title={g.title} /> : <span className="muted small">원본 페이지 정보 없음</span>}</li>)}</ul>
               </>
             )}
           </>

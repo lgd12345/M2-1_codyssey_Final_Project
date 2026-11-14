@@ -9,7 +9,7 @@ from pydantic import ConfigDict, Field, StrictBool, model_validator
 from app.auth.deps import require_csrf, require_operator_csrf
 from app.auth.service import AuthError, SessionInfo
 from app.service_requests import analysis as analysis_flow
-from app.service_requests import views, workflow
+from app.service_requests import feedback, views, workflow
 from app.service_requests.routes import (
     Input, NoBody, access_company, execute_analysis, request_database, request_number,
 )
@@ -41,6 +41,10 @@ class DepartmentEdit(Input):
         if not given or (self.reset and len(given) > 1):
             raise ValueError('send selected, draft or reset')
         return self
+
+
+class RatingIn(Input):
+    rating: Literal['helpful', 'not_helpful']
 
 
 class CommentIn(Input):
@@ -91,6 +95,22 @@ def assign(identity: str, body: NoBody | None = None, session: SessionInfo = Dep
     number = request_number(identity)
     with request_database() as connection:
         workflow.assign(connection, number, session.user)
+        return _operator_item(connection, number)
+
+
+@router.put('/{identity}/analysis/feedback')
+def rate_analysis(identity: str, body: RatingIn, session: SessionInfo = Depends(require_operator_csrf)):
+    number = request_number(identity)
+    with request_database() as connection:
+        feedback.rate(connection, number, session.user.id, body.rating)
+        return _operator_item(connection, number)
+
+
+@router.delete('/{identity}/analysis/feedback')
+def clear_analysis_rating(identity: str, session: SessionInfo = Depends(require_operator_csrf)):
+    number = request_number(identity)
+    with request_database() as connection:
+        feedback.clear(connection, number, session.user.id)
         return _operator_item(connection, number)
 
 

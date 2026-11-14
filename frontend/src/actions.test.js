@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { requestFor, customerEvents } from './domain/actions.js'
+import { requestFor, customerEvents, evidencePageUrl, myRating } from './domain/actions.js'
 
 const item = { id: 'CLM-005', departments: [{ key: 'service', selected: true }, { key: 'sales', selected: false }] }
 
@@ -53,4 +53,32 @@ test('customer history shows only server-provided customer wording and never int
   assert.deepEqual(events.map(event => [event.who, event.text]), [
     ['나', '문의'], ['서비스 담당자', '확인 중입니다.'], ['시스템', '담당 부서에서 처리를 시작했습니다.'], ['시스템', '서비스 요청이 접수되었습니다.']])
   assert.equal(events.filter(event => event.message).length, 2)
+})
+
+test('rating an analysis and taking the rating back are server requests with a fixed vocabulary', () => {
+  assert.deepEqual(requestFor({ type: 'RATE_ANALYSIS', id: 'CLM-005', rating: 'helpful' }, item),
+    { method: 'PUT', path: '/service-requests/CLM-005/analysis/feedback', body: { rating: 'helpful' }, result: 'item' })
+  assert.deepEqual(requestFor({ type: 'RATE_ANALYSIS', id: 'CLM-005', rating: 'not_helpful' }, item).body, { rating: 'not_helpful' })
+  assert.deepEqual(requestFor({ type: 'CLEAR_RATING', id: 'CLM-005' }, item),
+    { method: 'DELETE', path: '/service-requests/CLM-005/analysis/feedback', body: undefined, result: 'item' })
+  for (const rating of ['great', '', undefined, 'HELPFUL']) {
+    assert.throws(() => requestFor({ type: 'RATE_ANALYSIS', id: 'CLM-005', rating }, item), /평가/)
+  }
+  assert.throws(() => requestFor({ type: 'RATE_ANALYSIS', id: '../x', rating: 'helpful' }, item), /요청 번호/)
+})
+
+test('a person sees only their own rating as pressed', () => {
+  const analysis = { feedback: { helpful: 1, notHelpful: 1, ratings: [{ by: 'kim', rating: 'helpful' }, { by: 'lee', rating: 'not_helpful' }] } }
+  assert.equal(myRating(analysis, 'kim'), 'helpful')
+  assert.equal(myRating(analysis, 'lee'), 'not_helpful')
+  assert.equal(myRating(analysis, 'park'), null)
+  assert.equal(myRating({}, 'kim'), null)
+  assert.equal(myRating(undefined, 'kim'), null)
+})
+
+test('the original-page address is built only from a request number and a citation id', () => {
+  assert.equal(evidencePageUrl('CLM-005', 'E1'), '/api/v1/service-requests/CLM-005/evidence/E1/page')
+  for (const [id, evidence] of [['CLM-5', 'E1'], ['../CLM-005', 'E1'], ['CLM-005', '../E1'], ['CLM-005', 'E1/page'], ['CLM-005', ''], ['CLM-005', 'e1']]) {
+    assert.throws(() => evidencePageUrl(id, evidence), /올바르지 않은/, `${id} ${evidence}`)
+  }
 })
