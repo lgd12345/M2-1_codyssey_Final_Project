@@ -16,7 +16,7 @@ import httpx
 import psycopg
 from dotenv import load_dotenv
 
-from app.agent_rag.embedding import configured_embedder
+from app.agent_rag.embedding import DEFAULT_EMBEDDING_PROVIDER, configured_embedder
 from app.config import application_database_url
 from app.agent_rag.embedding_readiness import embedding_readiness
 from quality.e2e import run_suite_e2e
@@ -50,7 +50,7 @@ class HttpApi:
 
 def runtime_snapshot(dsn: str) -> dict[str, Any]:
     """No remote calls and no writes. Save the retrieval conditions, not credentials or endpoints."""
-    provider = os.getenv('RAG_EMBEDDING_PROVIDER', 'gemini')
+    provider = os.getenv('RAG_EMBEDDING_PROVIDER', DEFAULT_EMBEDDING_PROVIDER)
     embedder = configured_embedder(provider=provider)
     with psycopg.connect(dsn, connect_timeout=5) as db:
         db.execute('SET TRANSACTION READ ONLY')

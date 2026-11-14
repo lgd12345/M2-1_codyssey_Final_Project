@@ -19,7 +19,7 @@ COOKIE_NAME = "manual_session"
 def database_url() -> str:
     url = application_database_url()
     if not url:
-        raise RuntimeError("RAG_DATABASE_URL or DATABASE_URL must be configured")
+        raise RuntimeError("DATABASE_URL must be configured")
     return url
 
 

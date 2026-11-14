@@ -7,7 +7,7 @@ from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 
 from app.auth.routes import install_auth
-from app.config import startup_notes
+from app.config import check_configuration, startup_notes
 from app.service_requests.pages import router as service_pages_router
 from app.service_requests.routes import router as service_requests_router
 from app.service_requests.workflow_routes import router as service_workflow_router
@@ -19,6 +19,7 @@ logger = logging.getLogger(__name__)
 async def lifespan(_app: FastAPI):
     # Database schema changes are explicit migrations; app startup is read-only (it never connects).
     shown = logging.getLogger("uvicorn.error")  # the logger uvicorn prints at INFO; the app logger would hide info notes
+    check_configuration()  # refuse a leftover RAG_DATABASE_URL that would switch databases
     for level, message in startup_notes():
         shown.log(logging.WARNING if level == 'warning' else logging.INFO, message)
     yield

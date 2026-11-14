@@ -40,9 +40,9 @@ def apply_migrations(database_url: str, *, migrations_dir: str | Path = MIGRATIO
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Apply the manual-agent database migrations.")
-    parser.add_argument("--env-name", choices=("TEST_DATABASE_URL", "RAG_DATABASE_URL", "DATABASE_URL"), default="TEST_DATABASE_URL")
+    parser.add_argument("--env-name", choices=("TEST_DATABASE_URL", "DATABASE_URL"), default="TEST_DATABASE_URL")
     parser.add_argument("--allow-non-test", action="store_true",
-                        help="required for RAG_DATABASE_URL (the database the running app uses) or DATABASE_URL; prevents accidental dev/prod migration")
+                        help="required for DATABASE_URL (the database the running app uses); prevents accidental dev/prod migration")
     args = parser.parse_args()
     database_url = os.getenv(args.env_name, "").strip()
     if not database_url:

@@ -10,7 +10,7 @@ def no_database(monkeypatch):
     monkeypatch.setattr(migrate, 'apply_migrations', forbidden)
 
 
-@pytest.mark.parametrize('env_name', ['RAG_DATABASE_URL', 'DATABASE_URL'])
+@pytest.mark.parametrize('env_name', ['DATABASE_URL'])
 def test_application_databases_are_never_migrated_without_explicit_approval(monkeypatch, env_name):
     monkeypatch.setenv(env_name, 'postgresql://u:p@host/service_poc')
     monkeypatch.setattr('sys.argv', ['migrate.py', '--env-name', env_name])
@@ -19,11 +19,11 @@ def test_application_databases_are_never_migrated_without_explicit_approval(monk
     assert stopped.value.code == 2
 
 
-def test_rag_database_url_is_the_database_the_running_app_uses(monkeypatch):
+def test_database_url_is_the_database_the_running_app_uses(monkeypatch):
     applied = []
     monkeypatch.setattr(migrate, 'apply_migrations', lambda url: applied.append(url) or ['015_next'])
-    monkeypatch.setenv('RAG_DATABASE_URL', 'postgresql://u:p@host/service_poc_test')
-    monkeypatch.setattr('sys.argv', ['migrate.py', '--env-name', 'RAG_DATABASE_URL', '--allow-non-test'])
+    monkeypatch.setenv('DATABASE_URL', 'postgresql://u:p@host/service_poc_test')
+    monkeypatch.setattr('sys.argv', ['migrate.py', '--env-name', 'DATABASE_URL', '--allow-non-test'])
     assert migrate.main() == 0
     assert applied == ['postgresql://u:p@host/service_poc_test']
 

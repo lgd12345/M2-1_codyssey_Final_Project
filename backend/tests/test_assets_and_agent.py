@@ -69,12 +69,6 @@ def test_tools_return_structured_operational_failures(monkeypatch):
     assert "private" not in repr(tools.tool_calls)
 
 
-def test_agent_database_can_be_safely_overridden_from_application_database(monkeypatch):
-    monkeypatch.setenv("DATABASE_URL", "postgresql://host/app")
-    monkeypatch.setenv("RAG_DATABASE_URL", "postgresql://host/app_test")
-    assert AgentSettings.from_env().database_url == "postgresql://host/app_test"
-
-
 def test_agent_requires_explicit_llm_proxy_and_key_configuration():
     settings = AgentSettings("https://proxy.test/v1", "", "model", 60,
                              "postgresql://test", __import__("pathlib").Path("cache"), 150)

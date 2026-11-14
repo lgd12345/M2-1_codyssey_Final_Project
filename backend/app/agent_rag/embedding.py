@@ -38,6 +38,10 @@ class EmbeddingUnavailable(RuntimeError):
         super().__init__(category)
 
 
+# Qwen is what the indexed corpus uses; Gemini stays available by setting RAG_EMBEDDING_PROVIDER=gemini.
+DEFAULT_EMBEDDING_PROVIDER = "qwen"
+
+
 class GeminiEmbedder:
     """OpenAI-compatible Gemini embeddings client with bounded transient-error retries."""
 
@@ -233,7 +237,7 @@ class QwenEmbedder(GeminiEmbedder):
 
 
 def configured_embedder(*, provider: str | None = None, error_sink=None) -> GeminiEmbedder:
-    provider = (provider or os.getenv("RAG_EMBEDDING_PROVIDER", "gemini")).strip().lower()
+    provider = (provider or os.getenv("RAG_EMBEDDING_PROVIDER", DEFAULT_EMBEDDING_PROVIDER)).strip().lower()
     if provider not in {"gemini", "qwen"}:
         raise ValueError("embedding provider must be gemini or qwen")
     cls = QwenEmbedder if provider == "qwen" else GeminiEmbedder

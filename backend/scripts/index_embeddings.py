@@ -19,14 +19,14 @@ from app.agent_rag.embedding_index import ensure_embedding_config, index_embeddi
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Generate resumable Gemini vectors for ingested manual pages.")
+    parser = argparse.ArgumentParser(description="Generate resumable embedding vectors for ingested manual pages.")
     parser.add_argument("--database-url-env", default="TEST_DATABASE_URL",
                         choices=("TEST_DATABASE_URL", "DATABASE_URL"))
     parser.add_argument("--batch-size", type=int, default=64)
     parser.add_argument("--limit", type=int, default=None,
                         help="embed at most this many contents in this run (probe); run again to resume the rest")
     parser.add_argument("--provider", choices=("gemini", "qwen"), default=None,
-                        help="embedding model to index with (default: RAG_EMBEDDING_PROVIDER, else gemini)")
+                        help="embedding model to index with (default: RAG_EMBEDDING_PROVIDER, else qwen)")
     parser.add_argument("--only", choices=("all", "pages", "cases"), default="all",
                         help="restrict to manual pages or past service cases (default: both)")
     parser.add_argument("--activate", action="store_true", help="activate only after every eligible page is embedded")

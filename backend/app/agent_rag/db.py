@@ -11,7 +11,7 @@ def connect_database(database_url: str | None = None):
 
     url = (database_url or application_database_url()).strip()
     if not url:
-        raise RuntimeError("RAG_DATABASE_URL or DATABASE_URL is not configured")
+        raise RuntimeError("DATABASE_URL is not configured")
     return psycopg.connect(url, connect_timeout=5)
 
 

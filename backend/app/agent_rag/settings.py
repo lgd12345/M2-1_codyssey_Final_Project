@@ -47,4 +47,4 @@ class AgentSettings:
         if not self.llm_base_url or not self.llm_api_key or not self.llm_model:
             raise AgentNotConfigured("LLM_BASE_URL, LLM_API_KEY and LLM_MODEL must be configured in backend/.env")
         if not self.database_url:
-            raise AgentNotConfigured("RAG_DATABASE_URL or DATABASE_URL must be configured in backend/.env")
+            raise AgentNotConfigured("DATABASE_URL must be configured in backend/.env")

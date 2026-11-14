@@ -89,7 +89,7 @@ def main() -> int:
     args = parser.parse_args()
     load_dotenv(ROOT / '.env', override=False)
     try:
-        dsn = (os.getenv('RAG_DATABASE_URL', '') or os.getenv('DATABASE_URL', '')).strip()
+        dsn = os.getenv('DATABASE_URL', '').strip()
         base_url = validate_target(dsn, args.base_url, args.allow_current_db)
         if not all(os.getenv(key) for key in ['LIVE_E2E_USER_PASSWORD', 'LIVE_E2E_ADMIN_PASSWORD']):
             raise ValueError('Supply both current-account passwords explicitly via environment')

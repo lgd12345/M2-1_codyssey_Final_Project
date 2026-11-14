@@ -31,10 +31,10 @@ def test_only_runner_created_disposable_databases_are_accepted(url, expected):
 
 
 def test_guard_removes_a_non_disposable_url_so_database_tests_skip_instead_of_truncating():
-    environment = {'TEST_DATABASE_URL': 'postgresql://u:p@host/service_poc_test', 'RAG_DATABASE_URL': 'postgresql://u:p@host/service_poc_test'}
+    environment = {'TEST_DATABASE_URL': 'postgresql://u:p@host/service_poc_test', 'DATABASE_URL': 'postgresql://u:p@host/service_poc_test'}
     message = guard_test_database(environment)
     assert environment['TEST_DATABASE_URL'] == ''  # present-but-empty: database tests skip
-    assert environment['RAG_DATABASE_URL'].endswith('service_poc_test')  # the application setting is never touched
+    assert environment['DATABASE_URL'].endswith('service_poc_test')  # the application setting is never touched
     assert 'scripts/test_isolated.py' in message and 'service_poc_test' not in message  # no database name leaks into logs
 
 

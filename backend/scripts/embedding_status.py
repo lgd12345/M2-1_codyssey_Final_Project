@@ -14,16 +14,16 @@ ROOT = Path(__file__).resolve().parents[1]
 load_dotenv(ROOT / ".env", override=False)
 sys.path.insert(0, str(ROOT))
 
-from app.agent_rag.embedding import configured_embedder
+from app.agent_rag.embedding import DEFAULT_EMBEDDING_PROVIDER, configured_embedder
 from app.config import application_database_url
 from app.agent_rag.embedding_readiness import embedding_readiness
 
 
 def connect_for_status():
-    # Same database selection as the running app (RAG_DATABASE_URL first).
+    # Same database as the running app.
     url = application_database_url()
     if not url:
-        raise ValueError("RAG_DATABASE_URL or DATABASE_URL is not configured")
+        raise ValueError("DATABASE_URL is not configured")
     connection = psycopg.connect(url, connect_timeout=5)
     connection.execute("SET TRANSACTION READ ONLY")
     return connection
@@ -32,7 +32,7 @@ def connect_for_status():
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--provider", choices=("gemini", "qwen"), default=None,
-                        help="runtime provider to check (default: RAG_EMBEDDING_PROVIDER, else gemini)")
+                        help="runtime provider to check (default: RAG_EMBEDDING_PROVIDER, else qwen)")
     args = parser.parse_args(argv)
     try:
         embedder = configured_embedder(provider=args.provider)
@@ -43,7 +43,7 @@ def main(argv: list[str] | None = None) -> int:
     try:
         report = embedding_readiness(connection, embedder)
         report["database"] = connection.execute("SELECT current_database()").fetchone()[0]
-        report["provider"] = args.provider or os.getenv("RAG_EMBEDDING_PROVIDER", "gemini")
+        report["provider"] = args.provider or os.getenv("RAG_EMBEDDING_PROVIDER", DEFAULT_EMBEDDING_PROVIDER)
         print(json.dumps(report, ensure_ascii=False))
         return 0 if report["status"] == "ready" else 1
     finally:

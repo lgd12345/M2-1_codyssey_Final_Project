@@ -27,7 +27,7 @@ def setup(monkeypatch):
     if not name.startswith('rag_regression_') or not name.endswith('_test'):
         pytest.fail('Use scripts/test_isolated.py: this fixture requires a fresh disposable DB')
     apply_migrations(DSN)
-    monkeypatch.setenv('RAG_DATABASE_URL', DSN)
+    monkeypatch.setenv('DATABASE_URL', DSN)
     monkeypatch.delenv('APP_COOKIE_SECURE', raising=False)
     suffix = uuid4().hex[:10]
     with psycopg.connect(DSN) as db:

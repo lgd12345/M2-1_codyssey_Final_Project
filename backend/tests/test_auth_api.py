@@ -21,7 +21,7 @@ def db(monkeypatch):
     from db_safety import require_disposable_test_database
     require_disposable_test_database(DATABASE_URL)
     apply_migrations(DATABASE_URL)
-    monkeypatch.setenv("RAG_DATABASE_URL", DATABASE_URL)
+    monkeypatch.setenv("DATABASE_URL", DATABASE_URL)
     monkeypatch.delenv("APP_COOKIE_SECURE", raising=False)
     connection = psycopg.connect(DATABASE_URL)
     connection.execute("TRUNCATE app_user, app_login_failure CASCADE")
