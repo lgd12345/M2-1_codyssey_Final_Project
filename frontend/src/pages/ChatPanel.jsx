@@ -2,10 +2,11 @@ import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { useChat } from '@ai-sdk/react'
 import { DefaultChatTransport } from 'ai'
 import { call } from '../api.js'
-import { CHIPS, chatPageUrl, draftStateLabel, evidenceFrom, handlerLine, mailDraftUrl, timeline, toolLabel, toolStatus, transportBody } from '../domain/chat.js'
+import { CHIPS, chatPageUrl, draftStateLabel, evidenceFrom, handlerLine, mailDraftUrl, proposalCard, proposalUrl, timeline, toolLabel, toolStatus, transportBody } from '../domain/chat.js'
 import { canReanalyze, canStartAnalysis } from '../domain/workflow.js'
 import { AnalysisBubble, PendingNotice } from './AnalysisSection.jsx'
 import { Modal } from '../ui.jsx'
+import { parseMarkdown } from '../domain/markdown.js'
 
 const STATUS_TEXT = { running: '조회 중', done: '완료', failed: '실패' }
 
@@ -87,6 +88,7 @@ function ChatSession({ item, csrf, initial, onChanged, dispatch, onAnalyze, anal
               : <details><summary>이전 분석 ({entry.revision}회차) 보기</summary><AnalysisBubble analysis={entry.analysis} item={item} current={false} revision={entry.revision} /></details>}
           </div>
         ) : <Turn key={entry.id} turn={entry} itemId={item.id} />)}
+        {(item.proposals ?? []).length > 0 && <Proposals item={item} csrf={csrf} onChanged={onChanged} />}
         {(item.mailDrafts ?? []).length > 0 && <MailDrafts item={item} csrf={csrf} onChanged={onChanged} />}
         {status === 'submitted' && <p className="muted small" role="status">AI가 확인하는 중…</p>}
         <div ref={end} />
@@ -108,6 +110,40 @@ function ChatSession({ item, csrf, initial, onChanged, dispatch, onAnalyze, anal
         </div>
       </form>
     </div>
+  )
+}
+
+// 에이전트가 제안한 변경(추가 정보 저장, 재분석). 제안만 기록되어 있고, 확인 버튼을 눌러야 실행된다.
+function Proposals({ item, csrf, onChanged }) {
+  return (
+    <div className="proposals" aria-label="AI 제안">
+      {item.proposals.map((proposal) => <ProposalCard key={proposal.id} proposal={proposal} itemId={item.id} csrf={csrf} onChanged={onChanged} />)}
+    </div>
+  )
+}
+
+function ProposalCard({ proposal, itemId, csrf, onChanged }) {
+  const card = proposalCard(proposal)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+  async function decide(action) {
+    setBusy(true); setError('')
+    try { await call(proposalUrl(itemId, proposal.id, action), { method: 'POST', body: {}, csrf }) } catch (e) { setError(e.message) }
+    await onChanged?.()
+    setBusy(false)
+  }
+  return (
+    <section className="proposal-card" aria-label={card.title}>
+      <h3>{card.title} <span className={`lozenge status-${proposal.status}`}>{card.state}</span></h3>
+      {card.detail && <p className="chat-text">{card.detail}</p>}
+      {error && <p className="error" role="alert">{error}</p>}
+      {card.open && (
+        <div className="actions">
+          <button type="button" className="ghost" disabled={busy} onClick={() => decide('cancel')}>취소</button>
+          <button type="button" className="primary" disabled={busy} onClick={() => decide('confirm')}>{card.confirm}</button>
+        </div>
+      )}
+    </section>
   )
 }
 
@@ -166,8 +202,24 @@ function Turn({ turn, itemId }) {
           {tools.map((p) => { const s = toolStatus(p); return <li key={p.toolCallId} className={s}>{toolLabel(p.type.slice(5))} · {STATUS_TEXT[s]}</li> })}
         </ul>
       )}
-      {answer && <p className="chat-text">{answer}</p>}
+      {answer && <Markdown text={answer} />}
       <Evidence parts={turn.parts} itemId={itemId} />
+    </div>
+  )
+}
+
+// 답변은 작은 마크다운 해석기로 보여준다: 굵게·코드·목록·제목·구분선만, HTML이나 링크는 해석하지 않는다.
+function Markdown({ text }) {
+  const inline = (parts) => parts.map((p, i) => p.t === 'bold' ? <strong key={i}>{p.v}</strong> : p.t === 'code' ? <code key={i}>{p.v}</code> : <React.Fragment key={i}>{p.v}</React.Fragment>)
+  return (
+    <div className="chat-text markdown">
+      {parseMarkdown(text).map((b, i) => {
+        if (b.type === 'hr') return <hr key={i} />
+        if (b.type === 'h') return <p key={i} className="md-heading"><strong>{inline(b.inlines)}</strong></p>
+        if (b.type === 'ul') return <ul key={i}>{b.items.map((item, j) => <li key={j}>{inline(item)}</li>)}</ul>
+        if (b.type === 'ol') return <ol key={i}>{b.items.map((item, j) => <li key={j}>{inline(item)}</li>)}</ol>
+        return <p key={i}>{inline(b.inlines)}</p>
+      })}
     </div>
   )
 }

@@ -61,6 +61,8 @@ test('AI answers cannot be rated: those action types are not supported', () => {
 
 test('the original-page address is built only from a request number and a citation id', () => {
   assert.equal(evidencePageUrl('CLM-005', 'E1'), '/api/v1/service-requests/CLM-005/evidence/E1/page')
+  assert.equal(evidencePageUrl('CLM-005', 'E1', 2), '/api/v1/service-requests/CLM-005/evidence/E1/page?revision=2')
+  for (const revision of [0, -1, 1.5, '2', '1&x=1']) assert.throws(() => evidencePageUrl('CLM-005', 'E1', revision), /올바르지 않은/)
   for (const [id, evidence] of [['CLM-5', 'E1'], ['../CLM-005', 'E1'], ['CLM-005', '../E1'], ['CLM-005', 'E1/page'], ['CLM-005', ''], ['CLM-005', 'e1']]) {
     assert.throws(() => evidencePageUrl(id, evidence), /올바르지 않은/, `${id} ${evidence}`)
   }

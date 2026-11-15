@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { CHIPS, chatPageUrl, evidenceFrom, draftStateLabel, groupTurns, timeline, handlerLine, mailDraftUrl, toolLabel, toolStatus, transportBody } from './domain/chat.js'
+import { CHIPS, chatPageUrl, evidenceFrom, draftStateLabel, groupTurns, proposalCard, proposalUrl, timeline, handlerLine, mailDraftUrl, toolLabel, toolStatus, transportBody } from './domain/chat.js'
 
 const SHA = 'a'.repeat(64)
 const part = (name, output, state = 'output-available') => ({ type: `tool-${name}`, toolCallId: `c-${name}`, state, input: {}, output })
@@ -133,3 +133,21 @@ test('answers split over several stored messages still read as one turn on the t
     msg('a2', 'assistant', '2026-11-15T01:00:02Z')], [])
   assert.deepEqual(items.map(i => [i.kind, i.parts.length]), [['turn', 1], ['turn', 2]])
 })
+
+test('a proposal card says what it would do and what happened, never that it was done before the server did', () => {
+  assert.deepEqual(proposalCard({ kind: 'add_info', text: '전화 확인 내용', status: 'pending' }),
+    { title: '추가 정보 저장 제안', detail: '전화 확인 내용', state: '아직 저장하지 않았습니다', confirm: '저장', open: true })
+  assert.deepEqual(proposalCard({ kind: 'reanalysis', text: '', status: 'pending' }),
+    { title: '재분석 제안', detail: '추가 정보를 반영해 분석을 다시 실행합니다.', state: '아직 실행하지 않았습니다', confirm: '재분석 시작', open: true })
+  assert.equal(proposalCard({ kind: 'add_info', text: 'x', status: 'confirmed' }).state, '저장했습니다')
+  assert.equal(proposalCard({ kind: 'reanalysis', text: '', status: 'confirmed' }).state, '재분석을 시작했습니다')
+  assert.equal(proposalCard({ kind: 'add_info', text: 'x', status: 'cancelled' }).state, '취소했습니다')
+  assert.equal(proposalCard({ kind: 'add_info', text: 'x', status: 'confirmed' }).open, false)
+})
+
+test('deciding a proposal addresses only a request number and a numeric proposal id', () => {
+  assert.equal(proposalUrl('CLM-005', 4, 'confirm'), '/service-requests/CLM-005/proposals/4/confirm')
+  assert.equal(proposalUrl('CLM-005', 4, 'cancel'), '/service-requests/CLM-005/proposals/4/cancel')
+  for (const bad of [['x', 4, 'confirm'], ['CLM-005', '4/x', 'confirm'], ['CLM-005', 0, 'confirm'], ['CLM-005', 4, 'delete']]) assert.throws(() => proposalUrl(...bad))
+})
+

@@ -7,7 +7,7 @@ import { activitiesFor, firstSentences } from '../domain/analysis.js'
 
 // 분석은 대화의 말풍선 하나로 나온다. 짧게: 요약, 원인 후보, 권장 활동(메일 초안 요청), 근거 접기.
 // 현장 수리 절차는 서비스 부서의 업무이므로 이 화면에 두지 않는다.
-// current=false 인 이전 분석은 활동 버튼과 원본 페이지 열기가 없다(원본 페이지는 서버가 항상 최신 분석의 인용만 연다).
+// current=false 인 이전 분석에는 활동 버튼이 없다. 원본 페이지는 회차(revision)로 그 분석의 인용을 연다.
 export function AnalysisBubble({ analysis: a, item, current, revision, dispatch, csrf, onChanged }) {
   const [open, setOpen] = useState(null)
   const [composing, setComposing] = useState(null)
@@ -16,7 +16,7 @@ export function AnalysisBubble({ analysis: a, item, current, revision, dispatch,
   const cases = a.evidence.filter((e) => e.kind === 'fsr')
   const manuals = a.evidence.filter((e) => e.kind === 'manual')
   const activities = current && a.status === 'answered' ? activitiesFor(item.departments) : []
-  const itemId = current ? item.id : undefined
+  const pageRevision = current ? undefined : revision  // the latest analysis is the server's default
   return (
     <div className="analysis-bubble">
       {revision > 1 && <p className="muted small">분석 {revision}회차</p>}
@@ -72,7 +72,7 @@ export function AnalysisBubble({ analysis: a, item, current, revision, dispatch,
       )}
       {manuals.length > 0 && (
         <details className="evidence-fold"><summary>관련 문서 {manuals.length}건 (보기)</summary>
-          <ul className="evidence">{manuals.map((e) => <EvidenceRow key={e.id} e={e} open={open} setOpen={setOpen} itemId={itemId} />)}</ul>
+          <ul className="evidence">{manuals.map((e) => <EvidenceRow key={e.id} e={e} open={open} setOpen={setOpen} itemId={item.id} revision={pageRevision} />)}</ul>
         </details>
       )}
       <div className="ai-foot">
@@ -112,7 +112,7 @@ export function AdditionalInfo({ item, dispatch }) {
 
 const sourceOf = (a, id) => a.evidence.find((e) => e.id === id)
 
-function EvidenceRow({ e, open, setOpen, itemId }) {
+function EvidenceRow({ e, open, setOpen, itemId, revision }) {
   const isOpen = open === e.id
   return (
     <li className={isOpen ? 'open' : ''}>
@@ -120,7 +120,7 @@ function EvidenceRow({ e, open, setOpen, itemId }) {
         <strong>{e.title}</strong><small>출처: {e.source}</small>
       </button>
       {isOpen && <div className="evidence-body"><pre>{e.excerpt}</pre><p className="note">적용 시 주의: {e.note}</p>
-        {e.ref && itemId && <SourcePageButton itemId={itemId} evidenceId={e.id} title={e.title} />}</div>}
+        {e.ref && itemId && <SourcePageButton itemId={itemId} evidenceId={e.id} title={e.title} revision={revision} />}</div>}
     </li>
   )
 }

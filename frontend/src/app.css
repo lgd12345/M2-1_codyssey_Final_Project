@@ -355,3 +355,21 @@ input:not([type='checkbox']), select, textarea { border-radius: 8px; }
 .ai-compose { display: flex; gap: 0.5rem; }
 .ai-compose input { flex: 1; }
 .mail-to { margin: 0; font-size: 0.9rem; }
+
+.markdown { display: grid; gap: 0.4rem; }
+.markdown p, .markdown ul, .markdown ol { margin: 0; white-space: pre-wrap; }
+.markdown ul, .markdown ol { padding-left: 1.2rem; }
+.markdown hr { border: 0; border-top: 1px solid var(--border, #dfe1e6); margin: 0.2rem 0; width: 100%; }
+
+.departments { max-width: 52rem; width: 100%; text-align: left; display: grid; gap: 1rem; }
+.dept-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 1rem; }
+.dept-row, .dept-new { border: 1px solid var(--border, #dfe1e6); border-radius: var(--radius); padding: 0.8rem 1rem; display: grid; gap: 0.5rem; background: var(--surface, #fff); }
+.dept-row label, .dept-new label { display: grid; gap: 0.2rem; font-size: 0.86rem; font-weight: 600; }
+.dept-row input[type=text], .dept-row input:not([type]), .dept-row textarea, .dept-new input, .dept-new textarea { width: 100%; font-weight: 400; }
+.dept-row .check { display: flex; align-items: center; gap: 0.4rem; font-weight: 400; }
+.dept-row .actions { display: flex; justify-content: space-between; align-items: center; gap: 0.6rem; }
+
+.proposals { display: grid; gap: 0.6rem; }
+.proposal-card { border: 1px dashed var(--border, #b3bac5); border-radius: var(--radius); padding: 0.6rem 0.8rem; display: grid; gap: 0.4rem; background: var(--surface, #fff); }
+.proposal-card h3 { margin: 0; font-size: 0.95rem; }
+.proposal-card .actions { display: flex; justify-content: flex-end; gap: 0.5rem; }

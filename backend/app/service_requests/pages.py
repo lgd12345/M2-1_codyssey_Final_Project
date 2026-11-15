@@ -9,7 +9,7 @@ from __future__ import annotations
 import logging
 from typing import Callable
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from fastapi.responses import Response
 from psycopg.rows import dict_row
 
@@ -45,10 +45,12 @@ def get_page_renderer() -> PageRenderer:
 
 
 @router.get('/{identity}/evidence/{evidence_id}/page')
-def evidence_page(identity: str, evidence_id: str, session: SessionInfo = Depends(require_user),
-                  render: PageRenderer = Depends(get_page_renderer)):
+def evidence_page(identity: str, evidence_id: str, revision: int | None = Query(default=None, ge=1, le=1000),
+                  session: SessionInfo = Depends(require_user), render: PageRenderer = Depends(get_page_renderer)):
     number = request_number(identity)
     staff = session.user.role == 'admin'
+    if revision is not None and not staff:
+        raise EvidenceNotFound()  # customers only ever see the analysis that was reviewed
     with request_database() as connection:
         company_id = access_company(connection, session)
         with connection.cursor(row_factory=dict_row) as cursor:
@@ -57,6 +59,11 @@ def evidence_page(identity: str, evidence_id: str, session: SessionInfo = Depend
                    LEFT JOIN LATERAL (SELECT result FROM service_analysis WHERE request_id=r.id AND status='succeeded'
                                       ORDER BY created_at DESC, id DESC LIMIT 1) ok ON TRUE
                    WHERE r.id=%s AND (%s OR r.company_id=%s)""", (number, staff, company_id)).fetchone()
+            if row is not None and revision is not None:
+                earlier = cursor.execute(
+                    """SELECT result FROM service_analysis WHERE request_id=%s AND status='succeeded'
+                       ORDER BY created_at, id OFFSET %s LIMIT 1""", (number, revision - 1)).fetchone()
+                row = {**row, 'result': earlier['result'] if earlier else None}
     if row is None:
         raise RequestNotFound()
     if not staff and row['status'] not in CUSTOMER_VISIBLE:

@@ -225,3 +225,52 @@ def test_the_rating_endpoint_does_not_exist_and_analyses_carry_no_ratings(setup,
     answer = getattr(clients[who], method)(f'{BASE}/{identity}/analysis/feedback', **({'json': {'rating': 'helpful'}} if method == 'put' else {}))
     assert answer.status_code in (404, 405)
     assert 'feedback' not in item(clients, 'staff', identity)['analysis']
+
+
+# ---------- pages of an earlier analysis ----------
+
+OTHER = 'b' * 64
+
+
+def test_an_operator_opens_the_page_of_an_earlier_analysis_by_revision(setup, use_runner, renderer):
+    clients, equipment = setup
+    calls = renderer()
+    first = good_result(evidence=[{**EVIDENCE[0], 'ref': {'document_sha256': SHA, 'page': 45}}, EVIDENCE[1]])
+    second = good_result(evidence=[{**EVIDENCE[0], 'ref': {'document_sha256': OTHER, 'page': 7}}, EVIDENCE[1]])
+    runner = use_runner(Runner(first))
+    identity = reviewed(clients, equipment)
+    runner.result = second
+    assert post(clients, 'staff', identity, 'reanalysis').status_code == 202
+    # E1 means a different page in each analysis: the revision decides which one is meant.
+    assert clients['staff'].get(page_url(identity), params={'revision': 1}).status_code == 200
+    assert calls[-1] == (SHA, 45)
+    assert clients['staff'].get(page_url(identity), params={'revision': 2}).status_code == 200
+    assert calls[-1] == (OTHER, 7)
+    assert clients['staff'].get(page_url(identity)).status_code == 200 and calls[-1] == (OTHER, 7)  # default: the latest
+
+
+@pytest.mark.parametrize('revision', [0, 3, -1, 99])
+def test_a_revision_that_does_not_exist_is_not_found(setup, use_runner, renderer, revision):
+    clients, equipment = setup
+    renderer()
+    use_runner(Runner(result_with_ref()))
+    identity = reviewed(clients, equipment)
+    assert clients['staff'].get(page_url(identity), params={'revision': revision}).status_code in (404, 422)
+
+
+def test_a_revision_must_be_a_number(setup, use_runner, renderer):
+    clients, equipment = setup
+    renderer()
+    use_runner(Runner(result_with_ref()))
+    identity = reviewed(clients, equipment)
+    assert clients['staff'].get(page_url(identity), params={'revision': 'latest'}).status_code == 422
+
+
+@pytest.mark.parametrize('who', ['alice', 'colleague'])
+def test_customers_cannot_choose_an_earlier_revision(setup, use_runner, renderer, who):
+    clients, equipment = setup
+    calls = renderer()
+    use_runner(Runner(result_with_ref()))
+    identity = approved(clients, equipment)
+    assert clients[who].get(page_url(identity), params={'revision': 1}).status_code == 404
+    assert calls == []

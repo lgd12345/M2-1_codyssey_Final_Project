@@ -12,10 +12,11 @@ import { PortalList } from './pages/PortalList.jsx'
 import { PortalDetail } from './pages/PortalDetail.jsx'
 import { WorkList } from './pages/WorkList.jsx'
 import { WorkDetail } from './pages/WorkDetail.jsx'
+import { Departments } from './pages/Departments.jsx'
 
 const TITLES = {
   home: '공작기계 고객지원', support: '고객센터', login: '로그인', list: '서비스 요청', new: '새 요청', detail: '서비스 요청',
-  'portal-list': '내 서비스 요청', 'portal-new': '새 서비스 요청', 'portal-detail': '서비스 요청', 'work-list': '받은 업무', 'work-detail': '업무', notfound: '페이지를 찾을 수 없습니다',
+  'portal-list': '내 서비스 요청', 'portal-new': '새 서비스 요청', 'portal-detail': '서비스 요청', 'work-list': '받은 업무', departments: '부서 메일 설정', 'work-detail': '업무', notfound: '페이지를 찾을 수 없습니다',
 }
 const deptOfWork = key => Object.entries(DEPT_PREFIX).find(([, prefix]) => prefix === key.slice(0, 3))?.[0]
 const emptyWorkspace = () => ({ owner: null, cases: [], context: null, detail: null, pending: false, error: '' })
@@ -188,6 +189,7 @@ export function App({ theme }) {
   else if (route.name === 'detail') content = <CaseDetail key={route.id} item={item} me={me} dispatch={dispatch} onAnalyze={startAnalysis} analyzing={analysisStarting} analysisError={analysisError} csrf={auth?.csrf_token} onChanged={() => refreshDetail(route.id)} />
   else if (route.name === 'portal-list' || route.name === 'portal-new') content = <PortalList cases={cases} company={workspace.context?.company?.name} onCreate={createRequest} equipment={equipment} modalOpen={route.name === 'portal-new'} />
   else if (route.name === 'portal-detail') content = <PortalDetail key={route.id} item={item} />
+  else if (route.name === 'departments') content = <Departments csrf={auth?.csrf_token} />
   else if (route.name === 'work-list') content = <WorkList cases={cases} deptKey={deptKey} onDeptChange={setDeptKey} />
   else if (route.name === 'work-detail') content = <WorkDetail key={route.workKey} cases={cases} workKey={route.workKey} deptKey={workDept} dispatch={dispatch} />
   else content = <section className="center-card"><h1>페이지를 찾을 수 없습니다</h1><a href={authed ? homeForRole(auth.user.role) : '#/home'}>처음으로</a></section>

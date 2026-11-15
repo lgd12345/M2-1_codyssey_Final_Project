@@ -39,6 +39,7 @@ export function SiteHeader({ preference, theme, session, route, pending = false,
     {authenticated ? (isStaff(role) ? <nav className="site-nav" aria-label="업무 메뉴">
       <a href={HOME.quality} aria-current={current(['list', 'new', 'detail'])}>대기열</a>
       <a href={HOME.dept} aria-current={current(['work-list', 'work-detail'])}>받은 업무</a>
+      <a href="#/departments" aria-current={current(['departments'])}>부서 메일</a>
     </nav> : <nav className="site-nav" aria-label="고객 메뉴">
       <a href={HOME.customer} aria-current={current(['portal-list', 'portal-new', 'portal-detail'])}>내 서비스 요청</a>
     </nav>) : !pending ? <nav className="site-nav" aria-label="주 메뉴">

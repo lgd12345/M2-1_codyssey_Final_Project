@@ -233,6 +233,9 @@ test('the operator chat answers from tool results, shows evidence and keeps its 
   const log = staff.page.getByRole('log', { name: 'AI 대화 내용' })
   await expect(log.getByText('이 요청과 비슷한 과거 사례를 찾아', { exact: false })).toBeVisible()
   await expect(log.getByText('비슷한 사례는 FSR-00005이며 담당 작업자는 EMP-0003입니다.', { exact: true })).toBeVisible({ timeout: 15000 })
+  // Markdown is rendered, not shown raw: the bold case number is a real <strong>.
+  await expect(log.locator('strong', { hasText: 'FSR-00005' }).first()).toBeVisible()
+  await expect(log).not.toContainText('**')
   const trail = log.getByRole('list', { name: '조회 과정' }).getByRole('listitem')
   await expect(trail).toHaveText(['과거 사례 검색 · 완료', '사례 담당 기록 조회 · 완료', '매뉴얼 검색 · 완료'])
   await expect(log.getByText('과거 사례 1건 (보기)', { exact: true })).toBeVisible()
@@ -368,10 +371,116 @@ test('analysis and conversation are one window: analysis is the first bubble and
   expect(order.indexOf('user')).toBeGreaterThan(order.indexOf('analysis'))
   expect(order.lastIndexOf('analysis')).toBeGreaterThan(order.indexOf('user'))
 
+  // The original page of an earlier analysis opens too, chosen by its revision.
+  await log.getByText('이전 분석 (1회차) 보기', { exact: true }).click()
+  const earlier = log.locator('details').filter({ hasText: '이전 분석 (1회차) 보기' }).first()
+  await earlier.getByText('관련 문서 1건 (보기)', { exact: true }).click()
+  await earlier.getByRole('button', { name: /E2E 매뉴얼/ }).click()
+  const pageRequest = staff.page.waitForRequest((r) => r.url().includes('/evidence/E1/page?revision=1'))
+  await earlier.getByRole('button', { name: '원본 페이지 보기', exact: true }).click()
+  await pageRequest
+  const original = staff.page.getByRole('dialog', { name: /원본 페이지 · E2E 매뉴얼/ })
+  await expect(original.getByRole('img', { name: /원본 페이지/ })).toBeVisible()
+  await expect.poll(() => original.getByRole('img').evaluate((img) => img.complete && img.naturalWidth > 0), { timeout: 10000 }).toBe(true)
+  await staff.page.keyboard.press('Escape')
+
   // The conversation survives a reload in the same order, and customers get none of it.
   await staff.page.reload()
   await expect(staff.page.getByRole('log', { name: 'AI 대화 내용' }).getByText('분석 2회차', { exact: true })).toBeVisible()
   expect(JSON.stringify(await serverItem(customer.page, id))).not.toContain('analysisHistory')
+  await customer.context.close()
+  await staff.context.close()
+})
+
+test('operators edit the department mail addresses on a settings page; customers cannot open it', async ({ browser }) => {
+  const customer = await newContext(browser, process.env.E2E_CUSTOMER, 'portal')
+  const staff = await newContext(browser, process.env.E2E_STAFF, 'cases')
+  await staff.page.getByRole('link', { name: '부서 메일', exact: true }).click()
+  await expect(staff.page.getByRole('heading', { name: '부서 메일 설정', exact: true })).toBeVisible()
+  const service = staff.page.getByRole('listitem', { name: '서비스 부서' })
+  const recipients = service.getByLabel('수신 주소 (한 줄에 하나)')
+  await expect(recipients).toHaveValue('hodob76@gmail.com')
+  const save = service.getByRole('button', { name: '저장', exact: true })
+  await expect(save).toBeDisabled()  // nothing changed
+
+  await recipients.fill('not-an-address')
+  await expect(service.getByRole('alert')).toContainText('주소 형식이 올바르지 않습니다')
+  await expect(save).toBeDisabled()
+
+  await recipients.fill('Dispatch@Example.com\nsecond@example.com')
+  await save.click()
+  await expect(service.getByText('저장했습니다.', { exact: true })).toBeVisible()
+  await expect(recipients).toHaveValue('dispatch@example.com\nsecond@example.com')
+  await expect(service.getByText('마지막 변경', { exact: false })).toBeVisible()
+  const listed = await (await staff.page.request.get('/api/v1/service-requests/departments/manage')).json()
+  expect(listed.departments.find(d => d.key === 'service').recipients).toEqual(['dispatch@example.com', 'second@example.com'])
+
+  // The new address is what a mail form shows.
+  const id = await createRequest(customer.page, '부서 주소 확인용 증상 설명입니다.')
+  await analyse(staff.page, id)
+  await staff.page.getByRole('list', { name: '권장 활동' }).getByRole('button', { name: '메일 작성', exact: true }).click()
+  await expect(staff.page.getByText('서비스 · dispatch@example.com, second@example.com', { exact: false })).toBeVisible()
+
+  // Add a department, then put the service address back.
+  await staff.page.goto('/#/departments')
+  const add = staff.page.getByRole('region', { name: '부서 추가' })
+  await add.getByLabel('키 (영문 소문자·숫자·_)').fill('supplier')
+  await add.getByLabel('이름', { exact: true }).fill('협력사 대응')
+  await add.getByLabel('수신 주소 (한 줄에 하나)').fill('partner@example.com')
+  await add.getByRole('button', { name: '부서 추가', exact: true }).click()
+  await expect(staff.page.getByRole('listitem', { name: '협력사 대응 부서' })).toBeVisible()
+  await service.getByLabel('수신 주소 (한 줄에 하나)').fill('hodob76@gmail.com')
+  await service.getByRole('button', { name: '저장', exact: true }).click()
+  await expect(service.getByText('저장했습니다.', { exact: true })).toBeVisible()
+
+  await customer.page.goto('/#/departments')
+  await expect(customer.page.getByRole('heading', { name: '부서 메일 설정', exact: true })).toHaveCount(0)
+  expect((await customer.page.request.get('/api/v1/service-requests/departments/manage')).status()).toBe(403)
+  await customer.context.close()
+  await staff.context.close()
+})
+
+test('the agent only proposes saving information and re-analysing: the card button does it', async ({ browser }) => {
+  const customer = await newContext(browser, process.env.E2E_CUSTOMER, 'portal')
+  const staff = await newContext(browser, process.env.E2E_STAFF, 'cases')
+  const id = await createRequest(customer.page, '제안 카드 확인용 증상 설명입니다.')
+  await analyse(staff.page, id)
+  await expect(statusButton(staff.page, '검토 대기')).toBeVisible({ timeout: 15000 })  // proposals need a finished analysis
+  const ask = async (text) => {
+    await staff.page.getByLabel('질문 입력', { exact: true }).fill(text)
+    await staff.page.getByRole('button', { name: '보내기', exact: true }).click()
+  }
+
+  await ask('전화로 확인한 내용이 있습니다. 추가 정보 제안해 주세요')
+  const infoCard = staff.page.getByRole('region', { name: '추가 정보 저장 제안' })
+  await expect(infoCard.getByText('아직 저장하지 않았습니다', { exact: true })).toBeVisible({ timeout: 15000 })
+  await expect(infoCard.getByText('전화 확인: 알람 2023이 스핀들 정지 직후 발생', { exact: true })).toBeVisible()
+  expect((await serverItem(staff.page, id)).additionalInfo).toEqual([])  // proposing saved nothing
+
+  await infoCard.getByRole('button', { name: '저장', exact: true }).click()
+  await expect(infoCard.getByText('저장했습니다', { exact: true })).toBeVisible()
+  await expect(infoCard.getByRole('button', { name: '저장', exact: true })).toHaveCount(0)
+  const saved = await serverItem(staff.page, id)
+  expect(saved.additionalInfo.map(n => n.text)).toEqual(['전화 확인: 알람 2023이 스핀들 정지 직후 발생'])
+  expect(saved.status).toBe('검토 대기')  // saving does not analyse
+
+  await ask('재분석 제안해 주세요')
+  const reCard = staff.page.getByRole('region', { name: '재분석 제안' })
+  await expect(reCard.getByText('아직 실행하지 않았습니다', { exact: true })).toBeVisible({ timeout: 15000 })
+  expect((await serverItem(staff.page, id)).analysisHistory).toHaveLength(1)  // proposing started nothing
+  await reCard.getByRole('button', { name: '재분석 시작', exact: true }).click()
+  const log = staff.page.getByRole('log', { name: 'AI 대화 내용' })
+  await expect(log.getByText('분석 2회차', { exact: true })).toBeVisible({ timeout: 20000 })
+  await expect(log.getByText('추가 정보 1건 반영', { exact: false }).first()).toBeVisible()
+
+  // A cancelled proposal changes nothing.
+  await ask('전화로 확인한 내용이 있습니다. 추가 정보 제안해 주세요')
+  const second = staff.page.getByRole('region', { name: '추가 정보 저장 제안' }).last()
+  await expect(second.getByRole('button', { name: '취소', exact: true })).toBeVisible({ timeout: 15000 })
+  await second.getByRole('button', { name: '취소', exact: true }).click()
+  await expect(second.getByText('취소했습니다', { exact: true })).toBeVisible()
+  expect((await serverItem(staff.page, id)).additionalInfo).toHaveLength(1)
+  expect(JSON.stringify(await serverItem(customer.page, id))).not.toContain('proposals')
   await customer.context.close()
   await staff.context.close()
 })

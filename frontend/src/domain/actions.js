@@ -41,9 +41,11 @@ export function requestFor(action, item) {
 
 // Original page of a manual citation. Only a request number and a citation id go into the address; the server
 // decides which document page that is and whether this person may open it.
-export function evidencePageUrl(id, evidenceId) {
+// An earlier analysis is addressed by its revision number: the same evidence id means another page in each analysis.
+export function evidencePageUrl(id, evidenceId, revision) {
   if (!ID.test(id ?? '') || !EVIDENCE.test(evidenceId ?? '')) throw new Error('올바르지 않은 원본 페이지 주소입니다.')
-  return `/api/v1/service-requests/${id}/evidence/${evidenceId}/page`
+  if (revision !== undefined && !(Number.isInteger(revision) && revision >= 1)) throw new Error('올바르지 않은 원본 페이지 주소입니다.')
+  return `/api/v1/service-requests/${id}/evidence/${evidenceId}/page${revision === undefined ? '' : `?revision=${revision}`}`
 }
 
 

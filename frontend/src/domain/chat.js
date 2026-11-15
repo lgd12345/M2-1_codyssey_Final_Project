@@ -104,3 +104,22 @@ export function timeline(messages, analyses) {
   }))
   return entries.sort((a, b) => (a.at === b.at ? a.order - b.order : a.at < b.at ? -1 : 1))
 }
+
+// Cards for what the agent proposed. A proposal is only a proposal until the operator confirms it.
+const PROPOSALS = {
+  add_info: { title: '추가 정보 저장 제안', pending: '아직 저장하지 않았습니다', done: '저장했습니다', confirm: '저장' },
+  reanalysis: { title: '재분석 제안', pending: '아직 실행하지 않았습니다', done: '재분석을 시작했습니다', confirm: '재분석 시작' },
+}
+export function proposalCard(proposal) {
+  const base = PROPOSALS[proposal.kind]
+  const state = proposal.status === 'confirmed' ? base.done : proposal.status === 'cancelled' ? '취소했습니다' : base.pending
+  return {
+    title: base.title, state, confirm: base.confirm, open: proposal.status === 'pending',
+    detail: proposal.kind === 'reanalysis' ? '추가 정보를 반영해 분석을 다시 실행합니다.' : proposal.text,
+  }
+}
+
+export function proposalUrl(id, proposalId, action) {
+  if (!REQUEST.test(id ?? '') || !Number.isInteger(proposalId) || proposalId < 1 || !['confirm', 'cancel'].includes(action)) throw new Error('올바르지 않은 제안 주소입니다.')
+  return `/service-requests/${id}/proposals/${proposalId}/${action}`
+}

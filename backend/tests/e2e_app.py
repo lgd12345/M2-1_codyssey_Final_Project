@@ -86,19 +86,37 @@ agent_tools.search_cases = lambda *args, **kwargs: CHAT_CASES
 agent_tools.search_manual = lambda *args, **kwargs: CHAT_MANUAL
 
 
-def _asked(messages):
-    return ' '.join(str(getattr(part, 'content', '')) for message in messages for part in message.parts
-                    if getattr(part, 'part_kind', '') == 'user-prompt')
+def _latest_prompt(messages):
+    for message in reversed(messages):
+        for part in message.parts:
+            if getattr(part, 'part_kind', '') == 'user-prompt':
+                return str(part.content)
+    return ''
+
+
+def _answered_by_a_tool(messages):
+    """The newest request carries tool results: this turn only has to write its answer."""
+    return any(getattr(part, 'part_kind', '') == 'tool-return' for part in messages[-1].parts)
 
 
 def chat_plan(messages):
-    if '메일 초안' in _asked(messages):
-        if any(getattr(part, 'part_kind', '') == 'tool-return' for message in messages for part in message.parts):
+    asked = _latest_prompt(messages)
+    done = _answered_by_a_tool(messages)
+    if '메일 초안' in asked:
+        if done:
             return [('text', '서비스 부서 메일 초안을 만들었습니다. 카드에서 확인하고 보내기를 눌러 주세요.')]
         return [('tool', 'draft_department_mail', {'department_key': 'service', 'subject': '[출동 요청] ATC 정지',
                                                    'body': 'F400 ATC 정지 증상입니다. 현장 점검을 부탁드립니다.'})]
-    if any(getattr(part, 'part_kind', '') == 'tool-return' for message in messages for part in message.parts):
-        return [('text', '비슷한 사례는 FSR-00005이며 담당 작업자는 EMP-0003입니다.')]
+    if '추가 정보 제안' in asked:
+        if done:
+            return [('text', '추가 정보 저장을 제안했습니다. 카드에서 확인해 주세요.')]
+        return [('tool', 'propose_additional_info', {'text': '전화 확인: 알람 2023이 스핀들 정지 직후 발생'})]
+    if '재분석 제안' in asked:
+        if done:
+            return [('text', '재분석을 제안했습니다. 카드에서 확인해 주세요.')]
+        return [('tool', 'propose_reanalysis', {})]
+    if done:
+        return [('text', '비슷한 사례는 **FSR-00005**이며 담당 작업자는 EMP-0003입니다.')]
     return [('tool', 'search_cases', {'query': 'ATC'}), ('tool', 'lookup_case', {'fsr_no': 'FSR-00005'}),
             ('tool', 'search_manual', {'query': 'ATC'})]
 

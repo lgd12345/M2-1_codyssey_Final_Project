@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "test": "node --test src/theme.test.js src/navigation.test.js src/workflow.test.js src/vite-config.test.js src/actions.test.js src/chat.test.js src/analysis.test.js",
+    "test": "node --test src/theme.test.js src/navigation.test.js src/workflow.test.js src/vite-config.test.js src/actions.test.js src/chat.test.js src/analysis.test.js src/markdown.test.js src/departments.test.js",
     "test:e2e": "playwright test",
     "test:e2e:live": "playwright test --config playwright.live.config.js",
     "build": "vite build",

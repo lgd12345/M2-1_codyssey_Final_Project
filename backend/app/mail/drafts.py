@@ -41,6 +41,16 @@ class MailOff(AuthError):
     message = '메일 발송이 설정되지 않았습니다. 관리자에게 문의해 주세요.'
 
 
+class DepartmentNotFound(AuthError):
+    status_code, code = 404, 'DEPARTMENT_NOT_FOUND'
+    message = '부서를 찾을 수 없습니다.'
+
+
+class DepartmentExists(AuthError):
+    status_code, code = 409, 'DEPARTMENT_EXISTS'
+    message = '같은 키의 부서가 이미 있습니다.'
+
+
 class MailAiInvalid(AuthError):
     status_code, code = 502, 'MAIL_AI_INVALID'
     message = 'AI가 만든 초안이 메일 규칙에 맞지 않았습니다. 다시 시도하거나 직접 작성해 주세요.'
@@ -127,3 +137,32 @@ def cancel(connection, number: int, draft_id: int) -> None:
     if row[0] not in ('draft', 'failed'):
         raise DraftNotSendable()
     connection.execute("UPDATE service_mail_draft SET status='cancelled' WHERE id=%s", (draft_id,))
+
+
+def manage_list(connection) -> list[dict[str, Any]]:
+    with connection.cursor(row_factory=dict_row) as cursor:
+        rows = cursor.execute('SELECT key,name,description,recipients,active,updated_by,updated_at FROM service_department ORDER BY key').fetchall()
+    return [{'key': r['key'], 'name': r['name'], 'description': r['description'], 'recipients': list(r['recipients']),
+             'active': r['active'], 'updatedBy': r['updated_by'], 'updatedAt': r['updated_at'].isoformat() if r['updated_at'] else None}
+            for r in rows]
+
+
+def add_department(connection, key: str, name: str, description: str, recipients: list[str], actor: str) -> None:
+    import psycopg
+    try:
+        with connection.transaction():
+            connection.execute(
+                'INSERT INTO service_department(key,name,description,recipients,updated_by,updated_at) VALUES (%s,%s,%s,%s,%s,now())',
+                (key, name.strip(), description.strip(), recipients, actor))
+    except psycopg.errors.UniqueViolation:
+        raise DepartmentExists() from None
+
+
+def change_department(connection, key: str, change: dict[str, Any], actor: str) -> None:
+    columns = {'name': 'name', 'description': 'description', 'recipients': 'recipients', 'active': 'active'}
+    sets = [f'{columns[field]}=%s' for field in change]
+    values = [value.strip() if isinstance(value, str) else value for value in change.values()]
+    row = connection.execute(f'UPDATE service_department SET {", ".join(sets)}, updated_by=%s, updated_at=now() WHERE key=%s RETURNING key',
+                             (*values, actor, key)).fetchone()
+    if row is None:
+        raise DepartmentNotFound()

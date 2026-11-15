@@ -3,9 +3,11 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import re
 
 from fastapi import APIRouter, Depends, Query
-from pydantic import BaseModel, Field
+from email_validator import EmailNotValidError, validate_email
+from pydantic import BaseModel, Field, StrictBool, field_validator, model_validator
 
 from pydantic_ai import Agent, UsageLimits
 
@@ -41,6 +43,52 @@ class AiIn(Input):
 class MailText(BaseModel):
     subject: str
     body: str
+
+
+def _recipients(values):
+    if not isinstance(values, list) or len(values) > 10:
+        raise ValueError('recipients must be a list of at most 10 addresses')
+    seen: list[str] = []
+    for value in values:
+        if not isinstance(value, str) or re.search(r'[\r\n]', value):
+            raise ValueError('invalid address')
+        try:
+            address = validate_email(value.strip(), check_deliverability=False, allow_smtputf8=False).ascii_email.casefold()
+        except EmailNotValidError:
+            raise ValueError('invalid address') from None
+        if address not in seen:
+            seen.append(address)
+    return seen
+
+
+class DepartmentNew(Input):
+    key: str = Field(pattern=r'^[a-z][a-z0-9_]{1,30}$')
+    name: str = Field(min_length=1, max_length=40)
+    description: str = Field(default='', max_length=300)
+    recipients: list[str] = Field(default_factory=list)
+
+    @field_validator('recipients', mode='before')
+    @classmethod
+    def clean_recipients(cls, values):
+        return _recipients(values)
+
+
+class DepartmentChange(Input):
+    name: str | None = Field(default=None, min_length=1, max_length=40)
+    description: str | None = Field(default=None, max_length=300)
+    recipients: list[str] | None = None
+    active: StrictBool | None = None
+
+    @field_validator('recipients', mode='before')
+    @classmethod
+    def clean_recipients(cls, values):
+        return None if values is None else _recipients(values)
+
+    @model_validator(mode='after')
+    def something_changes(self):
+        if all(getattr(self, field) is None for field in ('name', 'description', 'recipients', 'active')):
+            raise ValueError('send at least one change')
+        return self
 
 
 class Empty(Input):
@@ -97,6 +145,30 @@ async def mail_template_ai(identity: str, body: AiIn, session: SessionInfo = Dep
         logger.warning('ai mail compose failed: %s', type(error).__name__)
         raise drafts.MailAiFailed(chat_flow.safe_error_text(error)) from None
     return {'subject': subject, 'body': text}
+
+
+def _manage(connection) -> dict:
+    return {'departments': drafts.manage_list(connection)}
+
+
+@router.get('/departments/manage')
+def manage_departments(session: SessionInfo = Depends(require_operator)):
+    with request_database() as connection:
+        return _manage(connection)
+
+
+@router.post('/departments', status_code=201)
+def add_department(body: DepartmentNew, session: SessionInfo = Depends(require_operator_csrf)):
+    with request_database() as connection:
+        drafts.add_department(connection, body.key, body.name, body.description, body.recipients, session.user.login_id)
+        return _manage(connection)
+
+
+@router.patch('/departments/{key}')
+def change_department(key: str, body: DepartmentChange, session: SessionInfo = Depends(require_operator_csrf)):
+    with request_database() as connection:
+        drafts.change_department(connection, key, body.model_dump(exclude_none=True), session.user.login_id)
+        return _manage(connection)
 
 
 @router.post('/{identity}/mail-drafts', status_code=201)
