@@ -45,13 +45,14 @@ async function createRequest(page, { reason = '공구 교환 이상', message, p
 }
 
 const serverItem = async (page, id) => (await page.request.get(`${API}/${id}`)).json()
-const statusButton = (page, name) => page.getByRole('button', { name: new RegExp(`^${name}`) })
+const statusBadge = (page, name) => page.getByRole('status', { name: `상태 ${name}` })
 const rowFor = (page, id) => page.getByRole('row').filter({ hasText: id })
 
-async function analyse(staff, id, wanted = '검토 대기') {
+// A request is 처리 중 from the moment the analysis starts; the analysis is finished once the conversation opens.
+async function analyse(staff, id) {
   await staff.goto(`/#/cases/${id}`)
   await staff.getByRole('button', { name: '분석해줘', exact: true }).click()
-  await expect(statusButton(staff, wanted)).toBeVisible({ timeout: PAGE_BUDGET })
+  await expect(staff.getByLabel('질문 입력', { exact: true })).toBeEnabled({ timeout: PAGE_BUDGET })
 }
 
 const optionWith = async (select, text) => (await select.locator('option', { hasText: text }).first().textContent())
@@ -154,7 +155,7 @@ test('theme preference cycles, is applied to the page and survives a reload; the
 // ---------------------------------------------------------------------------------------------------------------
 
 test('private pages need a session, wrong credentials are refused, roles are routed and sign out ends the session', async ({ browser, page }) => {
-  for (const hash of ['cases', 'cases/new', 'cases/CLM-001', 'portal', 'portal/new', 'portal/CLM-001', 'work', 'work/SVC-001']) {
+  for (const hash of ['cases', 'cases/new', 'cases/CLM-001', 'portal', 'portal/new', 'portal/CLM-001', 'departments']) {
     await page.goto(`/#/${hash}`)
     await expect(page).toHaveURL(/#\/login$/)
   }
@@ -180,7 +181,7 @@ test('private pages need a session, wrong credentials are refused, roles are rou
   await expect(menu.getByRole('link', { name: '내 서비스 요청' })).toHaveAttribute('aria-current', 'page')
   await expect(customer.page.getByRole('navigation', { name: '업무 메뉴' })).toHaveCount(0)
   await expect(customer.page.locator('.header-account')).toHaveText(process.env.E2E_CUSTOMER)
-  for (const hash of ['cases', 'cases/new', 'work', 'login']) {
+  for (const hash of ['cases', 'cases/new', 'departments', 'login']) {
     await customer.page.goto(`/#/${hash}`)
     await expect(customer.page).toHaveURL(/#\/portal$/)
   }
@@ -192,9 +193,10 @@ test('private pages need a session, wrong credentials are refused, roles are rou
   const staff = await session(browser, process.env.E2E_STAFF, 'cases')
   const ops = staff.page.getByRole('navigation', { name: '업무 메뉴' })
   await expect(ops.getByRole('link', { name: '대기열' })).toHaveAttribute('aria-current', 'page')
-  await ops.getByRole('link', { name: '받은 업무' }).click()
-  await expect(staff.page).toHaveURL(/#\/work$/)
-  await expect(ops.getByRole('link', { name: '받은 업무' })).toHaveAttribute('aria-current', 'page')
+  await expect(ops.getByRole('link', { name: '받은 업무' })).toHaveCount(0)  // department work is gone
+  await ops.getByRole('link', { name: '부서 메일' }).click()
+  await expect(staff.page).toHaveURL(/#\/departments$/)
+  await expect(ops.getByRole('link', { name: '부서 메일' })).toHaveAttribute('aria-current', 'page')
   await expect(staff.page.getByRole('navigation', { name: '고객 메뉴' })).toHaveCount(0)
   await expect(staff.page.getByText('AI 분석은 검토용 초안입니다. 인용된 근거와 원본 매뉴얼을 확인해 주세요.')).toBeVisible()  // operator footer
   await staff.page.goto('/#/login')
@@ -323,18 +325,18 @@ test('customer list: company sharing, every filter, sorting and the customer-saf
   await expect(rowFor(bob.page, first)).toHaveCount(0)
   await expect(alice.page.getByText('의 서비스 요청을 한곳에서 확인합니다.', { exact: false })).toBeVisible()
 
-  // Internal status names never reach the customer: an analysed request is simply "확인 중".
-  await expect(rowFor(alice.page, first).getByText('확인 중', { exact: true })).toBeVisible()
+  // Internal status names never reach the customer: an analysed request is simply "처리 중".
+  await expect(rowFor(alice.page, first).getByText('처리 중', { exact: true })).toBeVisible()
   await expect(rowFor(alice.page, second).getByText('접수됨', { exact: true })).toBeVisible()
   await expect(alice.page.getByText('검토 대기', { exact: true })).toHaveCount(0)
 
   const page = alice.page
   const total = page.getByText(/^총 \d+건$/)
   // Status filter + removable chip.
-  await page.getByRole('combobox', { name: '상태', exact: true }).selectOption('확인 중')
+  await page.getByRole('combobox', { name: '상태', exact: true }).selectOption('처리 중')
   await expect(rowFor(page, first)).toBeVisible()
   await expect(rowFor(page, second)).toHaveCount(0)
-  await page.getByRole('button', { name: '상태: 확인 중 ×' }).click()
+  await page.getByRole('button', { name: '상태: 처리 중 ×' }).click()
   await expect(rowFor(page, second)).toBeVisible()
   // Type filter.
   await page.getByRole('combobox', { name: '유형', exact: true }).selectOption('알람·전장 이상')
@@ -372,13 +374,13 @@ test('customer list: company sharing, every filter, sorting and the customer-saf
   await expect(header).toHaveAttribute('aria-sort', 'descending')
   expect(await ids()).toEqual([...(await ids())].sort().reverse())
 
-  // Detail: facts, history, guides (none before approval), and no contact or follow-up controls.
+  // Detail: facts, history, guides (none before the request is closed), and no contact or follow-up controls.
   await page.getByRole('link', { name: `${first} 상세 보기` }).click()
   await expect(page).toHaveURL(new RegExp(`#/portal/${first}$`))
   const facts = page.locator('.pd-meta')
   await expect(facts).toContainText(first)
   await expect(facts).toContainText(process.env.E2E_CUSTOMER)
-  await expect(facts.getByText('확인 중', { exact: true })).toBeVisible()
+  await expect(facts.getByText('처리 중', { exact: true })).toBeVisible()
   await expect(page.getByText('목록 확인 첫째 요청').first()).toBeVisible()
   await expect(page.getByRole('tab', { name: '이력', exact: true })).toHaveAttribute('aria-selected', 'true')
   await expect(page.getByRole('heading', { name: '요청 이력' })).toBeVisible()
@@ -414,20 +416,20 @@ test('operator queue: counts per status, search, every filter, empty state and n
   await page.reload()  // the list loaded at sign-in predates the two requests filed above
   const side = page.getByRole('complementary', { name: '대기열' })
   const count = async name => Number((await side.getByRole('button', { name: new RegExp(`^${name}`) }).locator('.count').textContent()).trim())
-  const before = await count('검토 대기')
+  const before = await count('처리 중')
   const beforeNew = await count('접수됨')
   await analyse(page, analysed)
   await page.goto('/#/cases')
   await page.reload()
-  expect(await count('검토 대기')).toBe(before + 1)
+  expect(await count('처리 중')).toBe(before + 1)
   expect(await count('접수됨')).toBe(beforeNew - 1)  // the analysed request left "접수됨"
   const all = await count('모든 요청')
   await expect(page.getByText(`총 ${all}건`)).toBeVisible()
   expect(all).toBeGreaterThanOrEqual(2)
 
   // Queue buttons filter by status and mark the current one.
-  await side.getByRole('button', { name: /^검토 대기/ }).click()
-  await expect(side.getByRole('button', { name: /^검토 대기/ })).toHaveAttribute('aria-current', 'true')
+  await side.getByRole('button', { name: /^처리 중/ }).click()
+  await expect(side.getByRole('button', { name: /^처리 중/ })).toHaveAttribute('aria-current', 'true')
   await expect(rowFor(page, analysed)).toBeVisible()
   await expect(rowFor(page, waiting)).toHaveCount(0)
   await side.getByRole('button', { name: /^접수됨/ }).click()
@@ -497,8 +499,8 @@ test('operator detail: AI tabs and evidence, original pages, notes, department p
   // Before analysis: nothing is pretended.
   await expect(page.getByText('아직 분석 결과가 없습니다.')).toBeVisible()
   await expect(page.getByText('미분석', { exact: true })).toBeVisible()
-  await expect(page.getByText('아직 분석 결과와 부서별 초안이 없습니다.', { exact: false })).toBeVisible()
-  await expect(page.getByRole('heading', { name: '검토 전' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: '처리 대기' })).toBeVisible()
+  await expect(page.getByText('연결 업무', { exact: true })).toHaveCount(0)  // the rest appears after the analysis
   await expect(page.getByRole('button', { name: '승인', exact: true })).toHaveCount(0)
 
   // Request card can be collapsed.
@@ -582,137 +584,44 @@ test('operator detail: AI tabs and evidence, original pages, notes, department p
   await expect(activity.getByLabel('내부 메모', { exact: true })).toHaveCount(0)
   await expect(page.getByText('저장하지 않을 메모')).toHaveCount(0)
 
-  // Department proposals: AI choice, adding, excluding, empty drafts, edit marker and reset to the AI original.
-  await expect(page.getByRole('heading', { name: '연결 업무 제안' })).toBeVisible()
-  await expect(page.getByText('승인 전 · 아직 전달되지 않음')).toBeVisible()
-  const service = page.getByRole('checkbox', { name: /^서비스/ })
-  const quality = page.getByRole('checkbox', { name: /^품질/ })
-  await expect(service).toBeChecked()
-  await expect(page.getByText('AI 추천', { exact: true })).toBeVisible()
-  await expect(quality).not.toBeChecked()
-  const approve = page.getByRole('button', { name: '승인', exact: true })
-  await expect(approve).toBeEnabled()
-  await quality.click()
-  await expect(page.getByText('추가함', { exact: true })).toBeVisible()
-  await expect(page.getByText('초안이 비어 있습니다.')).toBeVisible()
-  await expect(approve).toBeDisabled()
-  await expect(page.getByText('부서를 한 곳 이상 선택하고 모든 초안을 채우면 승인할 수 있습니다.')).toBeVisible()
-  await quality.click()
-  await expect(quality).not.toBeChecked()
-  await expect(approve).toBeEnabled()
-  await service.click()
-  await expect(page.getByText('제외함', { exact: true })).toBeVisible()
-  await expect(approve).toBeDisabled()
-  await service.click()
-  await expect(service).toBeChecked()
-  const draft = page.getByLabel('서비스 초안', { exact: true })
-  await expect(draft).toHaveValue('ATC 점검 방문 초안')
-  await draft.fill('검토자가 바꾼 초안')
-  await expect(page.getByRole('button', { name: /초안 접기 · 수정됨/ })).toBeVisible()
-  await page.getByRole('button', { name: 'AI 원본으로 되돌리기' }).click()
-  await expect(draft).toHaveValue('ATC 점검 방문 초안')
-  await page.getByRole('button', { name: /^초안 접기/ }).click()
-  await expect(draft).toHaveCount(0)
-  await page.getByRole('button', { name: /^초안 보기/ }).click()
-  await expect(draft).toBeVisible()
-
-  // Details panel, status menu and decline form can be opened and left without side effects.
-  await expect(page.getByText('대상 부서')).toBeVisible()
-  await page.getByRole('button', { name: '나에게 지정', exact: true }).click()
-  await expect(page.locator('.detail-list')).toContainText(process.env.E2E_STAFF)
-  const status = statusButton(page, '검토 대기')
-  await status.click()
-  await expect(page.getByRole('menuitem', { name: '재분석 요청', exact: true })).toBeEnabled()
-  await status.click()
-  await expect(page.getByRole('menu')).toHaveCount(0)
-  await page.getByRole('button', { name: '반려', exact: true }).click()
-  await expect(page.getByRole('button', { name: '반려 확인', exact: true })).toBeDisabled()
-  await page.getByRole('button', { name: '취소', exact: true }).last().click()
-  await expect(page.getByRole('button', { name: '반려 확인', exact: true })).toHaveCount(0)
-  expect((await serverItem(page, id)).status).toBe('검토 대기')
+  // The old review controls are gone: no department selection or drafts, approval, decline, assignee or status menu.
+  for (const name of ['승인', '반려', '나에게 지정']) await expect(page.getByRole('button', { name, exact: true })).toHaveCount(0)
+  await expect(page.getByRole('checkbox')).toHaveCount(0)
+  await expect(page.getByText('연결 업무', { exact: true })).toHaveCount(0)
+  await expect(page.getByText('대상 부서', { exact: true })).toHaveCount(0)
+  await expect(page.getByText('담당자', { exact: true })).toHaveCount(0)
+  await expect(statusBadge(page, '처리 중')).toBeVisible()
+  expect((await serverItem(page, id)).status).toBe('처리 중')
   expect(customer.errors.concat(staff.errors)).toEqual([])
   await closeAll(customer, staff)
 })
 
-test('four-team approval, department inbox, work detail and what the customer sees from guides', async ({ browser }) => {
+test('closing: the result and the guides reach the customer together, and not before', async ({ browser }) => {
   const customer = await session(browser, process.env.E2E_CUSTOMER, 'portal')
   const staff = await session(browser, process.env.E2E_STAFF, 'cases')
-  const id = await createRequest(customer.page, { message: '네 부서 승인 확인용 요청입니다.' })
-  const number = id.slice(4)
-  const keys = { service: `SVC-${number}`, quality: `QLT-${number}`, parts: `PRT-${number}`, sales: `SAL-${number}` }
+  const id = await createRequest(customer.page, { message: '종결 안내 확인용 요청입니다.' })
   const page = staff.page
   await analyse(page, id)
-  // Before approval a customer cannot open the page, and the refusal looks like "does not exist".
+
+  // While the request is being processed the customer sees progress only: no guides, no page, no result.
   expect((await customer.page.request.get(`/api/v1/service-requests/${id}/evidence/E1/page`)).status()).toBe(404)
-  for (const [department, draft] of [['품질', '품질 지시'], ['부품·자재', '부품 지시'], ['영업', '영업 지시']]) {
-    await page.getByRole('checkbox', { name: new RegExp(`^${department}`) }).click()
-    await page.getByLabel(`${department} 초안`, { exact: true }).fill(draft)
-  }
-  await page.getByRole('button', { name: '승인', exact: true }).click()
-  await expect(statusButton(page, '처리 중')).toBeVisible()
-  await expect(page.getByText('0/4 완료', { exact: false }).first()).toBeVisible()
-  const approved = await serverItem(page, id)
-  expect(approved.linked.map(work => work.workKey)).toEqual([keys.service, keys.quality, keys.parts, keys.sales])
-  await expect(page.getByText('승인한 내용만 연결 업무로 생성되며, 승인 후에는 수정할 수 없습니다.')).toBeVisible()
-  await expect(page.getByRole('checkbox')).toHaveCount(0)  // proposals are no longer editable
+  await customer.page.goto(`/#/portal/${id}`)
+  await customer.page.getByRole('tab', { name: '기술 가이드', exact: true }).click()
+  await expect(customer.page.getByText('E2E 매뉴얼', { exact: true })).toHaveCount(0)
 
-  // Each team sees exactly its own work.
-  await page.goto('/#/work')
-  const team = page.locator('.team-select select')
-  const queue = page.getByRole('complementary', { name: '업무 큐' })
-  for (const [label, department] of [['서비스팀', 'service'], ['품질팀', 'quality'], ['부품·자재팀', 'parts'], ['영업팀', 'sales']]) {
-    await team.selectOption({ label })
-    await expect(page.getByRole('heading', { name: `${label} 받은 업무` })).toBeVisible()
-    await expect(rowFor(page, keys[department])).toBeVisible()
-    for (const [other, key] of Object.entries(keys)) if (other !== department) await expect(page.getByRole('link', { name: key, exact: true })).toHaveCount(0)
-  }
-  await team.selectOption({ label: '서비스팀' })
-  await queue.getByRole('button', { name: /^진행 중/ }).click()
-  await expect(rowFor(page, keys.service)).toHaveCount(0)
-  await queue.getByRole('button', { name: /^전달됨/ }).click()
-  await expect(rowFor(page, keys.service)).toBeVisible()
-  await queue.getByRole('button', { name: /^완료/ }).click()
-  await expect(rowFor(page, keys.service)).toHaveCount(0)
+  // The operator writes the result once; closing is the operator's own button.
+  await page.getByLabel('처리 결과 (고객에게 보입니다)', { exact: true }).fill('ATC 구동부를 점검하고 정상 동작을 확인했습니다.')
+  await page.getByRole('button', { name: '요청 종결', exact: true }).click()
+  await expect(statusBadge(page, '종결')).toBeVisible()
+  await expect(page.getByText('종결됨', { exact: true })).toBeVisible()
 
-  // Work detail: instructions, original request, AI summary, siblings, claiming, starting and finishing.
-  await page.goto(`/#/work/${keys.parts}`)
-  await expect(page.getByText('품질 담당자 승인 완료')).toBeVisible()
-  await expect(page.getByText('부품 지시', { exact: true })).toBeVisible()
-  await expect(page.getByText('네 부서 승인 확인용 요청입니다.').first()).toBeVisible()
-  await expect(page.getByText('E2E 통제된 분석 응답', { exact: false })).toBeVisible()
-  const siblings = page.locator('.siblings')
-  for (const other of [keys.service, keys.quality, keys.sales]) await expect(siblings).toContainText(other)
-  await expect(siblings).not.toContainText(keys.parts)
-  await expect(page.getByText('처리를 시작하면 결과를 입력할 수 있습니다.')).toBeVisible()
-  await page.getByRole('button', { name: '나에게 지정', exact: true }).click()
-  await expect(page.locator('.detail-list')).toContainText(process.env.E2E_STAFF)
-  await page.getByRole('button', { name: '처리 시작', exact: true }).click()
-  await expect(page.locator('.status-btn')).toHaveText('진행 중')
-  const finish = page.getByRole('button', { name: '처리 완료', exact: true })
-  await expect(finish).toBeDisabled()
-  await page.getByLabel('조치 내용 *', { exact: true }).fill('   ')
-  await expect(finish).toBeDisabled()
-  await page.getByLabel('조치 내용 *', { exact: true }).fill('부품 수배 완료')
-  await finish.click()
-  await expect(page.getByText('부품 수배 완료').first()).toBeVisible()
-  await expect(page.getByText('작업 시간 미입력', { exact: false })).toBeVisible()
-  await expect(page.locator('.status-btn')).toHaveText('완료')
-  await expect(page.getByRole('button', { name: '처리 시작', exact: true })).toHaveCount(0)
-  // The original request reflects it; closing stays blocked until every team is done.
-  await page.goto(`/#/cases/${id}`)
-  await expect(page.getByText('1/4 완료', { exact: false }).first()).toBeVisible()
-  await expect(page.getByText('부서 업무가 모두 완료되면 종결할 수 있습니다.')).toBeVisible()
-  await expect(page.getByRole('button', { name: '요청 종결', exact: true })).toHaveCount(0)
-  // An unknown work key is explained.
-  await page.goto('/#/work/SVC-999999')
-  await expect(page.getByRole('heading', { name: '업무를 찾을 수 없습니다' })).toBeVisible()
-  await page.getByRole('link', { name: '받은 업무로' }).click()
-  await expect(page).toHaveURL(/#\/work$/)
-
-  // Customer: progress and the manual titles behind the approved analysis, never the work or the AI text.
+  // The customer: completed, the result, and the manual titles behind the analysis, never the AI text.
   await customer.page.goto(`/#/portal/${id}`)
   await customer.page.reload()
-  await expect(customer.page.locator('.pd-meta').getByText('처리 중', { exact: true })).toBeVisible()
+  await expect(customer.page.getByText('ATC 구동부를 점검하고 정상 동작을 확인했습니다.', { exact: false })).toBeVisible()
+  await customer.page.goto(`/#/portal/${id}`)
+  await customer.page.reload()
+  await expect(customer.page.locator('.pd-meta').getByText('완료', { exact: true })).toBeVisible()
   const guidesTab = customer.page.getByRole('tab', { name: '기술 가이드', exact: true })
   await guidesTab.click()
   await guidesTab.hover()  // the pointer stays on the tab it just chose; its label must stay readable
@@ -720,7 +629,7 @@ test('four-team approval, department inbox, work detail and what the customer se
   expect(tabColors[0], 'selected tab text vs background').not.toBe(tabColors[1])
   expect(tabColors[1], 'selected tab keeps its selected background while hovered').toBe(await guidesTab.evaluate(el => getComputedStyle(el).borderTopColor))
   await expect(customer.page.getByText('E2E 매뉴얼', { exact: true })).toBeVisible()
-  await expect(customer.page.getByText('AI가 접수 내용을 바탕으로 찾고 서비스 담당자가 확인한 자료입니다.', { exact: false })).toBeVisible()
+  await expect(customer.page.getByText('AI가 접수 내용을 바탕으로 찾은 자료입니다.', { exact: false })).toBeVisible()
   await customer.page.getByRole('button', { name: '원본 페이지 보기', exact: true }).click()
   const guide = customer.page.getByRole('dialog', { name: /원본 페이지 · E2E 매뉴얼/ })
   await expect(guide.getByRole('img')).toBeVisible()
@@ -732,7 +641,7 @@ test('four-team approval, department inbox, work detail and what the customer se
   expect(opened.headers()['content-type']).toBe('image/png')
   expect((await customer.page.request.get(`/api/v1/service-requests/${id}/evidence/E2/page`)).status()).toBe(404)  // cases are not guides
   const seen = JSON.stringify(await serverItem(customer.page, id))
-  for (const secret of ['부품 지시', '영업 지시', keys.parts, 'ATC 구동부 점검 절차', 'E2E 통제된 분석 응답']) expect(seen).not.toContain(secret)
+  for (const secret of ['ATC 구동부 점검 절차', 'E2E 통제된 분석 응답', '부품 수배']) expect(seen).not.toContain(secret)
   expect(customer.errors.concat(staff.errors)).toEqual([])
   await closeAll(customer, staff)
 })
@@ -773,8 +682,7 @@ test('every screen fits a phone-sized viewport without sideways scrolling and ke
   const aiHeading = staff.page.getByRole('heading', { name: 'AI 분석' })
   const lines = await aiHeading.evaluate(h => Math.round(h.getBoundingClientRect().height / parseFloat(getComputedStyle(h).lineHeight)))
   expect(lines, 'AI 분석 heading lines').toBe(1)
-  await expect(staff.page.getByRole('button', { name: '승인', exact: true })).toBeAttached()
-  for (const hash of ['cases', 'work']) {
+  for (const hash of ['cases', 'departments']) {
     await staff.page.goto(`/#/${hash}`)
     await expect(staff.page.locator('main')).toBeVisible()
     expect(await overflowing(staff.page), `operator ${hash}`).toEqual([])
@@ -788,15 +696,20 @@ test('(network stub) a failing request list is reported and can be retried; a lo
   const { page } = staff
   // Opening another screen loads the list again (navigating to the same address would not).
   await page.route('**/api/v1/service-requests', route => route.fulfill({ status: 500, contentType: 'application/json', body: '{"detail":"stub failure"}' }))
-  await page.goto('/#/work')
+  await page.reload()
   await expect(page.getByRole('heading', { name: '요청을 불러오지 못했습니다' })).toBeVisible()
   await expect(page.getByRole('alert')).toBeVisible()
   await page.unroute('**/api/v1/service-requests')
   await page.getByRole('button', { name: '다시 시도', exact: true }).click()
-  await expect(page.getByRole('heading', { name: /받은 업무$/ })).toBeVisible()
+  await expect(page.getByRole('complementary', { name: '대기열' })).toBeVisible()
 
+  // The session is lost while the list loads: back to sign-in.
+  await page.route('**/api/v1/service-requests', route => route.fulfill({ status: 500, contentType: 'application/json', body: '{"detail":"stub failure"}' }))
+  await page.reload()
+  await expect(page.getByRole('heading', { name: '요청을 불러오지 못했습니다' })).toBeVisible()
+  await page.unroute('**/api/v1/service-requests')
   await page.route('**/api/v1/service-requests', route => route.fulfill({ status: 401, contentType: 'application/json', body: '{"detail":"expired"}' }))
-  await page.goto('/#/cases')
+  await page.getByRole('button', { name: '다시 시도', exact: true }).click()
   await expect(page).toHaveURL(/#\/login$/)
   expect(staff.errors).toEqual([])
   await closeAll(staff)

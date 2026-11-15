@@ -1,62 +1,64 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { analysisRunNotice, canApprove, canReanalyze, canStartAnalysis, isAnalysisRunning, canResolve, customerStatus, isEditable, isEdited, statusCounts, workItems, identifierCheckLine, canAddInfo, mailLines } from './domain/workflow.js'
+import { analysisRunNotice, canReanalyze, canStartAnalysis, isAnalysisRunning, canResolve, chatReady, customerStatus, showsActivityInput, showsDepartments, statusCounts, identifierCheckLine, canAddInfo, mailLines, STATUSES } from './domain/workflow.js'
 
-const request = (extra = {}) => ({ id: 'CLM-1000', status: '검토 대기', analysis: { summary: '실제 분석 결과' },
-  departments: [{ key: 'service', selected: true, aiDraft: '원본', draft: '원본' }], linked: [], ...extra })
+const request = (extra = {}) => ({ id: 'CLM-1000', status: '처리 중', analysis: { summary: '실제 분석 결과' },
+  analysisRun: { status: 'succeeded', errorCode: null }, ...extra })
 
-test('an unanalysed received request is not reviewable, approvable or resolved', () => {
-  const item = request({ status: '접수됨', analysis: null })
-  assert.equal(canApprove(item), false)
-  assert.equal(isEditable(item), false)
-  assert.equal(canResolve(item), false)
-  assert.equal(canReanalyze(item), false)
+test('a request is 접수됨, 처리 중 or 종결: nothing else', () => {
+  assert.deepEqual(STATUSES, ['접수됨', '처리 중', '종결'])
 })
-for (const status of ['검토 대기', '추가 정보 필요']) {
-  test(`${status}: approval needs analysis, a selected department and nonblank drafts`, () => {
-    const item = request({ status })
-    assert.equal(canApprove(item), true)
-    assert.equal(canApprove({ ...item, analysis: null }), false)
-    assert.equal(canApprove({ ...item, departments: [] }), false)
-    assert.equal(canApprove({ ...item, departments: [{ selected: false, draft: 'x' }] }), false)
-    assert.equal(canApprove({ ...item, departments: [{ selected: true, draft: '  ' }] }), false)
-  })
-}
-for (const status of ['분석 중', '반려됨', '처리 중', '종결']) {
-  test(`${status} cannot approve or edit department drafts`, () => {
-    assert.equal(canApprove(request({ status })), false)
-    assert.equal(isEditable(request({ status })), false)
-  })
-}
-test('only review, additional information and declined requests can be reanalysed', () => {
-  for (const status of ['검토 대기', '추가 정보 필요', '반려됨']) assert.equal(canReanalyze({ status }), true)
-  for (const status of ['접수됨', '분석 중', '처리 중', '종결']) assert.equal(canReanalyze({ status }), false)
+
+test('closing needs a request that is being processed', () => {
+  assert.equal(canResolve(request()), true)
+  assert.equal(canResolve(request({ analysis: null })), true)  // the operator may close even if the analysis failed
+  for (const status of ['접수됨', '종결']) assert.equal(canResolve(request({ status })), false, status)
 })
-test('closing requires processing state and at least one linked work, all completed', () => {
-  assert.equal(canResolve(request({ status: '처리 중' })), false)
-  assert.equal(canResolve(request({ status: '처리 중', linked: [{ status: '진행 중' }] })), false)
-  assert.equal(canResolve(request({ status: '처리 중', linked: [{ status: '완료' }, { status: '완료' }] })), true)
-  assert.equal(canResolve(request({ status: '종결', linked: [{ status: '완료' }] })), false)
+
+test('re-analysis and additional information need a request being processed that already has an analysis', () => {
+  assert.equal(canReanalyze(request()), true)
+  assert.equal(canReanalyze(request({ analysis: null })), false)
+  assert.equal(canReanalyze(request({ analysisRun: { status: 'running' } })), false)  // one analysis at a time
+  for (const status of ['접수됨', '종결']) assert.equal(canReanalyze(request({ status })), false, status)
+  assert.equal(canAddInfo(request()), true)
+  assert.equal(canAddInfo(request({ status: '종결' })), false)
+  assert.equal(canAddInfo(request({ status: '접수됨', analysis: null })), false)
 })
-test('public status projection does not expose internal review and decline states', () => {
-  const states = ['접수됨', '분석 중', '검토 대기', '추가 정보 필요', '반려됨', '처리 중', '종결']
-  assert.deepEqual(states.map(status => customerStatus({ status })), ['접수됨', '접수됨', '확인 중', '확인 중', '확인 중', '처리 중', '완료'])  // nothing is ever asked of the customer
+
+test('customers see 접수됨, 처리 중 and 완료 only', () => {
+  assert.deepEqual(['접수됨', '처리 중', '종결'].map(status => customerStatus({ status })), ['접수됨', '처리 중', '완료'])
 })
-test('department work lists contain only work actually returned by the server', () => {
-  assert.deepEqual(workItems([], 'sales'), [])
-  const item = request({ title: '요청', intake: {}, approval: { at: '2026-01-01' },
-    linked: [{ name: '영업', workKey: 'SAL-1000' }, { name: '서비스', workKey: 'SVC-1000' }] })
-  assert.deepEqual(workItems([item], 'sales').map(x => x.workKey), ['SAL-1000'])
+
+test('the first analysis can be started until one succeeds, and never while one runs', () => {
+  assert.equal(canStartAnalysis(request({ status: '접수됨', analysis: null, analysisRun: null })), true)
+  assert.equal(canStartAnalysis(request({ analysis: null, analysisRun: { status: 'failed', errorCode: 'agent_error' } })), true)  // retry after a failure
+  assert.equal(canStartAnalysis(request({ analysis: null, analysisRun: { status: 'running', errorCode: null } })), false)
+  assert.equal(canStartAnalysis(request()), false)
+  assert.equal(canStartAnalysis(request({ status: '종결', analysis: null })), false)
+  assert.equal(canStartAnalysis(null), false)
 })
+
+test('a running analysis is read from the run itself, since the request is already 처리 중', () => {
+  assert.equal(isAnalysisRunning(request({ analysisRun: { status: 'running', errorCode: null } })), true)
+  assert.equal(isAnalysisRunning(request()), false)
+  assert.equal(isAnalysisRunning(request({ status: '접수됨', analysisRun: null })), false)
+  assert.equal(isAnalysisRunning(null), false)
+})
+
+test('the screen discloses its parts in order: first the analysis button, then everything else', () => {
+  const fresh = request({ status: '접수됨', analysis: null, analysisRun: null })
+  const running = request({ analysis: null, analysisRun: { status: 'running', errorCode: null } })
+  const failed = request({ analysis: null, analysisRun: { status: 'failed', errorCode: 'agent_error' } })
+  const done = request()
+  assert.deepEqual([fresh, running, failed, done].map(chatReady), [false, false, false, true])
+  assert.deepEqual([fresh, running, failed, done].map(showsDepartments), [false, false, false, true])
+  assert.deepEqual([fresh, running, failed, done].map(showsActivityInput), [false, false, true, true])  // a failed analysis must not lock the operator out
+})
+
 test('empty queues have zero counts and no generated sample data', () => {
   assert.ok(Object.values(statusCounts([])).every(n => n === 0))
   assert.equal(statusCounts([request({ status: '접수됨' })])['접수됨'], 1)
 })
-test('AI original and reviewer edit remain distinct', () => {
-  assert.equal(isEdited({ aiDraft: '원본', draft: '원본' }), false)
-  assert.equal(isEdited({ aiDraft: '원본', draft: '검토 수정' }), true)
-})
-
 test('only a received request without a running analysis can start analysis', () => {
   assert.equal(canStartAnalysis(request({ status: '접수됨', analysis: null })), true)
   assert.equal(canStartAnalysis(request({ status: '접수됨', analysis: null, analysisRun: { status: 'failed', errorCode: 'agent_error' } })), true)
@@ -64,12 +66,6 @@ test('only a received request without a running analysis can start analysis', ()
     assert.equal(canStartAnalysis(request({ status })), false, status)
   }
   assert.equal(canStartAnalysis(null), false)
-})
-
-test('a running analysis is detected from the server state and drives polling', () => {
-  assert.equal(isAnalysisRunning(request({ status: '분석 중' })), true)
-  assert.equal(isAnalysisRunning(request({ status: '검토 대기' })), false)
-  assert.equal(isAnalysisRunning(null), false)
 })
 
 test('failed analysis notices are honest, actionable and never expose internals', () => {
@@ -90,11 +86,6 @@ test('identifier checks read as one line each and never call a miss a verified a
   assert.equal(line('pmc_address', 'check_failed'), 'PMC 주소 2023: 조회하지 못함')
   assert.equal(line('drawing_no', 'found', 'agent'), '도면번호 2023: 색인된 매뉴얼에서 찾음 (AI 추가 조회)')
   assert.equal(line('mystery', 'found'), '식별자 2023: 색인된 매뉴얼에서 찾음')
-})
-
-test('operators can add information only while the request can still be analysed again', () => {
-  const states = ['접수됨', '분석 중', '검토 대기', '추가 정보 필요', '반려됨', '처리 중', '종결']
-  assert.deepEqual(states.map(status => canAddInfo({ status })), [false, false, true, true, true, false, false])
 })
 
 test('operators read mail delivery as one line per notification, failures and skips included', () => {

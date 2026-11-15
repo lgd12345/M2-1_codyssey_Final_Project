@@ -187,9 +187,12 @@ async def execute_analysis(analysis_id, request_input, runner) -> None:
 @router.post('/{identity}/analysis', status_code=202)
 def start_analysis(identity: str, background: BackgroundTasks, body: NoBody | None = None,
                    session: SessionInfo = Depends(require_operator_csrf),
-                   runner: analysis_flow.AnalysisRunner = Depends(analysis_flow.get_analysis_runner)):
+                   runner: analysis_flow.AnalysisRunner = Depends(analysis_flow.get_analysis_runner),
+                   sender=Depends(get_mail_sender)):
     number = request_number(identity)
     with request_database() as connection:
-        analysis_id, request_input = analysis_flow.begin(connection, number, session.user.id)
+        analysis_id, request_input, started = analysis_flow.begin(connection, number, session.user.id)
+        if started:  # the request just became 처리 중: tell the customer once
+            queue_mail(connection, background, sender, number, 'approved')
     background.add_task(execute_analysis, analysis_id, request_input, runner)
-    return {'id': identity, 'status': '분석 중'}
+    return {'id': identity, 'status': '처리 중'}

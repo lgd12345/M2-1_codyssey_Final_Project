@@ -35,7 +35,7 @@ def propose(connection, number: int, kind: str, text: str = '') -> dict[str, Any
     if kind == 'add_info' and not 1 <= len(text) <= MAX_NOTE:
         return {'ok': False, 'error': {'code': 'invalid_text', 'message': f'추가 정보는 1자 이상 {MAX_NOTE}자 이하여야 합니다.'}}
     row = connection.execute('SELECT status FROM service_request WHERE id=%s', (number,)).fetchone()
-    if row is None or row[0] not in workflow.REANALYZABLE:
+    if row is None or row[0] not in workflow.IN_PROGRESS:
         return {'ok': False, 'error': {'code': 'invalid_state', 'message': '현재 요청 상태에서는 제안할 수 없습니다.'}}
     if kind == 'reanalysis' and not connection.execute(
             "SELECT 1 FROM service_analysis WHERE request_id=%s AND status='succeeded' LIMIT 1", (number,)).fetchone():
@@ -81,12 +81,12 @@ def confirm(identity: str, proposal_id: int, response: Response, background: Bac
             workflow.add_additional_info(connection, number, session.user, proposal['text'])  # InvalidState leaves it pending
             _close(connection, proposal_id, 'confirmed', session.user.login_id)
             return views.fetch_items(connection, 'r.id=%s', (number,), staff=True)[0]
-        analysis_id, request_input = analysis_flow.begin(
-            connection, number, session.user.id, allowed=workflow.REANALYZABLE, history='재분석 요청')
+        analysis_id, request_input, _ = analysis_flow.begin(
+            connection, number, session.user.id, first=False, history='재분석 요청')
         _close(connection, proposal_id, 'confirmed', session.user.login_id)
     background.add_task(execute_analysis, analysis_id, request_input, runner)
     response.status_code = 202
-    return {'id': identity, 'status': '분석 중'}
+    return {'id': identity, 'status': '처리 중'}
 
 
 @router.post('/{identity}/proposals/{proposal_id}/cancel')

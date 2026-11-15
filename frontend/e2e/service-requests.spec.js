@@ -74,10 +74,9 @@ test('real intake persists, is shared with company/staff and isolated from other
   await login(staff, process.env.E2E_STAFF)
   await staff.getByRole('link', { name: created.id, exact: true }).click()
   await expect(staff.getByText('아직 분석 결과가 없습니다.', { exact: false })).toBeVisible()
-  await expect(staff.getByRole('button', { name: '나에게 지정', exact: true })).toBeEnabled()
   await expect(staff.getByText('아직 분석 결과가 없습니다.', { exact: false })).toBeVisible()
   await expect(staff.locator('.timeline')).toHaveCount(0)
-  await expect(staff.getByRole('button', { name: '내부 메모 추가', exact: true })).toBeEnabled()
+  await expect(staff.getByRole('button', { name: '내부 메모 추가', exact: true })).toHaveCount(0)  // notes open after the first analysis
   const before = await staff.request.get(`/api/v1/service-requests/${created.id}`)
   expect((await before.json()).status).toBe('접수됨')
   await staff.reload()
@@ -95,15 +94,14 @@ test('real intake persists, is shared with company/staff and isolated from other
   await expect(staff.getByRole('button', { name: '분석해줘', exact: true })).toHaveCount(0)
   await staff.getByText('과거 사례 1건 (보기)', { exact: true }).click()
   await expect(staff.getByText('FSR-00001', { exact: false }).first()).toBeVisible()
-  await expect(staff.getByRole('checkbox', { name: /서비스/ })).toBeEnabled()
-  await expect(staff.getByText('어느 부서에도 전달되지 않았습니다', { exact: false })).toBeVisible()
+  await expect(staff.getByRole('checkbox')).toHaveCount(0)  // no department selection any more
   const analysed = await (await staff.request.get(`/api/v1/service-requests/${created.id}`)).json()
-  expect(analysed.status).toBe('검토 대기')
-  expect(analysed.linked).toEqual([])
+  expect(analysed.status).toBe('처리 중')
+  expect(analysed.linked).toBeUndefined()
   await staff.reload()
   await expect(staff.getByText('E2E 통제된 분석 응답', { exact: false })).toBeVisible()
   await staff.goto('/#/cases')
-  await expect(staff.locator('tbody tr', { hasText: created.id })).toContainText('검토 대기')
+  await expect(staff.locator('tbody tr', { hasText: created.id })).toContainText('처리 중')
   await staffContext.close()
 
   // The customer sees only a customer-safe status; no analysis or draft content reaches the browser.

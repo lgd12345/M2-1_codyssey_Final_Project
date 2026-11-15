@@ -16,7 +16,7 @@ from app.mail import outbox
 from app.main import app
 from test_service_analysis_api import Runner, good_result, use_runner, start  # noqa: F401
 from test_service_requests_api import setup, body, BASE, DSN, PASSWORD, pytestmark  # noqa: F401
-from test_service_workflow_api import item, post, keys  # noqa: F401
+from test_service_workflow_api import item, post  # noqa: F401
 
 
 @pytest.fixture
@@ -72,18 +72,14 @@ def test_account_without_an_email_address_is_recorded_as_skipped_and_nothing_is_
     assert recorded_mail.messages == []
 
 
-def test_approval_and_closure_mails_follow_the_workflow_once_each(mailer, recorded_mail, use_runner):
+def test_processing_and_closure_mails_follow_the_workflow_once_each(mailer, recorded_mail, use_runner):
     client, login, clients, equipment = mailer
     use_runner(Runner(good_result()))
     identity = file_request(mailer)
-    assert start(clients, identity).status_code == 202
-    assert post(clients, 'staff', identity, 'approval').status_code == 200
+    assert start(clients, identity).status_code == 202  # the request becomes 처리 중: the customer is told once
     assert [(kind, status) for kind, status, *_ in rows(identity)] == [('received', 'sent'), ('approved', 'sent')]
-    work = keys(identity)
-    for key in ('service', 'parts'):
-        assert post(clients, 'staff', identity, f'work/{work[key]}/assignee').status_code == 200
-        assert post(clients, 'staff', identity, f'work/{work[key]}/start').status_code == 200
-        assert post(clients, 'staff', identity, f'work/{work[key]}/complete', summary='조치 완료').status_code == 200
+    assert post(clients, 'staff', identity, 'reanalysis').status_code == 202  # a re-analysis does not announce it again
+    assert [kind for kind, *_ in rows(identity)] == ['received', 'approved']
     assert post(clients, 'staff', identity, 'resolution', note='센서를 재조임했습니다.').status_code == 200
     assert [(kind, status) for kind, status, *_ in rows(identity)] == [
         ('received', 'sent'), ('approved', 'sent'), ('resolved', 'sent')]
@@ -92,15 +88,14 @@ def test_approval_and_closure_mails_follow_the_workflow_once_each(mailer, record
     assert all(m['To'] == login for m in recorded_mail.messages)
 
 
-def test_a_declined_or_internal_action_sends_nothing(mailer, recorded_mail, use_runner):
+def test_an_internal_action_sends_nothing(mailer, recorded_mail, use_runner):
     client, login, clients, equipment = mailer
     use_runner(Runner(good_result()))
     identity = file_request(mailer)
     assert start(clients, identity).status_code == 202
     assert post(clients, 'staff', identity, 'comments', kind='internal', text='메모').status_code == 201
     assert post(clients, 'staff', identity, 'additional-info', text='전화 확인').status_code == 201
-    assert post(clients, 'staff', identity, 'decline', reason='근거 부족').status_code == 200
-    assert [kind for kind, *_ in rows(identity)] == ['received']
+    assert [kind for kind, *_ in rows(identity)] == ['received', 'approved']  # only the start of processing, once
 
 
 def test_a_kind_is_queued_once_per_request(mailer, recorded_mail):

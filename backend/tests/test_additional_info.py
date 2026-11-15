@@ -9,7 +9,7 @@ from fastapi.testclient import TestClient
 from app.main import app
 from test_service_analysis_api import Runner, good_result, use_runner, submit, start  # noqa: F401
 from test_service_requests_api import setup, BASE, pytestmark  # noqa: F401
-from test_service_workflow_api import INSUFFICIENT, approved, item, post, reviewed  # noqa: F401
+from test_service_workflow_api import INSUFFICIENT, closed, item, post, reviewed  # noqa: F401
 
 CALL_NOTE = '현장 확인 결과 알람 2023이 스핀들 정지 직후에 발생함. 고객 통화로 확인.'
 
@@ -54,7 +54,7 @@ def test_reanalysis_input_contains_the_notes_but_the_first_analysis_has_none(set
     assert runner.inputs[1]['additional_info'] == [CALL_NOTE]
     assert 'contact' not in runner.inputs[1]
     after = item(clients, 'staff', identity)
-    assert after['status'] == '검토 대기' and after['additionalInfo'][0]['text'] == CALL_NOTE
+    assert after['status'] == '처리 중' and after['additionalInfo'][0]['text'] == CALL_NOTE
 
 
 def test_adding_information_does_not_start_an_analysis_by_itself(setup, use_runner):
@@ -62,7 +62,7 @@ def test_adding_information_does_not_start_an_analysis_by_itself(setup, use_runn
     runner = use_runner(Runner(good_result(**INSUFFICIENT)))
     identity = reviewed(clients, equipment)
     assert add_info(clients, identity).status_code == 201
-    assert len(runner.inputs) == 1 and item(clients, 'staff', identity)['status'] == '추가 정보 필요'
+    assert len(runner.inputs) == 1 and item(clients, 'staff', identity)['status'] == '처리 중'
 
 
 @pytest.mark.parametrize('who, expected', [('alice', 403), ('colleague', 403), ('bob', 403)])
@@ -96,18 +96,17 @@ def test_invalid_notes_are_rejected(setup, use_runner, payload):
     assert item(clients, 'staff', identity)['additionalInfo'] == []
 
 
-def test_information_can_only_be_added_while_the_request_can_be_re_analysed(setup, use_runner):
+def test_information_can_only_be_added_while_the_request_is_being_processed(setup, use_runner):
     clients, equipment = setup
     use_runner(Runner())
     received = submit(clients, equipment)
     assert add_info(clients, received).status_code == 409
-    identity = approved(clients, equipment)  # being processed: analysis is final
+    identity = closed(clients, equipment)  # the result is written: nothing more can be added
     response = add_info(clients, identity)
     assert response.status_code == 409 and response.json()['code'] == 'INVALID_STATE'
     assert item(clients, 'staff', identity)['additionalInfo'] == []
-    declined = reviewed(clients, equipment)
-    assert post(clients, 'staff', declined, 'decline', reason='사유').status_code == 200
-    assert add_info(clients, declined).status_code == 201  # a declined request may be analysed again
+    processing = reviewed(clients, equipment)
+    assert add_info(clients, processing).status_code == 201
 
 
 def test_unknown_request_is_not_found(setup):
@@ -122,7 +121,7 @@ def test_customers_never_see_the_notes_the_questions_or_a_request_for_informatio
     assert add_info(clients, identity).status_code == 201
     for who in ('alice', 'colleague'):
         view = item(clients, who, identity)
-        assert view['status'] == '확인 중'  # nothing is asked of the customer
+        assert view['status'] == '처리 중'  # nothing is asked of the customer
         text = str(view)
         assert CALL_NOTE not in text and '알람 번호는?' not in text and 'additionalInfo' not in view
         assert all('추가 정보' not in entry['text'] for entry in view['history'])

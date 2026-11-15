@@ -1,5 +1,6 @@
 import React, { useState } from 'react'
 import { Avatar, formatTime } from '../ui.jsx'
+import { showsActivityInput } from '../domain/workflow.js'
 
 // Jira의 Activity: 전체/댓글/이력 보기, "Add internal note / Reply to customer" 입력줄,
 // 내부 메모는 노란 배경과 자물쇠 표시, 입력 영역의 Suggest reply·상황별 알약(contextual pills).
@@ -33,22 +34,23 @@ export function Activity({ item, dispatch, me }) {
         {SHOW.map((s) => <button key={s.key} role="tab" aria-selected={show === s.key} className={show === s.key ? 'quick-btn active' : 'quick-btn'} onClick={() => setShow(s.key)}>{s.label}</button>)}
       </div>
 
-      <div className="comment-bar">
-        <Avatar name={me} />
-        {mode === null ? (
-          <div className="bar-closed"><button className="linkish" disabled={!dispatch} onClick={() => setMode('internal')}>내부 메모 추가</button><span aria-hidden="true">/</span><button className="linkish" disabled={!dispatch} onClick={() => setMode('public')}>고객에게 답변</button></div>
-        ) : (
-          <div className="editor">
-            <p className="muted small">{mode === 'internal' ? '내부 메모: 우리 팀만 볼 수 있습니다.' : '고객에게 답변: 접수자에게 전달됩니다.'}</p>
-            <textarea rows={4} value={text} autoFocus onChange={(e) => setText(e.target.value)} aria-label={mode === 'internal' ? '내부 메모' : '고객 답변'} />
-            <div className="editor-tools">
-              {pills.map((p) => <button key={p.label} className="pill" onClick={() => setText(p.text)}>{p.label}</button>)}
+      {showsActivityInput(item) && (
+        <div className="comment-bar">
+          <Avatar name={me} />
+          {mode === null ? (
+            <div className="bar-closed"><button className="linkish" disabled={!dispatch} onClick={() => setMode('internal')}>내부 메모 추가</button><span aria-hidden="true">/</span><button className="linkish" disabled={!dispatch} onClick={() => setMode('public')}>고객에게 답변</button></div>
+          ) : (
+            <div className="editor">
+              <p className="muted small">{mode === 'internal' ? '내부 메모: 우리 팀만 볼 수 있습니다.' : '고객에게 답변: 접수자에게 전달됩니다.'}</p>
+              <textarea rows={4} value={text} autoFocus onChange={(e) => setText(e.target.value)} aria-label={mode === 'internal' ? '내부 메모' : '고객 답변'} />
+              <div className="editor-tools">
+                {pills.map((p) => <button key={p.label} className="pill" onClick={() => setText(p.text)}>{p.label}</button>)}
+              </div>
+              <div className="actions"><button className="ghost" onClick={() => { setMode(null); setText('') }}>취소</button><button className="primary" disabled={!dispatch || !text.trim()} onClick={send}>저장</button></div>
             </div>
-            <div className="actions"><button className="ghost" onClick={() => { setMode(null); setText('') }}>취소</button><button className="primary" disabled={!dispatch || !text.trim()} onClick={send}>저장</button></div>
-          </div>
-        )}
-      </div>
-
+          )}
+        </div>
+      )}
 
       <ul className="activity">
         {entries.map((e) => e.entry === 'history' ? (

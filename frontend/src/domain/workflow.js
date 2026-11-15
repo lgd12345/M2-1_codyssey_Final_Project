@@ -1,16 +1,17 @@
-import { DEPARTMENTS } from './catalog.js'
-
 // UI rules only. State transitions and authorization belong to the server.
-export const STATUSES = ['접수됨', '분석 중', '검토 대기', '추가 정보 필요', '처리 중', '반려됨', '종결']
-export const WORK_STATUSES = ['전달됨', '진행 중', '완료']
-export const isEditable = item => ['검토 대기', '추가 정보 필요'].includes(item.status)
-export const canReanalyze = item => ['검토 대기', '추가 정보 필요', '반려됨'].includes(item.status)
-// Information gathered outside the app feeds the next analysis, so it can be added exactly while re-analysis is possible.
-export const canAddInfo = canReanalyze
-export const allWorkDone = item => item.linked.length > 0 && item.linked.every(work => work.status === '완료')
-export const canResolve = item => item.status === '처리 중' && allWorkDone(item)
-export const canStartAnalysis = item => Boolean(item) && item.status === '접수됨'
-export const isAnalysisRunning = item => Boolean(item) && item.status === '분석 중'
+// 접수됨 -> 처리 중 (the first analysis starts) -> 종결 (an operator writes the result).
+export const STATUSES = ['접수됨', '처리 중', '종결']
+export const isAnalysisRunning = item => item?.analysisRun?.status === 'running'  // the request is 처리 중 from the start: ask the run
+export const canStartAnalysis = item => Boolean(item) && item.status !== '종결' && !item.analysis && !isAnalysisRunning(item)
+export const canReanalyze = item => Boolean(item) && item.status === '처리 중' && Boolean(item.analysis) && !isAnalysisRunning(item)
+// Information gathered outside the app feeds the next analysis.
+export const canAddInfo = item => Boolean(item) && item.status === '처리 중' && Boolean(item.analysis)
+export const canResolve = item => Boolean(item) && item.status === '처리 중'
+// The screen reveals itself in order: the analysis button first; the conversation, mail activities and the rest once an analysis exists.
+export const chatReady = item => Boolean(item?.analysis)
+export const showsDepartments = chatReady
+// Notes and replies are possible after an analysis, and also when it failed so that the operator is never locked out.
+export const showsActivityInput = item => Boolean(item) && (Boolean(item.analysis) || item.analysisRun?.status === 'failed')
 const RUN_FAILURES = {
   llm_unavailable: 'AI 모델에 연결하지 못했습니다.',
   agent_not_configured: 'AI 분석 설정이 완료되지 않았습니다.',
@@ -23,21 +24,9 @@ export function analysisRunNotice(run) {
   if (run?.status !== 'failed') return ''
   return `분석에 실패했습니다. ${RUN_FAILURES[run.errorCode] ?? ''} 다시 시도할 수 있습니다.`.replace('  ', ' ')
 }
-export const isEdited = department => department.draft !== department.aiDraft
-export function canApprove(item) {
-  if (!isEditable(item) || !item.analysis) return false
-  const selected = item.departments.filter(department => department.selected)
-  return selected.length > 0 && selected.every(department => department.draft.trim().length > 0)
-}
 export const statusCounts = cases => Object.fromEntries(STATUSES.map(status => [status, cases.filter(item => item.status === status).length]))
-const CUSTOMER_STATUS = { '접수됨': '접수됨', '분석 중': '접수됨', '검토 대기': '확인 중', '반려됨': '확인 중', '추가 정보 필요': '확인 중', '처리 중': '처리 중', '종결': '완료' }
+const CUSTOMER_STATUS = { '접수됨': '접수됨', '처리 중': '처리 중', '종결': '완료' }
 export const customerStatus = item => CUSTOMER_STATUS[item.status] ?? item.status
-export function workItems(cases, deptKey) {
-  const name = DEPARTMENTS.find(department => department.key === deptKey)?.name
-  return cases.flatMap(item => (item.linked || []).filter(work => work.name === name).map(work => ({
-    ...work, caseId: item.id, caseTitle: item.title, intake: item.intake, caseStatus: item.status, createdAt: item.approval?.at,
-  })))
-}
 
 const IDENTIFIER_KINDS = { alarm_number: '알람', part_no: '부품번호', drawing_no: '도면번호', pmc_address: 'PMC 주소' }
 const IDENTIFIER_OUTCOMES = { found: '색인된 매뉴얼에서 찾음', not_found: '색인된 매뉴얼에서 찾지 못함', check_failed: '조회하지 못함' }

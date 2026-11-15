@@ -59,7 +59,7 @@ def test_infrastructure_failures_are_errors_not_quality_failures(setup, use_runn
     assert 'secret' not in str(record)
 
 
-def test_insufficient_evidence_moves_the_request_to_additional_information_and_is_scored_as_such(setup, use_runner):
+def test_insufficient_evidence_keeps_the_request_processing_and_is_scored_as_such(setup, use_runner):
     clients, equipment = setup
     use_runner(Runner(good_result(status='insufficient_evidence', summary='근거를 찾지 못했습니다.', causes=[], steps=[],
                                   parts=[], evidence=[], departments=[], questions=['어떤 증상인가요?'])))
@@ -67,7 +67,7 @@ def test_insufficient_evidence_moves_the_request_to_additional_information_and_i
     off_topic = Case('safety_x', 'safety', '점심 메뉴 추천', '알람·전장 이상', 'F400', [], {'status': ['insufficient_evidence'], 'no_conclusions': True})
     record = run_case(off_topic, user, admin, str(equipment[0]), tag='QEVAL-4', timeout=30, interval=0.01)
     assert record['passed'] is True, record
-    assert record['request_status'] == '추가 정보 필요'
+    assert record['request_status'] == '처리 중'
 
 
 def test_stored_result_maps_back_to_the_analysis_contract_losslessly(setup, use_runner):
@@ -86,7 +86,7 @@ def test_stored_result_maps_back_to_the_analysis_contract_losslessly(setup, use_
 
 
 def test_customers_must_never_see_analysis_drafts_or_internal_state():
-    clean = {'id': 'CLM-001', 'status': '확인 중', 'comments': [], 'history': [], 'intake': {}}
+    clean = {'id': 'CLM-001', 'status': '처리 중', 'comments': [], 'history': [], 'intake': {}}
     assert customer_leaks(clean) == []
     leaky = {**clean, 'analysis': {}, 'departments': [], 'linked': [], 'analysisRun': {}, 'approval': None}
     assert set(customer_leaks(leaky)) == {'analysis', 'departments', 'linked', 'analysisRun', 'approval'}
@@ -131,7 +131,7 @@ class StuckApi:
             status_code = 200
 
             def json(self_inner):
-                return {'status': '분석 중', 'analysisRun': {'status': 'running', 'errorCode': None}}
+                return {'status': '처리 중', 'analysisRun': {'status': 'running', 'errorCode': None}}
         return Response()
 
 
@@ -139,4 +139,4 @@ def test_waiting_for_a_stuck_analysis_times_out_with_a_stable_error():
     api, ticks = StuckApi(), []
     item, error = wait_for_analysis(api, 'CLM-001', timeout=1.0, interval=0.25, clock=lambda: len(ticks) * 0.25,
                                     sleep=lambda seconds: ticks.append(seconds))
-    assert error == 'timeout' and item['status'] == '분석 중' and api.calls >= 4
+    assert error == 'timeout' and item['status'] == '처리 중' and api.calls >= 4

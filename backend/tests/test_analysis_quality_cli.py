@@ -99,7 +99,7 @@ def test_e2e_mode_scores_stored_results_writes_a_report_and_reports_the_mode():
         assert args.require_embedding_ready is True
         args.runtime = {'embedding': {'status': 'ready', 'embedder_missing': 0}}
         return [{'case': case.id, 'run': 0, 'passed': True, 'error': None, 'failed_checks': [], 'details': {}, 'status': 'insufficient_evidence',
-                 'request_status': '추가 정보 필요', 'request': 'CLM-001', 'seconds': 12.0, 'result': insufficient()} for case in cases]
+                 'request_status': '처리 중', 'request': 'CLM-001', 'seconds': 12.0, 'result': insufficient()} for case in cases]
 
     with tempfile.TemporaryDirectory() as folder:
         out = Path(folder) / 'e2e.json'

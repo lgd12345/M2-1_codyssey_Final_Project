@@ -15,7 +15,7 @@ from app.main import app
 from app.service_requests.pages import get_page_renderer
 from test_service_analysis_api import EVIDENCE, Runner, good_result, use_runner, submit, start  # noqa: F401
 from test_service_requests_api import setup, BASE, DSN, pytestmark  # noqa: F401
-from test_service_workflow_api import approved, item, post, reviewed  # noqa: F401
+from test_service_workflow_api import closed, item, post, reviewed  # noqa: F401
 
 SHA = 'a' * 64
 PNG = b'\x89PNG\r\n\x1a\n' + b'fake-page-image'
@@ -82,15 +82,15 @@ def test_a_citation_without_a_stored_reference_has_no_page(setup, use_runner, re
     assert clients['staff'].get(page_url('CLM-999999')).status_code == 404
 
 
-def test_customers_may_open_guide_pages_only_after_approval_and_only_for_their_company(setup, use_runner, renderer):
+def test_customers_may_open_guide_pages_only_once_closed_and_only_for_their_company(setup, use_runner, renderer):
     clients, equipment = setup
     calls = renderer()
     use_runner(Runner(result_with_ref()))
     identity = reviewed(clients, equipment)
     for who in ('alice', 'colleague', 'bob'):
-        assert clients[who].get(page_url(identity)).status_code == 404  # not reviewed yet: indistinguishable from missing
+        assert clients[who].get(page_url(identity)).status_code == 404  # not closed yet: indistinguishable from missing
     assert calls == []
-    assert post(clients, 'staff', identity, 'approval').status_code == 200
+    assert post(clients, 'staff', identity, 'resolution', note='처리했습니다.').status_code == 200
     for who in ('alice', 'colleague'):
         opened = clients[who].get(page_url(identity))
         assert opened.status_code == 200 and opened.content == PNG
@@ -106,7 +106,7 @@ def test_customer_guides_say_whether_a_page_exists_and_never_expose_the_referenc
     clients, equipment = setup
     renderer()
     use_runner(Runner(result_with_ref()))
-    identity = approved(clients, equipment)
+    identity = closed(clients, equipment)
     guides = item(clients, 'alice', identity)['guides']
     assert guides == [{'id': 'E1', 'title': 'F400 매뉴얼', 'source': 'F400 매뉴얼 p.45', 'viewable': True}]
     seen = json.dumps(item(clients, 'alice', identity), ensure_ascii=False)
@@ -117,7 +117,7 @@ def test_old_citations_without_a_reference_are_listed_but_not_viewable(setup, us
     clients, equipment = setup
     renderer()
     use_runner(Runner())
-    identity = approved(clients, equipment)
+    identity = closed(clients, equipment)
     assert item(clients, 'alice', identity)['guides'][0]['viewable'] is False
 
 
@@ -271,6 +271,6 @@ def test_customers_cannot_choose_an_earlier_revision(setup, use_runner, renderer
     clients, equipment = setup
     calls = renderer()
     use_runner(Runner(result_with_ref()))
-    identity = approved(clients, equipment)
+    identity = closed(clients, equipment)
     assert clients[who].get(page_url(identity), params={'revision': 1}).status_code == 404
     assert calls == []

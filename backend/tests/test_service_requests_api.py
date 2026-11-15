@@ -87,7 +87,7 @@ def test_customer_intake_is_durable_visible_to_company_and_staff_not_other_compa
     assert 'analysis' not in item and 'departments' not in item and 'approval' not in item
     staff_item = clients['staff'].get(f'{BASE}/{identity}').json()
     assert staff_item['analysis'] is None
-    assert staff_item['linked'] == [] and staff_item['departments'] == []
+    assert 'linked' not in staff_item and staff_item['departments'] == []
     assert 'stepsDone' not in staff_item and 'scenarioId' not in staff_item
 
 

@@ -20,7 +20,7 @@ from app.service_requests.routes import RequestNotFound, access_company, request
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix='/api/v1/service-requests', tags=['service-requests-pages'])
 PageRenderer = Callable[[str, int], bytes]
-CUSTOMER_VISIBLE = ('처리 중', '종결')  # reviewed and approved
+CUSTOMER_VISIBLE = ('종결',)  # the guides appear together with the closing result
 
 
 class EvidenceNotFound(AuthError):

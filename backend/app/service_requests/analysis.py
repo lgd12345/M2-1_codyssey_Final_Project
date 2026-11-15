@@ -1,6 +1,6 @@
 """Analysis lifecycle for stored requests: begin -> (model runner) -> validated, durable result.
 
-Nothing here approves a request or creates department work; it only produces a reviewable analysis.
+Starting an analysis is what makes a request 처리 중. It never creates department work: the analysis is an operator aid.
 """
 from __future__ import annotations
 
@@ -27,7 +27,7 @@ class AnalysisInProgress(AuthError):
 
 class AnalysisNotAllowed(AuthError):
     status_code, code = 409, 'ANALYSIS_NOT_ALLOWED'
-    message = '접수됨 상태의 요청만 분석을 시작할 수 있습니다.'
+    message = '이 요청은 지금 분석을 시작할 수 없습니다. 이미 분석했거나 종결된 요청입니다.'
 
 
 class AnalysisRequestNotFound(AuthError):
@@ -166,12 +166,10 @@ def error_code_for(error: BaseException) -> str:
 
 
 def recover_orphans(connection) -> None:
+    """A run owned by another process was cut off by a restart: it failed, and the request stays 처리 중."""
     with connection.transaction():
-        connection.execute(
-            """WITH failed AS (UPDATE service_analysis SET status='failed', error_code='interrupted', finished_at=now()
-                                WHERE status='running' AND worker_id <> %s RETURNING request_id, previous_status)
-               UPDATE service_request r SET status=f.previous_status
-               FROM failed f WHERE r.status='분석 중' AND r.id=f.request_id""", (PROCESS_ID,))
+        connection.execute("UPDATE service_analysis SET status='failed', error_code='interrupted', finished_at=now() "
+                           "WHERE status='running' AND worker_id <> %s", (PROCESS_ID,))
 
 
 def add_history(connection, number: int, text: str, public_text: str | None = None) -> None:
@@ -179,9 +177,14 @@ def add_history(connection, number: int, text: str, public_text: str | None = No
                        (number, text, public_text))
 
 
-def begin(connection, number: int, user_id: UUID, *, allowed: tuple[str, ...] = ('접수됨',),
-          history: str | None = None) -> tuple[UUID, dict[str, Any]]:
-    """Atomically claim a request for (re-)analysis and return the stored facts the model may use."""
+def begin(connection, number: int, user_id: UUID, *, first: bool = True,
+          history: str | None = None) -> tuple[UUID, dict[str, Any], bool]:
+    """Atomically claim a request for analysis and return the stored facts the model may use.
+
+    first=True is the first analysis (a failed attempt may be retried): it needs a request with no successful analysis.
+    first=False is a re-analysis of a request that is already 처리 중. The last value says whether this call moved the
+    request from 접수됨 to 처리 중 (the moment customers are told processing has started).
+    """
     recover_orphans(connection)
     with connection.transaction():
         row = connection.execute(
@@ -189,14 +192,19 @@ def begin(connection, number: int, user_id: UUID, *, allowed: tuple[str, ...] = 
             (number,)).fetchone()
         if row is None:
             raise AnalysisRequestNotFound()
-        if row[0] == '분석 중':
+        if connection.execute("SELECT 1 FROM service_analysis WHERE request_id=%s AND status='running'", (number,)).fetchone():
             raise AnalysisInProgress()
-        if row[0] not in allowed:
+        allowed = ('접수됨', '처리 중') if first else ('처리 중',)
+        if row[0] not in allowed or (first and connection.execute(
+                "SELECT 1 FROM service_analysis WHERE request_id=%s AND status='succeeded'", (number,)).fetchone()):
             raise AnalysisNotAllowed()
         analysis_id = connection.execute(
             'INSERT INTO service_analysis(request_id,requested_by,worker_id,previous_status) VALUES (%s,%s,%s,%s) RETURNING id',
             (number, user_id, PROCESS_ID, row[0])).fetchone()[0]
-        connection.execute("UPDATE service_request SET status='분석 중' WHERE id=%s", (number,))
+        started = row[0] == '접수됨'
+        if started:
+            connection.execute("UPDATE service_request SET status='처리 중' WHERE id=%s", (number,))
+            add_history(connection, number, '처리 시작 · 분석 시작', '처리를 시작했습니다.')
         if history:
             add_history(connection, number, history)
         notes = [note[0] for note in connection.execute(
@@ -204,7 +212,7 @@ def begin(connection, number: int, user_id: UUID, *, allowed: tuple[str, ...] = 
     snapshot = row[4]
     # Only diagnostic facts: the customer's contact details are deliberately not sent to a model.
     return analysis_id, {'message': row[1], 'reason': row[2], 'alarm_numbers': list(row[3]),
-                         'machine': snapshot['machine'], 'additional_info': notes}
+                         'machine': snapshot['machine'], 'additional_info': notes}, started
 
 
 def finish_success(connection, analysis_id: UUID, result: dict[str, Any]) -> None:
@@ -226,22 +234,18 @@ def finish_success(connection, analysis_id: UUID, result: dict[str, Any]) -> Non
                 """INSERT INTO service_request_department(request_id,key,ai_selected,selected,reason,ai_draft,draft)
                    VALUES (%s,%s,%s,%s,%s,%s,%s)""",
                 (number, key, item is not None, item is not None, item['reason'] if item else NO_RECOMMENDATION, draft, draft))
-        # Without enough evidence the customer is asked for more information instead of a review.
         insufficient = result['status'] == 'insufficient_evidence'
-        connection.execute(
-            """UPDATE service_request SET status=%s,
-                      revision=(SELECT count(*) FROM service_analysis WHERE request_id=%s AND status='succeeded')
-               WHERE id=%s AND status='분석 중'""", ('추가 정보 필요' if insufficient else '검토 대기', number, number))
-        add_history(connection, number, '분석 완료 · 근거 부족, 추가 정보 필요' if insufficient else '분석 완료 · 검토 대기')
+        connection.execute("UPDATE service_request SET revision=(SELECT count(*) FROM service_analysis WHERE request_id=%s AND status='succeeded') "
+                           "WHERE id=%s", (number, number))
+        add_history(connection, number, '분석 완료 · 근거 부족, 확인 필요' if insufficient else '분석 완료')
 
 
 def finish_failure(connection, analysis_id: UUID, code: str) -> None:
     with connection.transaction():
         row = connection.execute(
             """UPDATE service_analysis SET status='failed', error_code=%s, finished_at=now()
-               WHERE id=%s AND status='running' RETURNING request_id, previous_status""", (code, analysis_id)).fetchone()
+               WHERE id=%s AND status='running' RETURNING request_id""", (code, analysis_id)).fetchone()
         if row:
-            connection.execute("UPDATE service_request SET status=%s WHERE id=%s AND status='분석 중'", (row[1], row[0]))
             add_history(connection, row[0], f'분석 실패 · {code}')
 
 

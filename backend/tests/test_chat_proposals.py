@@ -10,7 +10,7 @@ from app.main import app
 from app.service_requests import chat
 from test_service_analysis_api import Runner, good_result, use_runner, start  # noqa: F401
 from test_service_requests_api import setup, BASE, DSN, pytestmark  # noqa: F401
-from test_service_workflow_api import INSUFFICIENT, approved, item, post, reviewed  # noqa: F401
+from test_service_workflow_api import INSUFFICIENT, closed, item, post, reviewed  # noqa: F401
 from test_service_chat import Script, use_model, answer_after_tool, send, events  # noqa: F401
 from test_service_chat import bare_env  # noqa: F401
 
@@ -35,7 +35,7 @@ def tool_output(response):
 def env(bare_env, use_runner):
     clients, identity = bare_env
     runner = use_runner(Runner(good_result(**INSUFFICIENT)))
-    assert start(clients, identity).status_code == 202  # analysed once, reviewable (추가 정보 필요)
+    assert start(clients, identity).status_code == 202  # analysed once and still being processed
     return clients, identity, runner
 
 
@@ -67,7 +67,7 @@ def test_proposing_a_re_analysis_starts_nothing(env):
     use_model(Script(answer_after_tool('propose_reanalysis', {}, '재분석할까요?')))
     out = tool_output(send(clients, identity))
     assert out['status'] == 'proposed' and '실행되지 않았습니다' in out['note']
-    assert len(runner.inputs) == 1 and item(clients, 'staff', identity)['status'] == '추가 정보 필요'
+    assert len(runner.inputs) == 1 and item(clients, 'staff', identity)['status'] == '처리 중'
     assert [(p[1], p[3]) for p in proposals(identity)] == [('reanalysis', 'pending')]
 
 
@@ -130,7 +130,7 @@ def test_confirming_a_re_analysis_starts_it_and_the_notes_are_included(env):
     assert decide(clients, identity, rid, 'confirm').status_code == 202
     assert len(runner.inputs) == 2 and runner.inputs[1]['additional_info'] == [NOTE]
     view = item(clients, 'staff', identity)
-    assert view['status'] == '검토 대기' and [p['status'] for p in view['proposals']] == ['confirmed', 'confirmed']
+    assert view['status'] == '처리 중' and [p['status'] for p in view['proposals']] == ['confirmed', 'confirmed']
 
 
 def body_for(text):
@@ -159,8 +159,7 @@ def test_a_proposal_can_only_be_decided_once(env):
 def test_confirming_after_the_request_moved_on_is_refused_and_leaves_it_pending(env):
     clients, identity, _ = env
     pid = propose_info(clients, identity)['proposal_id']
-    with psycopg.connect(DSN) as db:
-        db.execute("UPDATE service_request SET status='처리 중' WHERE id=%s", (int(identity[4:]),))
+    assert post(clients, 'staff', identity, 'resolution', note='처리 결과입니다.').status_code == 200  # closed meanwhile
     answer = decide(clients, identity, pid, 'confirm')
     assert answer.status_code == 409 and answer.json()['code'] == 'INVALID_STATE'
     assert [p[3] for p in proposals(identity)] == ['pending'] and item(clients, 'staff', identity)['additionalInfo'] == []

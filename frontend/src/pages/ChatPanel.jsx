@@ -69,7 +69,7 @@ function ChatSession({ item, csrf, initial, onChanged, dispatch, onAnalyze, anal
   })
   const entries = timeline(stamped, history)
   const startable = canStartAnalysis(item) && Boolean(onAnalyze)
-  const again = Boolean(item.analysis) && canReanalyze(item) && Boolean(dispatch) && item.status !== '분석 중'
+  const again = canReanalyze(item) && Boolean(dispatch)
   function send(value) {
     const question = value.trim()
     if (!question || busy || full || !open) return

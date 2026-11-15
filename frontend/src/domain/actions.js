@@ -1,39 +1,16 @@
 // Maps screen actions to server requests. The browser chooses only the action and user-entered text;
 // actors, times, identifiers of created records and company scope are decided by the server.
 const ID = /^CLM-\d{3,19}$/
-const WORK = /^(SVC|QLT|PRT|SAL)-\d{3,19}$/
-const KEYS = ['service', 'quality', 'parts', 'sales']
 const EVIDENCE = /^E\d{1,3}$/
 
 export function requestFor(action, item) {
   if (!ID.test(action.id ?? '')) throw new Error('올바르지 않은 요청 번호입니다.')
   const base = `/service-requests/${action.id}`
-  const work = () => {
-    if (!WORK.test(action.workKey ?? '')) throw new Error('올바르지 않은 업무 번호입니다.')
-    return `${base}/work/${action.workKey}`
-  }
-  const dept = () => {
-    if (!KEYS.includes(action.key)) throw new Error('알 수 없는 부서입니다.')
-    return `${base}/departments/${action.key}`
-  }
   const post = (path, body, result = 'item') => ({ method: 'POST', path, body, result })
   switch (action.type) {
     case 'REANALYZE': return post(`${base}/reanalysis`, undefined, 'accepted')
-    case 'ASSIGN': return post(`${base}/assignee`)
     case 'ADD_COMMENT': return post(`${base}/comments`, { kind: action.kind, text: action.text })
     case 'ADD_INFO': return post(`${base}/additional-info`, { text: action.text })
-    case 'APPROVE': return post(`${base}/approval`)
-    case 'DECLINE': return post(`${base}/decline`, { reason: action.reason })
-    case 'TOGGLE_DEPT': {
-      const current = item?.departments?.find(department => department.key === action.key)
-      if (!current) throw new Error('알 수 없는 부서입니다.')
-      return { method: 'PATCH', path: dept(), body: { selected: !current.selected }, result: 'item' }
-    }
-    case 'EDIT_DRAFT': return { method: 'PATCH', path: dept(), body: { draft: action.text }, result: 'item' }
-    case 'RESET_DRAFT': return { method: 'PATCH', path: dept(), body: { reset: true }, result: 'item' }
-    case 'WORK_ASSIGN': return post(`${work()}/assignee`)
-    case 'WORK_START': return post(`${work()}/start`)
-    case 'WORK_COMPLETE': return post(`${work()}/complete`, { summary: action.result?.summary, hours: action.result?.hours ?? '' })
     case 'RESOLVE': return post(`${base}/resolution`, { note: action.note ?? '' })
     default: throw new Error('지원하지 않는 작업입니다.')
   }

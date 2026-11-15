@@ -12,10 +12,10 @@ from typing import Any, Callable, Mapping
 
 from quality.scoring import Case, Check, case_passed, score
 
-CUSTOMER_STATUS = {'접수됨', '확인 중', '처리 중', '완료'}
+CUSTOMER_STATUS = {'접수됨', '처리 중', '완료'}
 INTERNAL_FIELDS = ('analysis', 'analysisRun', 'departments', 'linked', 'approval', 'assignee', 'revision', 'additionalInfo')
-EXPECTED_REQUEST_STATUS = {'answered': '검토 대기', 'insufficient_evidence': '추가 정보 필요'}
-EXPECTED_CUSTOMER_STATUS = {'answered': '확인 중', 'insufficient_evidence': '확인 중'}
+EXPECTED_REQUEST_STATUS = {'answered': '처리 중', 'insufficient_evidence': '처리 중'}  # starting the analysis made it 처리 중
+EXPECTED_CUSTOMER_STATUS = {'answered': '처리 중', 'insufficient_evidence': '처리 중'}
 
 
 def customer_leaks(item: Mapping[str, Any]) -> list[str]:
@@ -44,7 +44,7 @@ def wait_for_analysis(api, identity: str, *, timeout: float, interval: float,
     started = clock()
     while True:
         item = api.get(f'/{identity}').json()
-        if item.get('status') != '분석 중':
+        if (item.get('analysisRun') or {}).get('status') != 'running':  # the request is 처리 중 from the start: ask the run itself
             return item, None
         if clock() - started >= timeout:
             return item, 'timeout'

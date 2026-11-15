@@ -1,12 +1,11 @@
 import React, { useState } from 'react'
-import { canApprove, canReanalyze, canResolve, isEditable, mailLines } from '../domain/workflow.js'
+import { canResolve, chatReady, mailLines } from '../domain/workflow.js'
 import { Avatar, formatTime } from '../ui.jsx'
 import { AdditionalInfo } from './AnalysisSection.jsx'
-import { DeptSection } from './DeptSection.jsx'
 import { Activity } from './Activity.jsx'
 import { ChatPanel } from './ChatPanel.jsx'
 
-// Jira 요청 상세(work item view): 왼쪽에 요청 정보·AI·연결 업무·활동, 오른쪽에 상태 버튼과 승인·세부 정보 패널.
+// 요청 상세: 왼쪽에 요청 정보·AI 분석·대화·활동, 오른쪽에 상태와 종결·세부 정보 패널. 분석 전에는 분석 시작만 보이고, 분석 후에 나머지가 나타난다.
 export function CaseDetail({ item, dispatch, me, onAnalyze, analyzing, analysisError, csrf, onChanged }) {
   if (!item) return <section className="center-card"><h1>요청을 찾을 수 없습니다</h1><a href="#/cases">대기열로</a></section>
   return (
@@ -17,14 +16,13 @@ export function CaseDetail({ item, dispatch, me, onAnalyze, analyzing, analysisE
           <h1 id="detail-title">{item.title}</h1>
           <RequestCard item={item} />
           {csrf && <ChatPanel item={item} csrf={csrf} onChanged={onChanged} dispatch={dispatch} onAnalyze={onAnalyze} analyzing={analyzing} analysisError={analysisError} />}
-          {item.analysis && <AdditionalInfo item={item} dispatch={dispatch} />}
-          <DeptSection item={item} dispatch={dispatch} />
+          {chatReady(item) && <AdditionalInfo item={item} dispatch={dispatch} />}
           <Activity item={item} dispatch={dispatch} me={me} />
         </div>
         <aside className="issue-side" aria-label="상태와 세부 정보">
-          <StatusMenu item={item} dispatch={dispatch} />
-          <ApprovalPanel item={item} dispatch={dispatch} me={me} />
-          <DetailsPanel item={item} dispatch={dispatch} me={me} />
+          <StatusBadge item={item} />
+          <ResolvePanel item={item} dispatch={dispatch} />
+          <DetailsPanel item={item} />
         </aside>
       </div>
     </article>
@@ -58,97 +56,40 @@ function RequestCard({ item }) {
   )
 }
 
-// Jira의 상태 드롭다운 버튼: 선택하면 이동 가능한 전환을 보여 준다.
-function StatusMenu({ item, dispatch }) {
-  const [open, setOpen] = useState(false)
-  const can = Boolean(dispatch) && canReanalyze(item)
-  return (
-    <div className="status-menu">
-      <button className={`status-btn status-${item.status === '종결' ? 'green' : item.status === '반려됨' ? 'red' : item.status === '추가 정보 필요' ? 'yellow' : 'blue'}`} aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen(!open)}>{item.status} ▾</button>
-      {open && (
-        <ul className="menu" role="menu">
-          <li role="none"><button role="menuitem" disabled={!can} onClick={() => { dispatch({ type: 'REANALYZE', id: item.id }); setOpen(false) }}>재분석 요청</button></li>
-          {!can && <li className="muted small menu-note">이 상태에서는 다른 전환이 없습니다.</li>}
-        </ul>
-      )}
-    </div>
-  )
+function StatusBadge({ item }) {
+  return <div className="status-menu"><span className={`status-btn status-${item.status === '종결' ? 'green' : 'blue'}`} role="status" aria-label={`상태 ${item.status}`}>{item.status}</span></div>
 }
 
-// Jira의 "This requires your approval" 패널: Approve / Decline.
-function ApprovalPanel({ item, dispatch, me }) {
-  const [declining, setDeclining] = useState(false)
-  const [reason, setReason] = useState('')
-
-  if (!item.analysis) return <div className="side-panel"><h3>검토 전</h3><p className="muted small">분석이 끝나면 근거와 부서별 초안을 검토하고 승인할 수 있습니다.</p></div>
-  if (item.status === '처리 중' || item.status === '종결') return <ResolvePanel item={item} dispatch={dispatch} me={me} />
-  if (item.status === '반려됨') {
-    const last = [...item.comments].reverse().find((c) => c.text.startsWith('반려 사유'))
-    return <div className="side-panel declined"><h3>반려됨</h3><p className="small">{last?.text}</p><p className="muted small">상태 메뉴에서 재분석을 요청할 수 있습니다.</p></div>
+// 처리 결과를 한 번 적으면 고객의 안내 문서와 완료 메일에 함께 나간다. 종결은 운영진이 직접 한다.
+function ResolvePanel({ item, dispatch }) {
+  const [note, setNote] = useState('')
+  if (item.status === '종결') {
+    return <div className="side-panel approved"><h3>종결됨</h3><p><strong>{item.resolution.by}</strong> · {formatTime(item.resolution.at)}</p><p className="small pre">{item.resolution.note}</p><p className="muted small">고객 포털에서 완료로 표시되고, 처리 결과와 안내 문서가 보입니다.</p></div>
   }
-
-  const approvable = Boolean(dispatch) && canApprove(item)
+  if (!canResolve(item)) return <div className="side-panel"><h3>처리 대기</h3><p className="muted small">`분석해줘`로 분석을 시작하면 처리 중이 되고, 그 뒤에 처리 결과를 적어 종결할 수 있습니다.</p></div>
   return (
     <div className="side-panel approval">
-      <h3>승인이 필요합니다</h3>
-      <p className="small">품질 담당자가 근거와 부서별 초안을 확인한 뒤 승인하면 선택한 부서로 연결 업무가 생성됩니다. 승인 전에는 전달되지 않습니다.</p>
-      {!declining ? (
-        <div className="actions left">
-          <button className="primary" disabled={!approvable} onClick={() => dispatch({ type: 'APPROVE', id: item.id })}>승인</button>
-          <button disabled={!dispatch || !isEditable(item)} onClick={() => setDeclining(true)}>반려</button>
-        </div>
-      ) : (
-        <div>
-          <label className="small">반려 사유 (내부 메모로 남습니다)<textarea rows={3} value={reason} onChange={(e) => setReason(e.target.value)} autoFocus /></label>
-          <div className="actions left">
-            <button className="danger" disabled={!dispatch || !reason.trim()} onClick={() => { dispatch({ type: 'DECLINE', id: item.id, reason }); setDeclining(false); setReason('') }}>반려 확인</button>
-            <button onClick={() => { setDeclining(false); setReason('') }}>취소</button>
-          </div>
-        </div>
-      )}
-      {!approvable && !declining && <p className="muted small">부서를 한 곳 이상 선택하고 모든 초안을 채우면 승인할 수 있습니다.</p>}
+      <h3>처리 결과 · 종결</h3>
+      <p className="small">처리 결과는 고객에게 안내 문서와 완료 메일로 함께 전달됩니다.</p>
+      <label className="small">처리 결과 (고객에게 보입니다)<textarea rows={4} maxLength={2000} value={note} onChange={(e) => setNote(e.target.value)} /></label>
+      <button className="primary" disabled={!dispatch || !note.trim()} onClick={() => dispatch({ type: 'RESOLVE', id: item.id, note: note.trim() })}>요청 종결</button>
     </div>
   )
 }
 
-// 승인 후: 연결 업무가 모두 완료되면 품질 담당자가 부서 결과를 확인하고 원본 요청을 종결한다(Jira 연결 작업 완료 후 원본 해결).
-function ResolvePanel({ item, dispatch, me }) {
-  const [note, setNote] = useState('')
-  const done = item.linked.filter((l) => l.status === '완료').length
-  if (item.status === '종결') {
-    return <div className="side-panel approved"><h3>종결됨</h3><p><strong>{item.resolution.by}</strong> · {formatTime(item.resolution.at)}</p>{item.resolution.note && <p className="small">{item.resolution.note}</p>}<p className="muted small">고객 포털에서 완료로 표시됩니다.</p></div>
-  }
-  return (
-    <div className={canResolve(item) ? 'side-panel approval' : 'side-panel'}>
-      <h3>부서 처리 {done}/{item.linked.length} 완료</h3>
-      <p className="small">{item.approval.by}이 {formatTime(item.approval.at)}에 승인했습니다.</p>
-      {canResolve(item) ? (
-        <>
-          <p className="small">모든 연결 업무가 완료되었습니다. 처리 결과를 확인한 뒤 요청을 종결하세요.</p>
-          <label className="small">종결 메모(고객에게 보입니다)<textarea rows={3} value={note} onChange={(e) => setNote(e.target.value)} /></label>
-          <button className="primary" disabled={!dispatch} onClick={() => dispatch({ type: 'RESOLVE', id: item.id, note })}>요청 종결</button>
-        </>
-      ) : <p className="muted small">부서 업무가 모두 완료되면 종결할 수 있습니다.</p>}
-    </div>
-  )
-}
-
-function DetailsPanel({ item, dispatch, me }) {
+function DetailsPanel({ item }) {
   const { intake, analysis } = item
   const manual = analysis?.evidence.filter((e) => e.kind === 'manual').length ?? 0
   const cases = analysis?.evidence.filter((e) => e.kind === 'fsr').length ?? 0
-  const targets = item.linked.length > 0 ? item.linked.map((l) => l.name) : item.departments.filter((d) => d.selected).map((d) => d.key && ({ service: '서비스', quality: '품질', parts: '부품·자재', sales: '영업' }[d.key]))
   return (
     <div className="side-panel details">
       <h3>세부 정보</h3>
       <dl className="detail-list">
-        <div><dt>담당자</dt><dd>{item.assignee ? <><Avatar name={item.assignee} /> {item.assignee}</> : <><span className="muted">미지정</span> <button className="linkish" disabled={!dispatch} onClick={() => dispatch({ type: 'ASSIGN', id: item.id })}>나에게 지정</button></>}</dd></div>
         <div><dt>접수자</dt><dd><Avatar name={intake.creator} /> {intake.creator}</dd></div>
         <div><dt>접수 사유</dt><dd>{intake.type}</dd></div>
         <div><dt>고객사</dt><dd>{intake.company}</dd></div>
         <div><dt>기종</dt><dd>{intake.machine}</dd></div>
         <div><dt>지식 근거</dt><dd>{analysis ? `${manual + cases}건 (매뉴얼 ${manual}, 과거 사례 ${cases})` : '미분석'}</dd></div>
-        <div><dt>대상 부서</dt><dd>{targets.length ? targets.join(', ') : '없음'}</dd></div>
         {mailLines(item.mail).length > 0 && <div><dt>알림 메일</dt><dd><ul className="mail-lines">{mailLines(item.mail).map((line) => <li key={line}>{line}</li>)}</ul></dd></div>}
       </dl>
       <p className="muted small">생성 {formatTime(item.createdAt)}{item.revision > 1 ? ` · 재분석 ${item.revision - 1}회` : ''}</p>

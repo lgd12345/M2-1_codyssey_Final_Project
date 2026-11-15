@@ -40,68 +40,45 @@ async function analyse(staff, id) {
 const noFollowUp = page => Promise.all(['정보 추가', '콜백 요청', '종결 요청'].map(name =>
   expect(page.getByRole('button', { name, exact: true })).toHaveCount(0)))
 
-const statusButton = (page, name) => page.getByRole('button', { name: new RegExp(`^${name}`) })
+const statusBadge = (page, name) => page.getByRole('status', { name: `상태 ${name}` })
+// The analysis is finished once the conversation opens (a request is 처리 중 from the moment it starts).
+const analysisDone = page => expect(page.getByLabel('질문 입력', { exact: true })).toBeEnabled({ timeout: 15000 })
 const serverItem = async (page, id) => (await page.request.get(`/api/v1/service-requests/${id}`)).json()
 
-test('review edits, approval, department work and closure run through the real UI and are durable', async ({ browser }) => {
+test('starting the analysis makes the request processing; the operator closes it with a result the customer reads', async ({ browser }) => {
   const customer = await newContext(browser, process.env.E2E_CUSTOMER, 'portal')
   const staff = await newContext(browser, process.env.E2E_STAFF, 'cases')
-  const id = await createRequest(customer.page, 'ATC 교환 중 정지합니다. 승인 흐름 확인.')
-  const work = { service: `SVC-${id.slice(4)}`, quality: `QLT-${id.slice(4)}` }
+  const id = await createRequest(customer.page, 'ATC 교환 중 정지합니다. 처리 흐름 확인.')
 
-  await analyse(staff.page, id)
-  await expect(staff.page.getByText('E2E 통제된 분석 응답', { exact: false })).toBeVisible({ timeout: 15000 })
-  await expect(statusButton(staff.page, '검토 대기')).toBeVisible()
-  // Review: edit the AI draft, add a department, and approve only after the edit was saved.
-  const draft = staff.page.getByLabel('서비스 초안', { exact: true })
-  await draft.fill('검토자가 고친 서비스 지시')
-  await staff.page.getByRole('checkbox', { name: /품질/ }).click()
-  await expect(staff.page.getByRole('checkbox', { name: /품질/ })).toBeChecked()
-  // A newly added department has no AI draft, so approval stays blocked until a draft is written.
-  await expect(staff.page.getByRole('button', { name: '승인', exact: true })).toBeDisabled()
-  await staff.page.getByLabel('품질 초안', { exact: true }).fill('품질 기록 확인 지시')
-  await expect(staff.page.getByText('수정됨', { exact: false }).first()).toBeVisible()
-  await staff.page.getByRole('button', { name: '승인', exact: true }).click()
-  await expect(statusButton(staff.page, '처리 중')).toBeVisible()
-  await expect(staff.page.getByText(work.service, { exact: true })).toBeVisible()
-  await expect(staff.page.getByText(work.quality, { exact: true })).toBeVisible()
-  await expect(staff.page.getByText('검토자가 고친 서비스 지시', { exact: false })).toBeVisible()
-  await expect(staff.page.getByText('0/2 완료', { exact: false }).first()).toBeVisible()
-  await staff.page.reload()
-  await expect(staff.page.getByText('검토자가 고친 서비스 지시', { exact: false })).toBeVisible()
-  const approved = await serverItem(staff.page, id)
-  expect(approved.linked.map(w => w.workKey)).toEqual([work.service, work.quality])
-  expect(approved.linked[0].content).toBe('검토자가 고친 서비스 지시')
-  expect(approved.linked[1].content).toBe('품질 기록 확인 지시')
+  // Before the analysis: received, only the start button, nothing else to review or close.
+  await staff.page.goto(`/#/cases/${id}`)
+  await expect(statusBadge(staff.page, '접수됨')).toBeVisible()
+  await expect(staff.page.getByRole('button', { name: '분석해줘', exact: true })).toBeVisible()
+  await expect(staff.page.getByText('연결 업무', { exact: true })).toHaveCount(0)
+  await expect(staff.page.getByRole('button', { name: '내부 메모 추가', exact: true })).toHaveCount(0)
+  await expect(staff.page.getByRole('button', { name: '요청 종결', exact: true })).toHaveCount(0)
+  await expect(staff.page.getByRole('button', { name: '승인', exact: true })).toHaveCount(0)
+  await expect(staff.page.getByText('담당자', { exact: true })).toHaveCount(0)
 
-  // Customer: only the customer-safe progress is visible.
+  // Starting the analysis is what makes it 처리 중, for the customer too.
+  await staff.page.getByRole('button', { name: '분석해줘', exact: true }).click()
+  await expect(statusBadge(staff.page, '처리 중')).toBeVisible()
+  await analysisDone(staff.page)
+  await expect(staff.page.getByText('E2E 통제된 분석 응답', { exact: false })).toBeVisible()
+  await expect(staff.page.getByRole('button', { name: '내부 메모 추가', exact: true })).toBeVisible()  // the rest appears after the analysis
   await customer.page.reload()
   await expect(customer.page.getByText('처리 중', { exact: true }).first()).toBeVisible()
-  await expect(customer.page.getByText('담당 부서에서 처리를 시작했습니다.', { exact: false })).toBeVisible()
-  await expect(customer.page.getByText('검토자가 고친 서비스 지시', { exact: false })).toHaveCount(0)
-  await expect(customer.page.getByText(work.service, { exact: false })).toHaveCount(0)
+  await expect(customer.page.getByText('처리를 시작했습니다.', { exact: false })).toBeVisible()
+  await expect(customer.page.getByText('E2E 통제된 분석 응답', { exact: false })).toHaveCount(0)
+  await customer.page.getByRole('tab', { name: '기술 가이드', exact: true }).click()
+  await expect(customer.page.getByText('E2E 매뉴얼', { exact: true })).toHaveCount(0)  // the guides come with the result
 
-  // Closure is blocked until every linked work item is done.
-  await expect(staff.page.getByText('부서 업무가 모두 완료되면 종결할 수 있습니다.', { exact: false })).toBeVisible()
-  await staff.page.goto(`/#/work/${work.service}`)
-  await staff.page.getByRole('button', { name: '처리 시작', exact: true }).click()
-  await expect(staff.page.getByText('진행 중', { exact: true }).first()).toBeVisible()
-  await staff.page.getByLabel('조치 내용 *', { exact: true }).fill('ATC 암 구동부 점검 후 정상 확인')
-  await staff.page.getByLabel('작업 시간(시간)', { exact: true }).fill('2')
-  await staff.page.getByRole('button', { name: '처리 완료', exact: true }).click()
-  await expect(staff.page.getByText('ATC 암 구동부 점검 후 정상 확인', { exact: false })).toBeVisible()
-  await staff.page.goto(`/#/cases/${id}`)
-  await expect(staff.page.getByText('1/2 완료', { exact: false }).first()).toBeVisible()
-  await expect(staff.page.getByRole('button', { name: '요청 종결', exact: true })).toHaveCount(0)
-  await staff.page.goto(`/#/work/${work.quality}`)
-  await staff.page.getByRole('button', { name: '처리 시작', exact: true }).click()
-  await staff.page.getByLabel('조치 내용 *', { exact: true }).fill('품질 기록 확인 완료')
-  await staff.page.getByRole('button', { name: '처리 완료', exact: true }).click()
-  await expect(staff.page.getByText('품질 기록 확인 완료', { exact: false })).toBeVisible()
-  await staff.page.goto(`/#/cases/${id}`)
-  await staff.page.getByLabel('종결 메모(고객에게 보입니다)', { exact: true }).fill('점검 결과를 안내드렸습니다.')
-  await staff.page.getByRole('button', { name: '요청 종결', exact: true }).click()
-  await expect(statusButton(staff.page, '종결')).toBeVisible()
+  // Closing needs the result to be written; it reaches the customer as the result and the guides.
+  const close = staff.page.getByRole('button', { name: '요청 종결', exact: true })
+  await expect(close).toBeDisabled()
+  await staff.page.getByLabel('처리 결과 (고객에게 보입니다)', { exact: true }).fill('점검 결과를 안내드렸습니다.')
+  await close.click()
+  await expect(statusBadge(staff.page, '종결')).toBeVisible()
   await expect(staff.page.getByText('종결됨', { exact: true })).toBeVisible()
   await staff.page.reload()
   await expect(staff.page.getByText('종결됨', { exact: true })).toBeVisible()
@@ -110,35 +87,31 @@ test('review edits, approval, department work and closure run through the real U
   await customer.page.reload()
   await expect(customer.page.getByText('이 서비스 요청은 완료되었습니다.', { exact: false })).toBeVisible()
   await expect(customer.page.getByText('점검 결과를 안내드렸습니다.', { exact: false })).toBeVisible()
+  await customer.page.getByRole('tab', { name: '기술 가이드', exact: true }).click()
+  await expect(customer.page.getByText('E2E 매뉴얼', { exact: true })).toBeVisible()
   await noFollowUp(customer.page)  // a finished request offers nothing to do
   await customer.context.close()
   await staff.context.close()
 })
 
-test('decline keeps its reason internal and re-analysis restores a reviewable request', async ({ browser }) => {
+test('a failed analysis leaves the request processing, keeps the operator able to write notes and can be retried', async ({ browser }) => {
   const customer = await newContext(browser, process.env.E2E_COLLEAGUE, 'portal')
   const staff = await newContext(browser, process.env.E2E_STAFF, 'cases')
-  const id = await createRequest(customer.page, '반려와 재분석 확인용 요청입니다.')
+  const id = await createRequest(customer.page, '분석실패 확인용 요청입니다.')
   await analyse(staff.page, id)
-  await expect(statusButton(staff.page, '검토 대기')).toBeVisible({ timeout: 15000 })
-  await staff.page.getByRole('button', { name: '반려', exact: true }).click()
-  await staff.page.getByLabel('반려 사유 (내부 메모로 남습니다)', { exact: false }).fill('내부전용 반려 사유입니다')
-  await staff.page.getByRole('button', { name: '반려 확인', exact: true }).click()
-  await expect(statusButton(staff.page, '반려됨')).toBeVisible()
-  await expect(staff.page.getByText('반려 사유: 내부전용 반려 사유입니다', { exact: false }).first()).toBeVisible()
-  await expect(staff.page.getByRole('button', { name: '승인', exact: true })).toHaveCount(0)
-
+  await expect(staff.page.getByText('분석에 실패했습니다.', { exact: false })).toBeVisible({ timeout: 15000 })
+  await expect(statusBadge(staff.page, '처리 중')).toBeVisible()
+  await expect(staff.page.getByLabel('질문 입력', { exact: true })).toBeDisabled()  // still no analysis to talk about
+  await expect(staff.page.getByRole('button', { name: '내부 메모 추가', exact: true })).toBeVisible()  // but the operator can still write notes
+  expect((await serverItem(staff.page, id)).analysisRun.status).toBe('failed')
   await customer.page.reload()
-  await expect(customer.page.getByText('확인 중', { exact: true }).first()).toBeVisible()
-  await expect(customer.page.getByText('내부전용 반려 사유', { exact: false })).toHaveCount(0)
-  expect(JSON.stringify(await serverItem(customer.page, id))).not.toContain('내부전용')
+  await expect(customer.page.getByText('처리 중', { exact: true }).first()).toBeVisible()
+  expect(JSON.stringify(await serverItem(customer.page, id))).not.toContain('analysisRun')
 
-  await statusButton(staff.page, '반려됨').click()
-  await staff.page.getByRole('menuitem', { name: '재분석 요청', exact: true }).click()
-  await expect(staff.page.getByText('분석 중입니다.', { exact: false }).or(statusButton(staff.page, '분석 중'))).toBeVisible()
-  await expect(statusButton(staff.page, '검토 대기')).toBeVisible({ timeout: 15000 })
-  await expect(staff.page.getByText('재분석 1회', { exact: false })).toBeVisible()
-  await expect(staff.page.getByRole('button', { name: '승인', exact: true })).toBeEnabled()
+  await staff.page.getByRole('button', { name: '분석 다시 시도', exact: true }).click()
+  await analysisDone(staff.page)
+  await expect(staff.page.getByText('E2E 통제된 분석 응답', { exact: false })).toBeVisible()
+  await expect(staff.page.getByText('분석에 실패했습니다.', { exact: false })).toHaveCount(0)
   await customer.context.close()
   await staff.context.close()
 })
@@ -148,7 +121,7 @@ test('insufficient evidence: questions are for operators, who add information th
   const staff = await newContext(browser, process.env.E2E_STAFF, 'cases')
   const id = await createRequest(customer.page, '근거부족 증상 설명입니다.')
   await analyse(staff.page, id)
-  await expect(statusButton(staff.page, '추가 정보 필요')).toBeVisible({ timeout: 15000 })
+  await analysisDone(staff.page)
   await expect(staff.page.getByText('E2E 근거 부족 응답', { exact: false })).toBeVisible()
   // The AI's questions are for the operator, who gathers the answers outside the app.
   await expect(staff.page.getByRole('heading', { name: '운영진이 확인할 사항', exact: true })).toBeVisible()
@@ -159,7 +132,7 @@ test('insufficient evidence: questions are for operators, who add information th
 
   // The customer is asked nothing: the request just reads as being checked.
   await customer.page.reload()
-  await expect(customer.page.getByText('확인 중', { exact: true }).first()).toBeVisible()
+  await expect(customer.page.getByText('처리 중', { exact: true }).first()).toBeVisible()
   await expect(customer.page.getByText('정보 요청', { exact: true })).toHaveCount(0)
   await expect(customer.page.getByText('서비스 담당자가 추가 정보를 요청했습니다.', { exact: false })).toHaveCount(0)
   await expect(customer.page.getByText('알람 번호를 알려주세요.', { exact: false })).toHaveCount(0)
@@ -176,9 +149,7 @@ test('insufficient evidence: questions are for operators, who add information th
   await expect(staff.page.getByText('추가 정보 입력', { exact: false }).first()).toBeVisible()  // history
 
   // Re-analysis is the operator's own decision and now receives the information.
-  await statusButton(staff.page, '추가 정보 필요').click()
-  await staff.page.getByRole('menuitem', { name: '재분석 요청', exact: true }).click()
-  await expect(statusButton(staff.page, '검토 대기')).toBeVisible({ timeout: 15000 })
+  await staff.page.getByRole('button', { name: '재분석', exact: true }).click()
   await expect(staff.page.getByText('추가 정보 1건 반영', { exact: false })).toBeVisible()
   await customer.page.reload()
   await expect(customer.page.getByText(note, { exact: false })).toHaveCount(0)
@@ -193,9 +164,8 @@ test('internal notes never reach customers; companies are isolated; customers ca
   const id = await createRequest(customer.page, '내부 메모 비공개 확인용입니다.')
   await noFollowUp(customer.page)
 
-  await staff.page.goto(`/#/cases/${id}`)
-  await staff.page.getByRole('button', { name: '나에게 지정', exact: true }).click()
-  await expect(staff.page.getByText('담당자로 지정', { exact: false })).toBeVisible()
+  await analyse(staff.page, id)
+  await analysisDone(staff.page)
   await staff.page.getByRole('button', { name: '내부 메모 추가', exact: true }).click()
   await staff.page.getByLabel('내부 메모', { exact: true }).fill('내부 전용 메모입니다')
   await staff.page.getByRole('button', { name: '저장', exact: true }).click()
@@ -213,7 +183,7 @@ test('internal notes never reach customers; companies are isolated; customers ca
   expect((await other.page.request.get(`/api/v1/service-requests/${id}`)).status()).toBe(404)
   // A customer cannot call operator actions, and the old customer follow-up endpoints no longer exist.
   const customerHeaders = { Origin: new URL(customer.page.url()).origin, 'X-CSRF-Token': (await (await customer.page.request.get('/api/v1/auth/me')).json()).csrf_token }
-  expect((await customer.page.request.post(`/api/v1/service-requests/${id}/approval`, { headers: customerHeaders })).status()).toBe(403)
+  expect((await customer.page.request.post(`/api/v1/service-requests/${id}/resolution`, { headers: customerHeaders, data: { note: 'x' } })).status()).toBe(403)
   for (const suffix of ['replies', 'callback', 'close-request']) {
     expect([404, 405]).toContain((await customer.page.request.post(`/api/v1/service-requests/${id}/${suffix}`, { headers: customerHeaders, data: { text: 'x', reason: 'y' } })).status())
     expect([404, 405]).toContain((await other.page.request.post(`/api/v1/service-requests/${id}/${suffix}`, { headers: otherHeaders, data: { text: 'x', reason: 'y' } })).status())
@@ -234,7 +204,7 @@ test('the operator chat answers from tool results, shows evidence and keeps its 
   await expect(staff.page.getByRole('button', { name: '사례 담당자는?', exact: true })).toHaveCount(0)
   await expect(staff.page.getByRole('button', { name: '분석해줘', exact: true })).toBeEnabled()
   await staff.page.getByRole('button', { name: '분석해줘', exact: true }).click()
-  await expect(statusButton(staff.page, '검토 대기')).toBeVisible({ timeout: 15000 })
+  await analysisDone(staff.page)
   await expect(staff.page.getByLabel('질문 입력', { exact: true })).toBeEnabled()
 
   await staff.page.getByRole('button', { name: '사례 담당자는?', exact: true }).click()
@@ -259,7 +229,7 @@ test('the operator chat answers from tool results, shows evidence and keeps its 
   await expect(staff.page.getByText('질문 1/30', { exact: true })).toBeVisible()
 
   // The chat only reads: the request itself is unchanged.
-  expect((await serverItem(staff.page, id)).status).toBe('검토 대기')
+  expect((await serverItem(staff.page, id)).status).toBe('처리 중')
 
   // History is kept by the server.
   await staff.page.reload()
@@ -279,7 +249,7 @@ test('a department mail is only a draft until the operator presses send, and the
   const staff = await newContext(browser, process.env.E2E_STAFF, 'cases')
   const id = await createRequest(customer.page, '메일 카드 확인용 증상 설명입니다.')
   await analyse(staff.page, id)
-  await expect(statusButton(staff.page, '검토 대기')).toBeVisible({ timeout: 15000 })
+  await analysisDone(staff.page)
   await staff.page.getByLabel('질문 입력', { exact: true }).fill('서비스 출동 요청 메일 초안 만들어 주세요')
   await staff.page.getByRole('button', { name: '보내기', exact: true }).click()
   const card = staff.page.getByRole('region', { name: '서비스 메일' })
@@ -455,7 +425,7 @@ test('the agent only proposes saving information and re-analysing: the card butt
   const staff = await newContext(browser, process.env.E2E_STAFF, 'cases')
   const id = await createRequest(customer.page, '제안 카드 확인용 증상 설명입니다.')
   await analyse(staff.page, id)
-  await expect(statusButton(staff.page, '검토 대기')).toBeVisible({ timeout: 15000 })  // proposals need a finished analysis
+  await analysisDone(staff.page)  // proposals need a finished analysis
   const ask = async (text) => {
     await staff.page.getByLabel('질문 입력', { exact: true }).fill(text)
     await staff.page.getByRole('button', { name: '보내기', exact: true }).click()
@@ -472,7 +442,7 @@ test('the agent only proposes saving information and re-analysing: the card butt
   await expect(infoCard.getByRole('button', { name: '저장', exact: true })).toHaveCount(0)
   const saved = await serverItem(staff.page, id)
   expect(saved.additionalInfo.map(n => n.text)).toEqual(['전화 확인: 알람 2023이 스핀들 정지 직후 발생'])
-  expect(saved.status).toBe('검토 대기')  // saving does not analyse
+  expect(saved.analysisHistory).toHaveLength(1)  // saving does not analyse
 
   await ask('재분석 제안해 주세요')
   const reCard = staff.page.getByRole('region', { name: '재분석 제안' })

@@ -4,7 +4,7 @@ import { customerEvents } from '../domain/actions.js'
 import { formatDate, formatTime } from '../ui.jsx'
 import { SourcePageButton } from './SourcePage.jsx'
 
-const TONE = { 접수됨: 'neutral', '확인 중': 'blue', '처리 중': 'blue', 완료: 'green' }
+const TONE = { 접수됨: 'neutral', '처리 중': 'blue', 완료: 'green' }
 const TABS = [['history', '이력'], ['guides', '기술 가이드']]
 
 // TRUMPF 서비스 케이스 상세: 요청 번호·접수자·접수일·기계·설명과 기술 가이드·이력 탭.
@@ -59,7 +59,7 @@ export function PortalDetail({ item }) {
             <h2>기술 가이드</h2>
             {guides.length === 0 ? <p className="muted">입력하신 내용에 해당하는 기술 가이드가 아직 없습니다.</p> : (
               <>
-                <p className="muted small">AI가 접수 내용을 바탕으로 찾고 서비스 담당자가 확인한 자료입니다. 스스로 점검해 볼 때 참고해 주세요.</p>
+                <p className="muted small">AI가 접수 내용을 바탕으로 찾은 자료입니다. 스스로 점검해 볼 때 참고해 주세요.</p>
                 <ul className="guides">{guides.map((g) => <li key={g.id}><div><strong>{g.title}</strong><small>{g.source}</small></div>{g.viewable ? <SourcePageButton itemId={item.id} evidenceId={g.id} title={g.title} /> : <span className="muted small">원본 페이지 정보 없음</span>}</li>)}</ul>
               </>
             )}

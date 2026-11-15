@@ -13,7 +13,7 @@ export function formatDate(at) {
   return Number.isNaN(d.getTime()) ? '' : `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
 }
 
-const LOZENGE = { '접수됨': 'neutral', '분석 중': 'neutral', '검토 대기': 'blue', '추가 정보 필요': 'yellow', '처리 중': 'blue', '반려됨': 'red', '종결': 'green', '전달됨': 'blue', '진행 중': 'yellow', '완료': 'green' }
+const LOZENGE = { '접수됨': 'neutral', '처리 중': 'blue', '종결': 'green', '완료': 'green' }
 
 // Jira의 상태 로젠지: 작은 대문자형 라벨 배지.
 export function Lozenge({ status }) {
