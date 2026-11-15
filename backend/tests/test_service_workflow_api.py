@@ -311,3 +311,17 @@ def test_insufficient_evidence_stays_processing_and_the_operator_adds_informatio
     assert len(runner.inputs) == 2 and runner.inputs[1]['additional_info'] == ['전화 확인: 알람 2023'] and 'contact' not in runner.inputs[1]
     after = item(clients, 'staff', identity)
     assert after['status'] == '처리 중' and after['revision'] == 2 and after['analysis']['status'] == 'answered'
+
+
+def test_a_request_cannot_be_closed_while_its_analysis_is_running(setup, use_runner):
+    clients, equipment = setup
+    use_runner(Runner())
+    identity = submit(clients, equipment)
+    from app.service_requests import analysis as analysis_module
+    with psycopg.connect(DSN) as db:
+        staff = db.execute("SELECT id FROM app_user WHERE login_id LIKE 'staff-%'").fetchone()[0]
+        analysis_module.begin(db, int(identity[4:]), staff)  # running, not finished
+    refused = post(clients, 'staff', identity, 'resolution', note=RESULT)
+    assert refused.status_code == 409 and refused.json()['code'] == 'INVALID_STATE'
+    assert item(clients, 'staff', identity)['status'] == '처리 중'
+

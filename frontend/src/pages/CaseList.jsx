@@ -52,7 +52,7 @@ export function CaseList({ cases, onCreate, equipment, modalOpen }) {
 
       <section className="queue-main" aria-labelledby="list-title">
         <div className="page-head row">
-          <div><p className="page-eyebrow">CLAIM OPERATIONS</p><h1 id="list-title" className="page-title">서비스 요청</h1><p className="page-lead">접수된 요청을 분석하고 검토·승인해 부서로 전달합니다.</p></div>
+          <div><p className="page-eyebrow">CLAIM OPERATIONS</p><h1 id="list-title" className="page-title">서비스 요청</h1><p className="page-lead">접수된 요청을 분석하고, 필요한 부서에 메일로 전달한 뒤 처리 결과를 적어 종결합니다.</p></div>
           <a className="button primary" href="#/cases/new">새 요청</a>
         </div>
 

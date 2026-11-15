@@ -83,6 +83,12 @@ test('starting the analysis makes the request processing; the operator closes it
   await staff.page.reload()
   await expect(staff.page.getByText('종결됨', { exact: true })).toBeVisible()
   expect((await serverItem(staff.page, id)).status).toBe('종결')
+  // A closed request is read-only: the history stays, nothing new can be asked, mailed or written.
+  await expect(staff.page.getByRole('log', { name: 'AI 대화 내용' }).getByText('E2E 통제된 분석 응답', { exact: false })).toBeVisible()
+  await expect(staff.page.getByLabel('질문 입력', { exact: true })).toBeDisabled()
+  await expect(staff.page.getByRole('button', { name: '메일 작성', exact: true })).toHaveCount(0)
+  await expect(staff.page.getByRole('button', { name: '내부 메모 추가', exact: true })).toHaveCount(0)
+  await expect(staff.page.getByRole('button', { name: '재분석', exact: true })).toHaveCount(0)
 
   await customer.page.reload()
   await expect(customer.page.getByText('이 서비스 요청은 완료되었습니다.', { exact: false })).toBeVisible()
@@ -101,7 +107,7 @@ test('a failed analysis leaves the request processing, keeps the operator able t
   await analyse(staff.page, id)
   await expect(staff.page.getByText('분석에 실패했습니다.', { exact: false })).toBeVisible({ timeout: 15000 })
   await expect(statusBadge(staff.page, '처리 중')).toBeVisible()
-  await expect(staff.page.getByLabel('질문 입력', { exact: true })).toBeDisabled()  // still no analysis to talk about
+  await expect(staff.page.getByLabel('질문 입력', { exact: true })).toHaveCount(0)  // still no analysis to talk about
   await expect(staff.page.getByRole('button', { name: '내부 메모 추가', exact: true })).toBeVisible()  // but the operator can still write notes
   expect((await serverItem(staff.page, id)).analysisRun.status).toBe('failed')
   await customer.page.reload()
@@ -197,15 +203,15 @@ test('the operator chat answers from tool results, shows evidence and keeps its 
   const id = await createRequest(customer.page, 'ATC가 작동하지 않습니다. 채팅 확인용 증상 설명입니다.')
   await staff.page.goto(`/#/cases/${id}`)
   await expect(staff.page.getByRole('heading', { name: 'AI 분석·대화', exact: true })).toBeVisible()
-  await expect(staff.page.getByText('읽기 전용이며', { exact: false })).toBeVisible()
 
   // Before the first analysis the conversation is closed: only the start button works.
-  await expect(staff.page.getByLabel('질문 입력', { exact: true })).toBeDisabled()
+  await expect(staff.page.getByLabel('질문 입력', { exact: true })).toHaveCount(0)
   await expect(staff.page.getByRole('button', { name: '사례 담당자는?', exact: true })).toHaveCount(0)
   await expect(staff.page.getByRole('button', { name: '분석해줘', exact: true })).toBeEnabled()
   await staff.page.getByRole('button', { name: '분석해줘', exact: true }).click()
   await analysisDone(staff.page)
   await expect(staff.page.getByLabel('질문 입력', { exact: true })).toBeEnabled()
+  await expect(staff.page.getByText('읽기 전용이며', { exact: false })).toBeVisible()
 
   await staff.page.getByRole('button', { name: '사례 담당자는?', exact: true }).click()
   const log = staff.page.getByRole('log', { name: 'AI 대화 내용' })
@@ -226,7 +232,7 @@ test('the operator chat answers from tool results, shows evidence and keeps its 
   await expect(image).toBeVisible()
   await expect.poll(() => image.evaluate((img) => img.complete && img.naturalWidth > 0), { timeout: 10000 }).toBe(true)  // really decoded
   await staff.page.keyboard.press('Escape')
-  await expect(staff.page.getByText('질문 1/30', { exact: true })).toBeVisible()
+  await expect(staff.page.getByText('질문 1/30', { exact: false })).toBeVisible()
 
   // The chat only reads: the request itself is unchanged.
   expect((await serverItem(staff.page, id)).status).toBe('처리 중')
@@ -234,7 +240,7 @@ test('the operator chat answers from tool results, shows evidence and keeps its 
   // History is kept by the server.
   await staff.page.reload()
   await expect(staff.page.getByRole('log', { name: 'AI 대화 내용' }).getByText('비슷한 사례는 FSR-00005이며 담당 작업자는 EMP-0003입니다.', { exact: true })).toBeVisible()
-  await expect(staff.page.getByText('질문 1/30', { exact: true })).toBeVisible()
+  await expect(staff.page.getByText('질문 1/30', { exact: false })).toBeVisible()
 
   // Customers have no chat, in the screen or in the API.
   await customer.page.goto(`/#/portal/${id}`)

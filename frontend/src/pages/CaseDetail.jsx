@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { canResolve, chatReady, mailLines } from '../domain/workflow.js'
+import { canResolve, chatReady, isAnalysisRunning, mailLines } from '../domain/workflow.js'
 import { Avatar, formatTime } from '../ui.jsx'
 import { AdditionalInfo } from './AnalysisSection.jsx'
 import { Activity } from './Activity.jsx'
@@ -66,7 +66,8 @@ function ResolvePanel({ item, dispatch }) {
   if (item.status === '종결') {
     return <div className="side-panel approved"><h3>종결됨</h3><p><strong>{item.resolution.by}</strong> · {formatTime(item.resolution.at)}</p><p className="small pre">{item.resolution.note}</p><p className="muted small">고객 포털에서 완료로 표시되고, 처리 결과와 안내 문서가 보입니다.</p></div>
   }
-  if (!canResolve(item)) return <div className="side-panel"><h3>처리 대기</h3><p className="muted small">`분석해줘`로 분석을 시작하면 처리 중이 되고, 그 뒤에 처리 결과를 적어 종결할 수 있습니다.</p></div>
+  if (isAnalysisRunning(item)) return <div className="side-panel"><h3>분석 중</h3><p className="muted small">분석이 끝나면 처리 결과를 적어 종결할 수 있습니다.</p></div>
+  if (!canResolve(item)) return <div className="side-panel"><h3>처리 대기</h3><p className="muted small">‘분석해줘’로 분석을 시작하면 처리 중이 되고, 그 뒤에 처리 결과를 적어 종결할 수 있습니다.</p></div>
   return (
     <div className="side-panel approval">
       <h3>처리 결과 · 종결</h3>

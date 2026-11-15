@@ -373,3 +373,5 @@ input:not([type='checkbox']), select, textarea { border-radius: 8px; }
 .proposal-card { border: 1px dashed var(--border, #b3bac5); border-radius: var(--radius); padding: 0.6rem 0.8rem; display: grid; gap: 0.4rem; background: var(--surface, #fff); }
 .proposal-card h3 { margin: 0; font-size: 0.95rem; }
 .proposal-card .actions { display: flex; justify-content: flex-end; gap: 0.5rem; }
+.ai-button { border: 1px solid var(--blue-fg, #0052cc); color: var(--blue-fg, #0052cc); background: #fff; border-radius: var(--radius); padding: 0.35rem 0.9rem; font-weight: 600; cursor: pointer; }
+.ai-button:disabled { opacity: 0.55; cursor: default; }

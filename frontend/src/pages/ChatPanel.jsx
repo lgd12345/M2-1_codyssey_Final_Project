@@ -24,7 +24,7 @@ export function ChatPanel({ item, csrf, onChanged, dispatch, onAnalyze, analyzin
     <section className="block chat" aria-labelledby="chat-title">
       <div className="block-head">
         <h2 id="chat-title"><span className="spark" aria-hidden="true">✦</span> AI 분석·대화</h2>
-        <span className="muted small">ⓘ AI가 작성한 검토용 초안입니다. 인용된 근거와 원본 매뉴얼을 확인한 뒤 판단해 주세요. 대화는 읽기 전용이며 요청을 바꾸거나 메일을 보내지 않습니다.</span>
+        <span className="muted small">ⓘ AI가 작성한 검토용 초안입니다. 인용된 근거와 원본 매뉴얼을 확인한 뒤 판단해 주세요.</span>
       </div>
       {failed && <p className="error" role="alert">대화 기록을 불러오지 못했습니다.</p>}
       {!failed && !initial && <p className="muted" role="status">대화를 불러오는 중…</p>}
@@ -68,11 +68,12 @@ function ChatSession({ item, csrf, initial, onChanged, dispatch, onAnalyze, anal
     return { ...m, metadata: { ...m.metadata, pydantic_ai: { timestamp: seen.current.get(m.id) } } }
   })
   const entries = timeline(stamped, history)
+  const closed = item.status === '종결'
   const startable = canStartAnalysis(item) && Boolean(onAnalyze)
   const again = canReanalyze(item) && Boolean(dispatch)
   function send(value) {
     const question = value.trim()
-    if (!question || busy || full || !open) return
+    if (!question || busy || full || !open || closed) return
     clearError()
     sendMessage({ text: question })
     setText('')
@@ -98,18 +99,20 @@ function ChatSession({ item, csrf, initial, onChanged, dispatch, onAnalyze, anal
       <div className="chips" aria-label="추천 질문">
         {startable && <button type="button" className="pill primary-pill" disabled={analyzing} onClick={() => onAnalyze(item.id)}>{analyzing ? '분석 요청 중…' : item.analysisRun?.status === 'failed' ? '분석 다시 시도' : '분석해줘'}</button>}
         {again && <button type="button" className="pill" onClick={() => dispatch({ type: 'REANALYZE', id: item.id })}>재분석</button>}
-        {open && CHIPS.map((chip) => <button key={chip.label} type="button" className="pill" disabled={busy || full} onClick={() => send(chip.text)}>{chip.label}</button>)}
+        {open && !closed && CHIPS.map((chip) => <button key={chip.label} type="button" className="pill" disabled={busy || full} onClick={() => send(chip.text)}>{chip.label}</button>)}
       </div>
+      {open && (
       <form className="chat-form" onSubmit={(e) => { e.preventDefault(); send(text) }}>
-        <textarea rows={2} maxLength={2000} value={text} aria-label="질문 입력" placeholder={open ? 'AI에게 질문하기' : '분석이 끝나면 질문할 수 있습니다'} disabled={full || !open}
+        <textarea rows={2} maxLength={2000} value={text} aria-label="질문 입력" placeholder={closed ? '종결된 요청입니다. 이전 대화만 볼 수 있습니다.' : 'AI에게 질문하기'} disabled={full || closed}
           onChange={(e) => setText(e.target.value)}
           onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); send(text) } }} />
         <div className="actions">
-          <span className="muted small">질문 {turns}/{initial.limit}</span>
+          <span className="muted small">질문 {turns}/{initial.limit}{!closed && ' · 대화는 읽기 전용이며 요청을 바꾸거나 메일을 보내지 않습니다.'}</span>
           {busy ? <button type="button" className="ghost" onClick={stop}>중지</button>
-            : <button type="submit" className="primary" disabled={!text.trim() || full || !open}>보내기</button>}
+            : <button type="submit" className="primary" disabled={!text.trim() || full || closed}>보내기</button>}
         </div>
       </form>
+      )}
     </div>
   )
 }

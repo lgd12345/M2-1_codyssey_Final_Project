@@ -141,7 +141,8 @@ def cancel(connection, number: int, draft_id: int) -> None:
 
 def manage_list(connection) -> list[dict[str, Any]]:
     with connection.cursor(row_factory=dict_row) as cursor:
-        rows = cursor.execute('SELECT key,name,description,recipients,active,updated_by,updated_at FROM service_department ORDER BY key').fetchall()
+        rows = cursor.execute("SELECT key,name,description,recipients,active,updated_by,updated_at FROM service_department "
+            "ORDER BY array_position(ARRAY['service','quality','parts','sales'], key), key").fetchall()
     return [{'key': r['key'], 'name': r['name'], 'description': r['description'], 'recipients': list(r['recipients']),
              'active': r['active'], 'updatedBy': r['updated_by'], 'updatedAt': r['updated_at'].isoformat() if r['updated_at'] else None}
             for r in rows]

@@ -58,7 +58,7 @@ export function MailCompose({ item, departmentKey, csrf, onSent, onChanged }) {
           <label>본문<textarea aria-label="메일 본문" rows={12} maxLength={4000} value={body} disabled={Boolean(busy)} onChange={(e) => setBody(e.target.value)} /></label>
           <div className="ai-compose">
             <input aria-label="AI에게 요청(선택)" placeholder="AI에게 요청(선택): 예) 긴급 건임을 강조" value={instruction} maxLength={500} disabled={Boolean(busy)} onChange={(e) => setInstruction(e.target.value)} />
-            <button type="button" className="ghost" disabled={Boolean(busy)} onClick={aiCompose}>{busy === 'ai' ? 'AI가 작성하는 중…' : 'AI로 작성'}</button>
+            <button type="button" className="ai-button" disabled={Boolean(busy)} onClick={aiCompose}>{busy === 'ai' ? 'AI가 작성하는 중…' : 'AI로 작성'}</button>
           </div>
         </>
       )}

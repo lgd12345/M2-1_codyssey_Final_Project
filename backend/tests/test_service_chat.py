@@ -19,7 +19,7 @@ from app.service_requests import chat
 from app.service_requests.pages import get_page_renderer
 from test_service_analysis_api import Runner, good_result, start, use_runner, submit  # noqa: F401
 from test_service_requests_api import setup, BASE, DSN, pytestmark  # noqa: F401
-from test_service_workflow_api import item  # noqa: F401
+from test_service_workflow_api import item, post  # noqa: F401
 
 DUMMY_SETTINGS = AgentSettings('', '', '', 60, '', Path('cache'), 150)
 SHA = 'a' * 64
@@ -369,4 +369,16 @@ def test_the_chat_stays_open_while_a_re_analysis_runs_and_after_it(chat_env):
     clients, identity = chat_env
     use_model(Script(lambda messages: [('text', '답')]))
     assert send(clients, identity).status_code == 200
+
+
+def test_a_closed_request_keeps_its_history_but_takes_no_new_questions(chat_env):
+    clients, identity = chat_env
+    use_model(Script(lambda messages: [('text', '답')]))
+    assert send(clients, identity).status_code == 200
+    assert post(clients, 'staff', identity, 'resolution', note='처리 결과입니다.').status_code == 200
+    script = Script(lambda messages: [('text', '새 답')])
+    use_model(script)
+    answer = send(clients, identity, body('종결 뒤 질문입니다', message_id='m-late'))
+    assert answer.status_code == 409 and answer.json()['code'] == 'CHAT_CLOSED' and script.requests == []
+    assert history(clients, identity).json()['turns'] == 1  # what was said before stays readable
 

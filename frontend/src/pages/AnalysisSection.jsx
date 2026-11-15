@@ -9,13 +9,14 @@ import { activitiesFor, firstSentences } from '../domain/analysis.js'
 // 현장 수리 절차는 서비스 부서의 업무이므로 이 화면에 두지 않는다.
 // current=false 인 이전 분석에는 활동 버튼이 없다. 원본 페이지는 회차(revision)로 그 분석의 인용을 연다.
 export function AnalysisBubble({ analysis: a, item, current, revision, dispatch, csrf, onChanged }) {
+  const canAct = item.status !== '종결'  // a closed request offers no new actions
   const [open, setOpen] = useState(null)
   const [composing, setComposing] = useState(null)
   const [full, setFull] = useState(false)
   const summary = firstSentences(a.summary, 2)
   const cases = a.evidence.filter((e) => e.kind === 'fsr')
   const manuals = a.evidence.filter((e) => e.kind === 'manual')
-  const activities = current && a.status === 'answered' ? activitiesFor(item.departments) : []
+  const activities = current && canAct && a.status === 'answered' ? activitiesFor(item.departments) : []
   const pageRevision = current ? undefined : revision  // the latest analysis is the server's default
   return (
     <div className="analysis-bubble">
@@ -58,7 +59,7 @@ export function AnalysisBubble({ analysis: a, item, current, revision, dispatch,
               </li>
             ))}
           </ol>
-          <p className="muted small">`메일 작성`을 누르면 작성란이 펼쳐집니다. 내용을 확인한 뒤 `보내기`를 누르면 발송됩니다.</p>
+          <p className="muted small">‘메일 작성’을 누르면 작성란이 펼쳐집니다. 내용을 확인한 뒤 ‘보내기’를 누르면 발송됩니다.</p>
         </>
       )}
       {a.status === 'insufficient_evidence' && a.questions.length > 0 && (
@@ -77,7 +78,7 @@ export function AnalysisBubble({ analysis: a, item, current, revision, dispatch,
       )}
       <div className="ai-foot">
         <span className="ai-chip">✦ AI 생성</span>
-        {current && <button className="ghost small" disabled={!dispatch} onClick={() => dispatch({ type: 'ADD_COMMENT', id: item.id, kind: 'internal', text: a.summary })}>내부 메모로 복사</button>}
+        {current && canAct && <button className="ghost small" disabled={!dispatch} onClick={() => dispatch({ type: 'ADD_COMMENT', id: item.id, kind: 'internal', text: a.summary })}>내부 메모로 복사</button>}
       </div>
     </div>
   )
@@ -132,7 +133,7 @@ export function PendingNotice({ item, error }) {
   const notice = analysisRunNotice(item.analysisRun)
   return (
     <div className="analysis-pending">
-      <p className="muted" role="status">{running ? '분석 중입니다. 매뉴얼과 과거 사례를 검색하고 있으며 완료되면 이 대화에 표시됩니다.' : '아직 분석 결과가 없습니다. `분석해줘`를 누르면 분석이 시작되고, 끝나면 질문할 수 있습니다.'}</p>
+      <p className="muted" role="status">{running ? '분석 중입니다. 매뉴얼과 과거 사례를 검색하고 있으며 완료되면 이 대화에 표시됩니다.' : '아직 분석 결과가 없습니다. ‘분석해줘’를 누르면 분석이 시작되고, 끝나면 질문할 수 있습니다.'}</p>
       {notice && <p className="error" role="alert">{notice}</p>}
       {error && <p className="error" role="alert">{error}</p>}
     </div>

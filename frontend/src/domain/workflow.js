@@ -6,12 +6,12 @@ export const canStartAnalysis = item => Boolean(item) && item.status !== '종결
 export const canReanalyze = item => Boolean(item) && item.status === '처리 중' && Boolean(item.analysis) && !isAnalysisRunning(item)
 // Information gathered outside the app feeds the next analysis.
 export const canAddInfo = item => Boolean(item) && item.status === '처리 중' && Boolean(item.analysis)
-export const canResolve = item => Boolean(item) && item.status === '처리 중'
+export const canResolve = item => Boolean(item) && item.status === '처리 중' && !isAnalysisRunning(item)  // an analysis still running would finish into a closed request
 // The screen reveals itself in order: the analysis button first; the conversation, mail activities and the rest once an analysis exists.
 export const chatReady = item => Boolean(item?.analysis)
 export const showsDepartments = chatReady
 // Notes and replies are possible after an analysis, and also when it failed so that the operator is never locked out.
-export const showsActivityInput = item => Boolean(item) && (Boolean(item.analysis) || item.analysisRun?.status === 'failed')
+export const showsActivityInput = item => Boolean(item) && item.status !== '종결' && (Boolean(item.analysis) || item.analysisRun?.status === 'failed')
 const RUN_FAILURES = {
   llm_unavailable: 'AI 모델에 연결하지 못했습니다.',
   agent_not_configured: 'AI 분석 설정이 완료되지 않았습니다.',

@@ -57,8 +57,9 @@ def add_additional_info(connection, number: int, actor, text: str) -> None:
 def resolve(connection, number: int, actor, note: str) -> None:
     """Close the request with the result the customer will read (guide page and completion mail)."""
     row = lock(connection, number)
-    if row['status'] != '처리 중':
-        raise InvalidState()
+    if row['status'] != '처리 중' or connection.execute(
+            "SELECT 1 FROM service_analysis WHERE request_id=%s AND status='running'", (number,)).fetchone():
+        raise InvalidState()  # an analysis still running would finish into a closed request
     connection.execute("UPDATE service_request SET status='종결', resolution=%s WHERE id=%s",
                        (Jsonb({'by': actor.login_id, 'at': _now(connection), 'note': note}), number))
     add_history(connection, number, f'{actor.login_id} 종결', '서비스 요청이 완료되었습니다.')

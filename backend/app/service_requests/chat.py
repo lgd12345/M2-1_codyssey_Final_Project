@@ -64,6 +64,11 @@ class ChatNeedsAnalysis(AuthError):
     message = '먼저 분석을 실행해 주세요. 분석이 끝나면 질문할 수 있습니다.'
 
 
+class ChatClosed(AuthError):
+    status_code, code = 409, 'CHAT_CLOSED'
+    message = '종결된 요청에는 새 질문을 할 수 없습니다. 이전 대화는 그대로 볼 수 있습니다.'
+
+
 class InvalidChatMessage(AuthError):
     status_code, code = 422, 'INVALID_CHAT_MESSAGE'
     message = f'질문은 1자 이상 {MAX_MESSAGE_CHARS}자 이하의 글이어야 합니다.'
@@ -301,6 +306,8 @@ async def chat_turn(identity: str, request: Request, session: SessionInfo = Depe
     row, notes, state = await asyncio.to_thread(_load, number)
     if not row['analysed']:
         raise ChatNeedsAnalysis()  # the conversation is about an analysis: the first one comes from the 분석해줘 button
+    if row['status'] == '종결':
+        raise ChatClosed()
     if state['turns'] >= MAX_USER_TURNS:
         raise ChatLimit()
     if len(await request.body()) > MAX_BODY_BYTES:

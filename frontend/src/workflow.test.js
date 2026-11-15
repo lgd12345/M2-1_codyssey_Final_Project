@@ -9,8 +9,9 @@ test('a request is 접수됨, 처리 중 or 종결: nothing else', () => {
   assert.deepEqual(STATUSES, ['접수됨', '처리 중', '종결'])
 })
 
-test('closing needs a request that is being processed', () => {
+test('closing needs a request that is being processed and no analysis running', () => {
   assert.equal(canResolve(request()), true)
+  assert.equal(canResolve(request({ analysisRun: { status: 'running', errorCode: null } })), false)
   assert.equal(canResolve(request({ analysis: null })), true)  // the operator may close even if the analysis failed
   for (const status of ['접수됨', '종결']) assert.equal(canResolve(request({ status })), false, status)
 })
@@ -53,6 +54,7 @@ test('the screen discloses its parts in order: first the analysis button, then e
   assert.deepEqual([fresh, running, failed, done].map(chatReady), [false, false, false, true])
   assert.deepEqual([fresh, running, failed, done].map(showsDepartments), [false, false, false, true])
   assert.deepEqual([fresh, running, failed, done].map(showsActivityInput), [false, false, true, true])  // a failed analysis must not lock the operator out
+  assert.equal(showsActivityInput(request({ status: '종결' })), false)  // nothing more is written to a closed request
 })
 
 test('empty queues have zero counts and no generated sample data', () => {
