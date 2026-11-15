@@ -78,7 +78,6 @@ export function AnalysisBubble({ analysis: a, item, current, revision, dispatch,
       )}
       <div className="ai-foot">
         <span className="ai-chip">✦ AI 생성</span>
-        {current && canAct && <button className="ghost small" disabled={!dispatch} onClick={() => dispatch({ type: 'ADD_COMMENT', id: item.id, kind: 'internal', text: a.summary })}>내부 메모로 복사</button>}
       </div>
     </div>
   )

@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { analysisRunNotice, canReanalyze, canStartAnalysis, isAnalysisRunning, canResolve, chatReady, customerStatus, showsActivityInput, showsDepartments, statusCounts, identifierCheckLine, mailLines, STATUSES } from './domain/workflow.js'
+import { analysisRunNotice, canReanalyze, canStartAnalysis, isAnalysisRunning, canResolve, chatReady, customerStatus, showsDepartments, statusCounts, identifierCheckLine, mailLines, STATUSES } from './domain/workflow.js'
 
 const request = (extra = {}) => ({ id: 'CLM-1000', status: '처리 중', analysis: { summary: '실제 분석 결과' },
   analysisRun: { status: 'succeeded', errorCode: null }, ...extra })
@@ -50,8 +50,6 @@ test('the screen discloses its parts in order: first the analysis button, then e
   const done = request()
   assert.deepEqual([fresh, running, failed, done].map(chatReady), [false, false, false, true])
   assert.deepEqual([fresh, running, failed, done].map(showsDepartments), [false, false, false, true])
-  assert.deepEqual([fresh, running, failed, done].map(showsActivityInput), [false, false, true, true])  // a failed analysis must not lock the operator out
-  assert.equal(showsActivityInput(request({ status: '종결' })), false)  // nothing more is written to a closed request
 })
 
 test('empty queues have zero counts and no generated sample data', () => {

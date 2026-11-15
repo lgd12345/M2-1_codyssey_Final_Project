@@ -76,7 +76,7 @@ test('real intake persists, is shared with company/staff and isolated from other
   await expect(staff.getByText('아직 분석 결과가 없습니다.', { exact: false })).toBeVisible()
   await expect(staff.getByText('아직 분석 결과가 없습니다.', { exact: false })).toBeVisible()
   await expect(staff.locator('.timeline')).toHaveCount(0)
-  await expect(staff.getByRole('button', { name: '내부 메모 추가', exact: true })).toHaveCount(0)  // notes open after the first analysis
+  await expect(staff.getByRole('button', { name: '내부 메모 추가', exact: true })).toHaveCount(0)  // there is no note input at all
   const before = await staff.request.get(`/api/v1/service-requests/${created.id}`)
   expect((await before.json()).status).toBe('접수됨')
   await staff.reload()

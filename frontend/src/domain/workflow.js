@@ -8,8 +8,6 @@ export const canResolve = item => Boolean(item) && item.status === '처리 중' 
 // The screen reveals itself in order: the analysis button first; the conversation, mail activities and the rest once an analysis exists.
 export const chatReady = item => Boolean(item?.analysis)
 export const showsDepartments = chatReady
-// Notes and replies are possible after an analysis, and also when it failed so that the operator is never locked out.
-export const showsActivityInput = item => Boolean(item) && item.status !== '종결' && (Boolean(item.analysis) || item.analysisRun?.status === 'failed')
 const RUN_FAILURES = {
   llm_unavailable: 'AI 모델에 연결하지 못했습니다.',
   agent_not_configured: 'AI 분석 설정이 완료되지 않았습니다.',

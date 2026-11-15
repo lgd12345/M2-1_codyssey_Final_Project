@@ -7,7 +7,6 @@ const item = { id: 'CLM-005' }
 test('every screen action maps to a server request with only user-chosen data', () => {
   const cases = [
     [{ type: 'REANALYZE', id: 'CLM-005' }, 'POST', '/service-requests/CLM-005/reanalysis', undefined, 'accepted'],
-    [{ type: 'ADD_COMMENT', id: 'CLM-005', kind: 'public', text: '안내' }, 'POST', '/service-requests/CLM-005/comments', { kind: 'public', text: '안내' }, 'item'],
     [{ type: 'RESOLVE', id: 'CLM-005', note: '완료 안내' }, 'POST', '/service-requests/CLM-005/resolution', { note: '완료 안내' }, 'item'],
   ]
   for (const [action, method, path, body, result] of cases) {
@@ -18,12 +17,11 @@ test('every screen action maps to a server request with only user-chosen data', 
 test('actor, time, owner and company are never sent by the browser', () => {
   const forged = { type: 'RESOLVE', id: 'CLM-005', note: '결과', by: 'someone', at: '2000-01-01', to: 'x', company: 'y' }
   assert.deepEqual(requestFor(forged, item), { method: 'POST', path: '/service-requests/CLM-005/resolution', body: { note: '결과' }, result: 'item' })
-  const comment = requestFor({ type: 'ADD_COMMENT', id: 'CLM-005', kind: 'internal', text: '메모', by: 'forged', at: 'x' }, item)
-  assert.deepEqual(comment.body, { kind: 'internal', text: '메모' })
 })
 
 test('unknown actions and unsafe identifiers are rejected instead of being sent', () => {
   assert.throws(() => requestFor({ type: 'RESET', id: 'CLM-005' }, item), /지원하지 않는 작업/)
+  assert.throws(() => requestFor({ type: 'ADD_COMMENT', id: 'CLM-005', kind: 'public', text: '안내' }, item), /지원하지 않는 작업/)  // notes and replies are gone
   assert.throws(() => requestFor({ type: 'RESOLVE', id: '../admin', note: 'x' }, item), /요청 번호/)
   for (const type of ['APPROVE', 'DECLINE', 'ASSIGN', 'TOGGLE_DEPT', 'EDIT_DRAFT', 'WORK_START', 'WORK_COMPLETE']) {
     assert.throws(() => requestFor({ type, id: 'CLM-005', workKey: 'SVC-005' }, item), /지원하지 않는 작업/, type)  // retired with the old workflow

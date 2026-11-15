@@ -562,27 +562,14 @@ test('operator detail: AI tabs and evidence, original pages, notes, department p
   await expect(page.getByText('지식 근거', { exact: true })).toBeVisible()
   await expect(page.getByText('2건 (매뉴얼 1, 과거 사례 1)', { exact: true })).toBeVisible()
 
-  // The AI summary can be copied into an internal note; customers never see it.
-  await page.getByRole('button', { name: '내부 메모로 복사' }).click()
-  await expect(page.locator('li.comment.internal')).toContainText('E2E 통제된 분석 응답')
-  await expect(page.locator('li.comment.internal')).toContainText('내부 메모')
+  // Customers never see the AI summary.
   expect(JSON.stringify(await serverItem(customer.page, id))).not.toContain('E2E 통제된 분석 응답')
 
-  // Activity: filters between everything, comments and history; an empty note cannot be saved; cancel discards.
-  const activity = page.getByRole('region', { name: '활동' })
-  await activity.getByRole('tab', { name: '이력', exact: true }).click()
-  await expect(activity.locator('li.event').first()).toBeVisible()
-  await expect(activity.locator('li.comment')).toHaveCount(0)
-  await activity.getByRole('tab', { name: '댓글', exact: true }).click()
-  await expect(activity.locator('li.event')).toHaveCount(0)
-  await expect(activity.locator('li.comment')).toHaveCount(1)
-  await activity.getByRole('tab', { name: '전체', exact: true }).click()
-  await activity.getByRole('button', { name: '내부 메모 추가', exact: true }).click()
-  await expect(activity.getByRole('button', { name: '저장', exact: true })).toBeDisabled()
-  await activity.getByLabel('내부 메모', { exact: true }).fill('저장하지 않을 메모')
-  await activity.getByRole('button', { name: '취소', exact: true }).click()
-  await expect(activity.getByLabel('내부 메모', { exact: true })).toHaveCount(0)
-  await expect(page.getByText('저장하지 않을 메모')).toHaveCount(0)
+  // History: a plain list of what happened. No note or reply inputs and no filters: the conversation and mail do the talking.
+  const history = page.getByRole('region', { name: '이력' })
+  await expect(history.locator('li.event').first()).toBeVisible()
+  await expect(history.getByRole('tab')).toHaveCount(0)
+  for (const name of ['내부 메모 추가', '고객에게 답변', '내부 메모로 복사']) await expect(page.getByRole('button', { name, exact: true })).toHaveCount(0)
 
   // The old review controls are gone: no department selection or drafts, approval, decline, assignee or status menu.
   for (const name of ['승인', '반려', '나에게 지정']) await expect(page.getByRole('button', { name, exact: true })).toHaveCount(0)
