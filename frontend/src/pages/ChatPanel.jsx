@@ -2,13 +2,13 @@ import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { useChat } from '@ai-sdk/react'
 import { DefaultChatTransport } from 'ai'
 import { call } from '../api.js'
-import { CHIPS, chatPageUrl, evidenceFrom, groupTurns, handlerLine, toolLabel, toolStatus, transportBody } from '../domain/chat.js'
+import { CHIPS, chatPageUrl, draftStateLabel, evidenceFrom, groupTurns, handlerLine, mailDraftUrl, toolLabel, toolStatus, transportBody } from '../domain/chat.js'
 import { Modal } from '../ui.jsx'
 
 const STATUS_TEXT = { running: '조회 중', done: '완료', failed: '실패' }
 
 // 운영진이 요청 하나에 대해 AI에게 묻는 대화. 읽기 전용이며 대화 기록은 서버가 보관한다.
-export function ChatPanel({ item, csrf }) {
+export function ChatPanel({ item, csrf, onChanged }) {
   const [initial, setInitial] = useState(null)
   const [failed, setFailed] = useState(false)
   useEffect(() => {
@@ -24,7 +24,7 @@ export function ChatPanel({ item, csrf }) {
       </div>
       {failed && <p className="error" role="alert">대화 기록을 불러오지 못했습니다.</p>}
       {!failed && !initial && <p className="muted" role="status">대화를 불러오는 중…</p>}
-      {initial && <ChatSession key={item.id} item={item} csrf={csrf} initial={initial} />}
+      {initial && <ChatSession key={item.id} item={item} csrf={csrf} initial={initial} onChanged={onChanged} />}
     </section>
   )
 }
@@ -37,12 +37,12 @@ function friendly(error) {
   return error.message && error.message.length < 200 ? error.message : '답변을 받지 못했습니다. 다시 시도해 주세요.'
 }
 
-function ChatSession({ item, csrf, initial }) {
+function ChatSession({ item, csrf, initial, onChanged }) {
   const transport = useMemo(() => new DefaultChatTransport({
     api: `/api/v1/service-requests/${item.id}/chat`, credentials: 'same-origin', headers: { 'X-CSRF-Token': csrf },
     prepareSendMessagesRequest: ({ id, messages, trigger }) => ({ body: transportBody({ id, messages, trigger }) }),
   }), [item.id, csrf])
-  const { messages, sendMessage, status, error, stop, clearError } = useChat({ id: item.id, messages: initial.messages, transport })
+  const { messages, sendMessage, status, error, stop, clearError } = useChat({ id: item.id, messages: initial.messages, transport, onFinish: () => onChanged?.() })
   const [text, setText] = useState('')
   const end = useRef(null)
   const busy = status === 'submitted' || status === 'streaming'
@@ -63,6 +63,7 @@ function ChatSession({ item, csrf, initial }) {
       <div className="chat-log" role="log" aria-live="polite" aria-label="AI 대화 내용">
         {messages.length === 0 && <p className="muted">아래 버튼을 누르거나 질문을 입력해 보세요. 예: 비슷한 과거 사례는 누가 담당했어?</p>}
         {groupTurns(messages).map((turn) => <Turn key={turn.id} turn={turn} itemId={item.id} />)}
+        {(item.mailDrafts ?? []).length > 0 && <MailDrafts item={item} csrf={csrf} onChanged={onChanged} />}
         {status === 'submitted' && <p className="muted small" role="status">AI가 확인하는 중…</p>}
         <div ref={end} />
       </div>
@@ -81,6 +82,48 @@ function ChatSession({ item, csrf, initial }) {
         </div>
       </form>
     </div>
+  )
+}
+
+// 에이전트가 만든 부서 메일 초안. 보내기 버튼을 눌러야만 발송됩니다(수신 주소는 서버가 부서 정보에서 찾습니다).
+function MailDrafts({ item, csrf, onChanged }) {
+  return (
+    <div className="mail-drafts" aria-label="부서 메일">
+      {item.mailDrafts.map((draft) => <MailCard key={draft.id} draft={draft} itemId={item.id} csrf={csrf} onChanged={onChanged} />)}
+    </div>
+  )
+}
+
+function MailCard({ draft, itemId, csrf, onChanged }) {
+  const [subject, setSubject] = useState(draft.subject)
+  const [body, setBody] = useState(draft.body)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+  const open = draft.status === 'draft' || draft.status === 'failed'
+  async function act(action) {
+    setBusy(true); setError('')
+    try {
+      await call(mailDraftUrl(itemId, draft.id, action), { method: 'POST', body: action === 'send' ? { subject, body } : {}, csrf })
+    } catch (e) { setError(e.message) }
+    await onChanged?.()
+    setBusy(false)
+  }
+  return (
+    <section className="mail-card" aria-label={`${draft.departmentName} 메일`}>
+      <h3>{draft.departmentName} 메일 <span className={`lozenge status-${draft.status}`}>{draftStateLabel(draft.status)}</span></h3>
+      <p className="muted small">받는 사람: {draft.departmentName} 부서 등록 주소 {draft.recipientCount}곳</p>
+      {open ? (
+        <>
+          <input aria-label="메일 제목" value={subject} maxLength={150} onChange={(e) => setSubject(e.target.value)} />
+          <textarea aria-label="메일 본문" rows={6} maxLength={4000} value={body} onChange={(e) => setBody(e.target.value)} />
+          {error && <p className="error" role="alert">{error}</p>}
+          <div className="actions">
+            <button type="button" className="ghost" disabled={busy} onClick={() => act('cancel')}>취소</button>
+            <button type="button" className="primary" disabled={busy || !subject.trim() || !body.trim()} onClick={() => act('send')}>보내기</button>
+          </div>
+        </>
+      ) : <><p><strong>{draft.subject}</strong></p><p className="chat-text">{draft.body}</p></>}
+    </section>
   )
 }
 

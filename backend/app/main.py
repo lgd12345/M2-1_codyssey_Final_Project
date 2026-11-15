@@ -8,6 +8,7 @@ from fastapi.staticfiles import StaticFiles
 
 from app.auth.routes import install_auth
 from app.config import check_configuration, startup_notes
+from app.mail.routes import router as service_mail_router
 from app.service_requests.chat import router as service_chat_router
 from app.service_requests.pages import router as service_pages_router
 from app.service_requests.routes import router as service_requests_router
@@ -28,6 +29,7 @@ async def lifespan(_app: FastAPI):
 
 app = FastAPI(title="Service Desk Agent API", lifespan=lifespan)
 install_auth(app)
+app.include_router(service_mail_router)
 app.include_router(service_requests_router)
 app.include_router(service_workflow_router)
 app.include_router(service_pages_router)

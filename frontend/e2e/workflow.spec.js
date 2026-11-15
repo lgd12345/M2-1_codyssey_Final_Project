@@ -261,3 +261,32 @@ test('the operator chat answers from tool results, shows evidence and keeps its 
   await customer.context.close()
   await staff.context.close()
 })
+
+test('a department mail is only a draft until the operator presses send, and the card shows what really happened', async ({ browser }) => {
+  const customer = await newContext(browser, process.env.E2E_CUSTOMER, 'portal')
+  const staff = await newContext(browser, process.env.E2E_STAFF, 'cases')
+  const id = await createRequest(customer.page, '메일 카드 확인용 증상 설명입니다.')
+  await staff.page.goto(`/#/cases/${id}`)
+  await staff.page.getByLabel('질문 입력', { exact: true }).fill('서비스 출동 요청 메일 초안 만들어 주세요')
+  await staff.page.getByRole('button', { name: '보내기', exact: true }).click()
+  const card = staff.page.getByRole('region', { name: '서비스 메일' })
+  await expect(card).toBeVisible({ timeout: 15000 })
+  await expect(card.getByText('초안 · 아직 보내지 않았습니다', { exact: true })).toBeVisible()
+  await expect(card.getByText('서비스 부서 등록 주소 1곳', { exact: false })).toBeVisible()
+  await expect(staff.page.getByText('hodob76@gmail.com', { exact: false })).toHaveCount(0)  // the address is never shown or sent to the browser
+  const before = await serverItem(staff.page, id)
+  expect(before.mailDrafts.map(d => d.status)).toEqual(['draft'])
+
+  await card.getByLabel('메일 제목', { exact: true }).fill('[출동 요청] ATC 정지 (수정)')
+  await card.getByRole('button', { name: '보내기', exact: true }).click()
+  await expect(card.getByText('발송됨', { exact: true })).toBeVisible({ timeout: 10000 })
+  await expect(card.getByText('[출동 요청] ATC 정지 (수정)', { exact: true })).toBeVisible()
+  const after = await serverItem(staff.page, id)
+  expect(after.mailDrafts.map(d => d.status)).toEqual(['sent'])
+  expect(after.history.some(h => h.text.startsWith('메일 발송 · 서비스'))).toBe(true)
+
+  await customer.page.goto(`/#/portal/${id}`)
+  expect(JSON.stringify(await serverItem(customer.page, id))).not.toContain('mailDrafts')
+  await customer.context.close()
+  await staff.context.close()
+})

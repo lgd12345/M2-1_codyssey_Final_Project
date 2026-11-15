@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { CHIPS, chatPageUrl, evidenceFrom, groupTurns, handlerLine, toolLabel, toolStatus, transportBody } from './domain/chat.js'
+import { CHIPS, chatPageUrl, evidenceFrom, draftStateLabel, groupTurns, handlerLine, mailDraftUrl, toolLabel, toolStatus, transportBody } from './domain/chat.js'
 
 const SHA = 'a'.repeat(64)
 const part = (name, output, state = 'output-available') => ({ type: `tool-${name}`, toolCallId: `c-${name}`, state, input: {}, output })
@@ -85,4 +85,18 @@ test('a handler reads as one line and says so when nothing was recorded', () => 
     'FSR-00005 · 작업자 EMP-0003 · 천안직영센터 · CENTER-003')
   assert.equal(handlerLine({ fsr_no: 'FSR-00006', worker: '', center: '', branch: '' }), 'FSR-00006 · 담당 기록 없음')
   assert.equal(handlerLine({ fsr_no: 'FSR-00007', worker: '', center: 'CENTER-009', branch: '' }), 'FSR-00007 · 작업자 기록 없음 · CENTER-009')
+})
+
+test('a mail draft card says what state it is in and never claims a mail was sent unless the server did', () => {
+  assert.equal(draftStateLabel('draft'), '초안 · 아직 보내지 않았습니다')
+  assert.equal(draftStateLabel('sending'), '보내는 중')
+  assert.equal(draftStateLabel('sent'), '발송됨')
+  assert.equal(draftStateLabel('failed'), '발송 실패 · 다시 보낼 수 있습니다')
+  assert.equal(draftStateLabel('cancelled'), '취소됨')
+})
+
+test('send and cancel addresses carry only the request number and a numeric draft id', () => {
+  assert.equal(mailDraftUrl('CLM-005', 7, 'send'), '/service-requests/CLM-005/mail-drafts/7/send')
+  assert.equal(mailDraftUrl('CLM-005', 7, 'cancel'), '/service-requests/CLM-005/mail-drafts/7/cancel')
+  for (const bad of [['x', 7, 'send'], ['CLM-005', '7/../', 'send'], ['CLM-005', 0, 'send'], ['CLM-005', 7, 'delete']]) assert.throws(() => mailDraftUrl(...bad))
 })

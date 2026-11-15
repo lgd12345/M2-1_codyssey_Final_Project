@@ -75,3 +75,11 @@ export function handlerLine(handler) {
   if (handler.center) bits.push(handler.center)
   return bits.join(' · ')
 }
+
+const DRAFT_STATES = { draft: '초안 · 아직 보내지 않았습니다', sending: '보내는 중', sent: '발송됨', failed: '발송 실패 · 다시 보낼 수 있습니다', cancelled: '취소됨' }
+export const draftStateLabel = status => DRAFT_STATES[status] ?? status
+
+export function mailDraftUrl(id, draftId, action) {
+  if (!REQUEST.test(id ?? '') || !Number.isInteger(draftId) || draftId < 1 || !['send', 'cancel'].includes(action)) throw new Error('올바르지 않은 메일 주소입니다.')
+  return `/service-requests/${id}/mail-drafts/${draftId}/${action}`
+}

@@ -30,7 +30,7 @@ def _group(rows, key='request_id'):
 
 def load_related(connection, ids: list[int], *, staff: bool) -> dict[str, dict[int, list[dict[str, Any]]]]:
     if not ids:
-        return {'comments': {}, 'history': {}, 'departments': {}, 'works': {}, 'info': {}, 'mail': {}}
+        return {'comments': {}, 'history': {}, 'departments': {}, 'works': {}, 'info': {}, 'mail': {}, 'drafts': {}}
     with connection.cursor(row_factory=dict_row) as cursor:
         kinds = ['internal', 'public'] if staff else ['public']
         comments = cursor.execute(
@@ -39,8 +39,12 @@ def load_related(connection, ids: list[int], *, staff: bool) -> dict[str, dict[i
         history = cursor.execute(
             f"SELECT * FROM service_history WHERE request_id=ANY(%s) {'' if staff else 'AND public_text IS NOT NULL'} ORDER BY at,id",
             (ids,)).fetchall()
-        departments = works = info = mail = []
+        departments = works = info = mail = drafts = []
         if staff:
+            drafts = cursor.execute(
+                """SELECT d.id,d.request_id,d.department_key,d.subject,d.body,d.status,d.sent_at,s.name,cardinality(s.recipients) AS n
+                   FROM service_mail_draft d JOIN service_department s ON s.key=d.department_key
+                   WHERE d.request_id=ANY(%s) ORDER BY d.id""", (ids,)).fetchall()
             mail = cursor.execute('SELECT request_id,kind,status,sent_at FROM service_mail WHERE request_id=ANY(%s) ORDER BY id',
                                   (ids,)).fetchall()
             info = cursor.execute('SELECT * FROM service_additional_info WHERE request_id=ANY(%s) ORDER BY created_at,id',
@@ -48,7 +52,7 @@ def load_related(connection, ids: list[int], *, staff: bool) -> dict[str, dict[i
             departments = cursor.execute('SELECT * FROM service_request_department WHERE request_id=ANY(%s)', (ids,)).fetchall()
             works = cursor.execute('SELECT * FROM service_work WHERE request_id=ANY(%s) ORDER BY created_at,dept', (ids,)).fetchall()
     return {'comments': _group(comments), 'history': _group(history), 'departments': _group(departments),
-            'works': _group(works), 'info': _group(info), 'mail': _group(mail)}
+            'works': _group(works), 'info': _group(info), 'mail': _group(mail), 'drafts': _group(drafts)}
 
 
 def _iso(value) -> str | None:
@@ -95,6 +99,9 @@ def serialize(row: dict[str, Any], related: dict[str, dict[int, list[dict[str, A
                   for c in comments],
         history=[{'at': created, 'text': '접수'}] + [{'at': _iso(h['at']), 'text': h['text']} for h in history],
         mail=[{'kind': m['kind'], 'status': m['status'], 'at': _iso(m['sent_at'])} for m in related['mail'].get(number, [])],
+        mailDrafts=[{'id': d['id'], 'department': d['department_key'], 'departmentName': d['name'], 'subject': d['subject'],
+                     'body': d['body'], 'status': d['status'], 'recipientCount': d['n'], 'sentAt': _iso(d['sent_at'])}
+                    for d in related['drafts'].get(number, [])],
         additionalInfo=[{'id': str(n['id']), 'by': n['author'], 'text': n['text'], 'at': _iso(n['created_at'])}
                         for n in related['info'].get(number, [])],
         resolution=row['resolution'], assignee=row['assignee'], revision=row['revision'], approval=row['approval'],

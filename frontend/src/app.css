@@ -333,3 +333,9 @@ input:not([type='checkbox']), select, textarea { border-radius: 8px; }
 .chat-form { display: grid; gap: 0.4rem; }
 .chat-form textarea { width: 100%; }
 .chat-form .actions { display: flex; justify-content: space-between; align-items: center; }
+
+.mail-drafts { display: grid; gap: 0.6rem; }
+.mail-card { border: 1px solid var(--border, #dfe1e6); border-radius: var(--radius); padding: 0.6rem 0.8rem; display: grid; gap: 0.4rem; background: var(--surface, #fff); }
+.mail-card h3 { margin: 0; font-size: 0.95rem; }
+.mail-card input, .mail-card textarea { width: 100%; }
+.mail-card .actions { display: flex; justify-content: flex-end; gap: 0.5rem; }

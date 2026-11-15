@@ -27,6 +27,7 @@ from pydantic_ai.messages import ModelMessagesTypeAdapter
 from pydantic_ai.ui.vercel_ai import VercelAIAdapter, VercelAIEventStream
 from pydantic_ai.ui.vercel_ai.response_types import ErrorChunk
 
+from app.mail import drafts as mail_drafts
 from app.agent_rag.case_retrieval import lookup_case
 from app.agent_rag.context import ContextPolicy
 from app.agent_rag.settings import AgentNotConfigured, AgentSettings
@@ -42,7 +43,8 @@ router = APIRouter(prefix='/api/v1/service-requests', tags=['service-requests-ch
 MAX_USER_TURNS = 30       # one conversation per request, bounded so history (and cost) cannot grow without limit
 MAX_MESSAGE_CHARS = 2000
 MAX_BODY_BYTES = 200_000
-TOOL_NAMES = ['search_cases', 'search_manual', 'lookup_identifier', 'open_source', 'lookup_case']
+TOOL_NAMES = ['search_cases', 'search_manual', 'lookup_identifier', 'open_source', 'lookup_case',
+              'list_departments', 'draft_department_mail']
 _active: set[int] = set()  # requests with a chat running: the application is a single process (see README)
 
 
@@ -63,7 +65,9 @@ class InvalidChatMessage(AuthError):
 
 SYSTEM = '''당신은 서비스 요청 하나를 검토하는 운영진을 돕는 어시스턴트다. 읽기 전용이다: 조회만 하며 요청의 상태 변경, 승인·반려, 댓글, 메일 발송, 부서 업무 생성, 추가 정보 저장은 할 수 없고 하지 않는다. 그런 일을 부탁받으면 운영진이 화면에서 직접 하도록 안내한다.
 
-도구: search_cases(과거 서비스 사례 FSR 검색), search_manual(매뉴얼 검색), lookup_identifier(알람·부품번호·PMC 주소 정확 조회), open_source(매뉴얼 페이지 텍스트 열람), lookup_case(FSR 번호로 사례의 담당 기록 조회: 작업자 ID·작업수행처·거점).
+메일: draft_department_mail은 부서에 보낼 메일의 초안을 저장할 뿐 발송하지 않는다. 발송은 운영진이 카드에서 보내기를 눌러야 한다. 보냈다고 말하지 않고 "초안을 만들었다"고 말한다. 수신 주소는 모르며 정하지 않는다(부서 키만 고른다). 메일 본문에는 요청 번호, 기종, 접수 사유, 증상 요약, 원인 후보, 참고 FSR 번호만 쓰고 고객 연락처와 작업자 ID는 쓰지 않는다.
+
+도구: search_cases(과거 서비스 사례 FSR 검색), search_manual(매뉴얼 검색), lookup_identifier(알람·부품번호·PMC 주소 정확 조회), open_source(매뉴얼 페이지 텍스트 열람), lookup_case(FSR 번호로 사례의 담당 기록 조회: 작업자 ID·작업수행처·거점), list_departments(메일을 보낼 수 있는 부서), draft_department_mail(부서 메일 초안 저장).
 
 규칙:
 - 사실은 이번 대화에서 도구로 조회한 결과에서만 말한다. 근거가 없으면 모른다고 답하고 추측하지 않는다. 번호를 비슷한 값으로 바꾸거나 같은 번호라고 추측하지 않는다.
@@ -78,12 +82,38 @@ _TAGS = re.compile(r'</?(request_message|operator_additional_info|request_contex
 
 
 class ChatTools(ManualAgentTools):
+    request_number: int | None = None
+
     """The analysis tools plus the case lookup. Opening a page returns its text only: the chat stores no images."""
 
     def open_source(self, doc_sha256: str, pdf_page: int) -> Any:
         """Read one manual page (converted text) by document SHA-256 and PDF page number from earlier search results."""
         result = super().open_source(doc_sha256, pdf_page)
         return result.return_value if isinstance(result, ToolReturn) else result
+
+    def list_departments(self) -> dict[str, Any]:
+        """List the departments mail can be drafted for: key, name and when to use it. Addresses are not shown."""
+        with request_database() as connection:
+            return {'departments': [{k: d[k] for k in ('key', 'name', 'description')}
+                                    for d in mail_drafts.departments(connection) if d['hasRecipient']]}
+
+    def draft_department_mail(self, department_key: str, subject: str, body: str) -> dict[str, Any]:
+        """Draft a mail to one department (key from list_departments). This only SAVES a draft: nothing is sent.
+        The operator reviews, may edit it and presses send on the card. Do not put worker IDs in the text."""
+        if self.request_number is None:
+            return {'ok': False, 'error': {'code': 'no_request'}}
+        arguments = {'department_key': department_key, 'subject': subject}
+        if (blocked := self._gate('draft_department_mail', {**arguments, 'body': body})) is not None:
+            return blocked
+        try:
+            with request_database() as connection:
+                draft_id = mail_drafts.create(connection, self.request_number, department_key, subject, body, None)
+        except AuthError as error:
+            self.tool_calls.append({'tool': 'draft_department_mail', 'status': 'error', 'error_code': error.code})
+            return {'ok': False, 'error': {'code': error.code, 'message': error.message}}
+        self.tool_calls.append({'tool': 'draft_department_mail', 'status': 'ok', 'arguments': arguments})
+        return {'ok': True, 'status': 'draft', 'draft_id': draft_id, 'department_key': department_key, 'subject': subject,
+                'note': '초안만 저장했으며 발송되지 않았습니다. 운영진이 카드에서 내용을 확인하고 보내기를 눌러야 발송됩니다.'}
 
     def lookup_case(self, fsr_no: str) -> dict[str, Any]:
         """Look up one past service case by its exact FSR number (for example FSR-00005): machine, date and who handled it."""
@@ -246,6 +276,7 @@ async def chat_turn(identity: str, request: Request, session: SessionInfo = Depe
         raise InvalidChatMessage()
     policy = ContextPolicy()
     tools = ChatTools(runtime.settings, embedder=runtime.embedder, policy=policy)
+    tools.request_number = number
     try:
         adapter = await ChatAdapter.from_request(request, agent=build_agent(tools), manage_message_history='server',
                                                  sdk_version=7)
