@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { ACTIVITY_LABELS, activitiesFor, activityQuestion, firstSentences, CHAT_ASK_EVENT } from './domain/analysis.js'
+import { ACTIVITY_LABELS, activitiesFor, firstSentences, mailAiUrl, mailTemplateUrl } from './domain/analysis.js'
 
 const dept = (key, aiSelected, selected = aiSelected) => ({ key, aiSelected, selected })
 
@@ -17,14 +17,9 @@ test('no departments, or none picked, means no activities', () => {
   assert.deepEqual(activitiesFor([dept('legal', true)]), [])  // an unknown key is ignored, never shown
 })
 
-test('every department has a label and the question asks for a DRAFT, never for sending', () => {
-  for (const [key, label] of Object.entries(ACTIVITY_LABELS)) {
-    const text = activityQuestion({ key, label })
-    assert.ok(text.includes(label) && text.includes('메일 초안'), text)
-    assert.ok(!text.includes('보내줘'))
-    assert.ok(text.length < 200)
-  }
+test('every department has a label and nothing else is shown for an unknown key', () => {
   assert.deepEqual(Object.keys(ACTIVITY_LABELS).sort(), ['parts', 'quality', 'sales', 'service'])
+  for (const label of Object.values(ACTIVITY_LABELS)) assert.ok(label.endsWith('메일'))
 })
 
 test('long text is cut to its first sentences without breaking the full text', () => {
@@ -35,6 +30,9 @@ test('long text is cut to its first sentences without breaking the full text', (
   assert.deepEqual(firstSentences('가나다.'.repeat(100), 1).cut, true)
 })
 
-test('the chat is asked through one named event', () => {
-  assert.equal(CHAT_ASK_EVENT, 'morrono-chat-ask')
+test('mail window addresses carry only a request number and a department key', () => {
+  assert.equal(mailTemplateUrl('CLM-005', 'service'), '/service-requests/CLM-005/mail-template?department_key=service')
+  assert.equal(mailAiUrl('CLM-005'), '/service-requests/CLM-005/mail-template/ai')
+  for (const bad of [['x', 'service'], ['CLM-005', 'a/b'], ['CLM-005', ''], ['CLM-005', 'x'.repeat(40)]]) assert.throws(() => mailTemplateUrl(...bad))
+  assert.throws(() => mailAiUrl('nope'))
 })

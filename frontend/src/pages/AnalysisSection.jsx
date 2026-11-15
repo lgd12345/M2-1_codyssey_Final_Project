@@ -2,12 +2,12 @@ import React, { useState } from 'react'
 import { analysisRunNotice, canStartAnalysis, canAddInfo, identifierCheckLine, isAnalysisRunning } from '../domain/workflow.js'
 import { SourcePageButton } from './SourcePage.jsx'
 import { formatTime } from '../ui.jsx'
-import { CHAT_ASK_EVENT, activitiesFor, activityQuestion, firstSentences } from '../domain/analysis.js'
+import { activitiesFor, firstSentences } from '../domain/analysis.js'
 
 // 분석은 대화의 말풍선 하나로 나온다. 짧게: 요약, 원인 후보, 권장 활동(메일 초안 요청), 근거 접기.
 // 현장 수리 절차는 서비스 부서의 업무이므로 이 화면에 두지 않는다.
 // current=false 인 이전 분석은 활동 버튼과 원본 페이지 열기가 없다(원본 페이지는 서버가 항상 최신 분석의 인용만 연다).
-export function AnalysisBubble({ analysis: a, item, current, revision, dispatch }) {
+export function AnalysisBubble({ analysis: a, item, current, revision, dispatch, onCompose }) {
   const [open, setOpen] = useState(null)
   const [full, setFull] = useState(false)
   const summary = firstSentences(a.summary, 2)
@@ -48,11 +48,11 @@ export function AnalysisBubble({ analysis: a, item, current, revision, dispatch 
             {activities.map((act) => (
               <li key={act.key}>
                 <span>{act.label}</span>
-                <button className="ghost small" disabled={!dispatch} onClick={() => window.dispatchEvent(new CustomEvent(CHAT_ASK_EVENT, { detail: activityQuestion(act) }))}>메일 작성</button>
+                <button className="ghost small" disabled={!dispatch} onClick={() => onCompose?.(act.key)}>메일 작성</button>
               </li>
             ))}
           </ol>
-          <p className="muted small">메일은 초안만 만들어지며, 내용을 확인하고 보내기를 눌러야 발송됩니다.</p>
+          <p className="muted small">메일 작성 창이 열리며, 내용을 확인하고 보내기를 눌러야 발송됩니다.</p>
         </>
       )}
       {a.status === 'insufficient_evidence' && a.questions.length > 0 && (

@@ -41,6 +41,16 @@ class MailOff(AuthError):
     message = '메일 발송이 설정되지 않았습니다. 관리자에게 문의해 주세요.'
 
 
+class MailAiInvalid(AuthError):
+    status_code, code = 502, 'MAIL_AI_INVALID'
+    message = 'AI가 만든 초안이 메일 규칙에 맞지 않았습니다. 다시 시도하거나 직접 작성해 주세요.'
+
+
+class MailAiFailed(AuthError):
+    status_code, code = 502, 'MAIL_AI_FAILED'
+    message = 'AI가 초안을 만들지 못했습니다. 직접 작성해 주세요.'
+
+
 class MailFailed(AuthError):
     status_code, code = 502, 'MAIL_FAILED'
     message = '메일을 보내지 못했습니다. 잠시 후 다시 시도해 주세요.'

@@ -347,3 +347,9 @@ input:not([type='checkbox']), select, textarea { border-radius: 8px; }
 .chat-msg.analysis { max-width: 100%; justify-self: stretch; }
 .analysis-bubble { display: grid; gap: 0.3rem; }
 .pill.primary-pill { background: var(--blue-fg, #0052cc); color: #fff; }
+
+.mail-compose { display: grid; gap: 0.6rem; }
+.mail-compose label { display: grid; gap: 0.2rem; font-weight: 600; font-size: 0.86rem; }
+.mail-compose input, .mail-compose textarea { width: 100%; font-weight: 400; }
+.ai-compose { display: flex; gap: 0.5rem; }
+.ai-compose input { flex: 1; }

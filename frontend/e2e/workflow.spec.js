@@ -291,17 +291,43 @@ test('a department mail is only a draft until the operator presses send, and the
   await staff.context.close()
 })
 
-test('a recommended activity asks the chat for a mail draft; nothing is sent until the card button is pressed', async ({ browser }) => {
+test('a recommended activity opens the mail window from a template; nothing is saved or sent until send is pressed', async ({ browser }) => {
   const customer = await newContext(browser, process.env.E2E_CUSTOMER, 'portal')
   const staff = await newContext(browser, process.env.E2E_STAFF, 'cases')
   const id = await createRequest(customer.page, '권장 활동 확인용 증상 설명입니다.')
   await analyse(staff.page, id)
   await expect(staff.page.getByRole('heading', { name: '권장 활동 1건' })).toBeVisible()
   await staff.page.getByRole('list', { name: '권장 활동' }).getByRole('button', { name: '메일 작성', exact: true }).click()
+
+  // The window opens at once from the fixed template: no question appears in the conversation and nothing is stored.
+  const dialog = staff.page.getByRole('dialog', { name: '서비스 메일 작성' })
+  await expect(dialog).toBeVisible()
+  await expect(dialog.getByLabel('메일 제목', { exact: true })).toHaveValue(new RegExp(`^\\[출동 요청\\] ${id} \\| F400`))
+  await expect(dialog.getByLabel('메일 본문', { exact: true })).toHaveValue(/서비스맨 출동 점검을 요청드립니다[\s\S]*요청 번호: CLM-/)
+  await expect(dialog.getByText('서비스 부서 등록 주소 1곳', { exact: false })).toBeVisible()
+  await expect(staff.page.getByRole('log', { name: 'AI 대화 내용' }).locator('.chat-msg.user')).toHaveCount(0)
+  expect((await serverItem(staff.page, id)).mailDrafts).toEqual([])
+
+  // The agent fills the same window on request; still nothing is saved.
+  await dialog.getByRole('button', { name: 'AI로 작성', exact: true }).click()
+  await expect(dialog.getByLabel('메일 제목', { exact: true })).toHaveValue('[출동 요청] AI 작성 제목', { timeout: 15000 })
+  await expect(dialog.getByLabel('메일 본문', { exact: true })).toHaveValue(/AI가 작성한 본문입니다/)
+  expect((await serverItem(staff.page, id)).mailDrafts).toEqual([])
+
+  // Cancel closes without a trace; opening again and sending records who sent it.
+  await dialog.getByRole('button', { name: '취소', exact: true }).click()
+  await expect(dialog).toHaveCount(0)
+  expect((await serverItem(staff.page, id)).mailDrafts).toEqual([])
+  await staff.page.getByRole('list', { name: '권장 활동' }).getByRole('button', { name: '메일 작성', exact: true }).click()
+  await dialog.getByLabel('메일 제목', { exact: true }).fill('[출동 요청] 직접 수정한 제목')
+  await dialog.getByRole('button', { name: '보내기', exact: true }).click()
+  await expect(dialog).toHaveCount(0, { timeout: 10000 })
   const card = staff.page.getByRole('region', { name: '서비스 메일' })
-  await expect(card.getByText('초안 · 아직 보내지 않았습니다', { exact: true })).toBeVisible({ timeout: 15000 })
-  await expect(staff.page.getByRole('log', { name: 'AI 대화 내용' }).getByText('서비스맨 출동 요청 메일 초안을 만들어 주세요.', { exact: true })).toBeVisible()
-  expect((await serverItem(staff.page, id)).mailDrafts.map(d => d.status)).toEqual(['draft'])
+  await expect(card.getByText('발송됨', { exact: true })).toBeVisible()
+  await expect(card.getByText('[출동 요청] 직접 수정한 제목', { exact: true })).toBeVisible()
+  const sent = await serverItem(staff.page, id)
+  expect(sent.mailDrafts.map(d => d.status)).toEqual(['sent'])
+  expect(sent.history.some(h => h.text.startsWith('메일 발송 · 서비스'))).toBe(true)
   await customer.context.close()
   await staff.context.close()
 })

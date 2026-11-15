@@ -105,6 +105,9 @@ def chat_plan(messages):
 
 def chat_model():
     def function(messages, info):
+        if info.output_tools:  # the mail-compose agent answers with a structured subject and body
+            return ModelResponse(parts=[ToolCallPart(info.output_tools[0].name, {
+                'subject': '[출동 요청] AI 작성 제목', 'body': 'AI가 작성한 본문입니다. 현장 점검을 요청드립니다.'})])
         parts = [ToolCallPart(s[1], s[2], tool_call_id=f'c{len(messages)}-{i}') if s[0] == 'tool' else TextPart(s[1])
                  for i, s in enumerate(chat_plan(messages))]
         return ModelResponse(parts=parts)

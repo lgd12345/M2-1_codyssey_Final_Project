@@ -84,6 +84,8 @@ def test_only_current_screen_and_analysis_routes_remain():
         ("POST", "/api/v1/service-requests/{identity}/reanalysis"),
         ("POST", "/api/v1/service-requests/{identity}/additional-info"),
         ("GET", "/api/v1/service-requests/departments"),
+        ("GET", "/api/v1/service-requests/{identity}/mail-template"),
+        ("POST", "/api/v1/service-requests/{identity}/mail-template/ai"),
         ("POST", "/api/v1/service-requests/{identity}/mail-drafts"),
         ("POST", "/api/v1/service-requests/{identity}/mail-drafts/{draft_id}/send"),
         ("POST", "/api/v1/service-requests/{identity}/mail-drafts/{draft_id}/cancel"),
