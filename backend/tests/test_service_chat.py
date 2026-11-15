@@ -17,7 +17,7 @@ from app.agent_rag.settings import AgentSettings
 from app.main import app
 from app.service_requests import chat
 from app.service_requests.pages import get_page_renderer
-from test_service_analysis_api import submit  # noqa: F401
+from test_service_analysis_api import Runner, good_result, start, use_runner, submit  # noqa: F401
 from test_service_requests_api import setup, BASE, DSN, pytestmark  # noqa: F401
 from test_service_workflow_api import item  # noqa: F401
 
@@ -75,7 +75,8 @@ def answer_after_tool(tool, args, text='답변입니다'):
 
 
 @pytest.fixture
-def chat_env(setup, monkeypatch):
+def bare_env(setup, monkeypatch):
+    """A received request that has NOT been analysed: the chat is closed for it."""
     clients, equipment = setup
     identity = submit(clients, equipment)
     monkeypatch.setattr(chat, 'lookup_case', lambda *a, **k: CASE)
@@ -87,6 +88,15 @@ def chat_env(setup, monkeypatch):
     app.dependency_overrides.pop(chat.get_chat_runtime, None)
     app.dependency_overrides.pop(get_page_renderer, None)
     chat._active.clear()
+
+
+@pytest.fixture
+def chat_env(bare_env, use_runner):
+    """The same request after its first analysis: the chat is open."""
+    clients, identity = bare_env
+    use_runner(Runner(good_result()))
+    assert start(clients, identity).status_code == 202
+    return clients, identity
 
 
 def use_model(script):
@@ -328,3 +338,35 @@ def test_the_case_tool_reports_invalid_numbers_without_inventing_a_match(chat_en
     stream = events(send(clients, identity))
     output = next(e for e in stream if isinstance(e, dict) and e['type'] == 'tool-output-available')['output']
     assert output['found'] is False and 'handlers' not in output
+
+
+# ---------- the chat opens only after the first analysis ----------
+
+def test_before_the_first_analysis_the_chat_is_closed_and_nothing_is_asked_of_the_model(bare_env):
+    clients, identity = bare_env
+    script = Script(lambda messages: [('text', '답')])
+    use_model(script)
+    response = send(clients, identity)
+    assert response.status_code == 409 and response.json()['code'] == 'CHAT_NEEDS_ANALYSIS'
+    assert script.requests == [] and stored(identity) is None
+
+
+def test_the_history_of_an_unanalysed_request_is_simply_empty(bare_env):
+    clients, identity = bare_env
+    saved = history(clients, identity)
+    assert saved.status_code == 200 and saved.json()['messages'] == [] and saved.json()['turns'] == 0
+
+
+def test_a_failed_first_analysis_keeps_the_chat_closed(bare_env, use_runner):
+    clients, identity = bare_env
+    use_runner(Runner(error=RuntimeError('x')))
+    assert start(clients, identity).status_code == 202
+    use_model(Script(lambda messages: [('text', '답')]))
+    assert send(clients, identity).json()['code'] == 'CHAT_NEEDS_ANALYSIS'
+
+
+def test_the_chat_stays_open_while_a_re_analysis_runs_and_after_it(chat_env):
+    clients, identity = chat_env
+    use_model(Script(lambda messages: [('text', '답')]))
+    assert send(clients, identity).status_code == 200
+

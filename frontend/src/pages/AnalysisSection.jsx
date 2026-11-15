@@ -132,7 +132,7 @@ export function PendingNotice({ item, error }) {
   const notice = analysisRunNotice(item.analysisRun)
   return (
     <div className="analysis-pending">
-      <p className="muted" role="status">{running ? '분석 중입니다. 매뉴얼과 과거 사례를 검색하고 있으며 완료되면 이 대화에 표시됩니다.' : '아직 분석 결과가 없습니다. 아래 `분석해줘` 버튼을 눌러 시작하세요.'}</p>
+      <p className="muted" role="status">{running ? '분석 중입니다. 매뉴얼과 과거 사례를 검색하고 있으며 완료되면 이 대화에 표시됩니다.' : '아직 분석 결과가 없습니다. `분석해줘`를 누르면 분석이 시작되고, 끝나면 질문할 수 있습니다.'}</p>
       {notice && <p className="error" role="alert">{notice}</p>}
       {error && <p className="error" role="alert">{error}</p>}
     </div>

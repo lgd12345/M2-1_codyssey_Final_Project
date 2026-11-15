@@ -9,11 +9,11 @@ from fastapi.testclient import TestClient
 from app.main import app
 from app.mail.deps import get_mail_sender
 from app.service_requests import chat
-from test_service_analysis_api import submit  # noqa: F401
+from test_service_analysis_api import submit, use_runner  # noqa: F401
 from test_service_requests_api import setup, BASE, DSN, pytestmark  # noqa: F401
 from test_service_workflow_api import item  # noqa: F401
 from test_service_chat import Script, use_model, answer_after_tool, send, events, types  # noqa: F401
-from test_service_chat import chat_env  # noqa: F401
+from test_service_chat import bare_env, chat_env  # noqa: F401  (chat_env = an analysed request)
 
 DEV = 'hodob76@gmail.com'
 GOOD = {'department_key': 'service', 'subject': 'CLM 출동 요청', 'body': 'F400 ATC 정지 증상입니다. 현장 점검 부탁드립니다.'}

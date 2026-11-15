@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { useChat } from '@ai-sdk/react'
 import { DefaultChatTransport } from 'ai'
 import { call } from '../api.js'
-import { CHIPS, chatPageUrl, draftStateLabel, evidenceFrom, handlerLine, mailDraftUrl, proposalCard, proposalUrl, timeline, toolLabel, toolStatus, transportBody } from '../domain/chat.js'
+import { CHIPS, chatOpen, chatPageUrl, draftStateLabel, evidenceFrom, handlerLine, mailDraftUrl, proposalCard, proposalUrl, timeline, toolLabel, toolStatus, transportBody } from '../domain/chat.js'
 import { canReanalyze, canStartAnalysis } from '../domain/workflow.js'
 import { AnalysisBubble, PendingNotice } from './AnalysisSection.jsx'
 import { Modal } from '../ui.jsx'
@@ -50,6 +50,7 @@ function ChatSession({ item, csrf, initial, onChanged, dispatch, onAnalyze, anal
   const [text, setText] = useState('')
   const end = useRef(null)
   const busy = status === 'submitted' || status === 'streaming'
+  const open = chatOpen(item)
   const turns = messages.filter((m) => m.role === 'user').length
   const full = turns >= initial.limit
   // Follow new messages, but never jump past the analysis when the page first opens.
@@ -71,7 +72,7 @@ function ChatSession({ item, csrf, initial, onChanged, dispatch, onAnalyze, anal
   const again = Boolean(item.analysis) && canReanalyze(item) && Boolean(dispatch) && item.status !== '분석 중'
   function send(value) {
     const question = value.trim()
-    if (!question || busy || full) return
+    if (!question || busy || full || !open) return
     clearError()
     sendMessage({ text: question })
     setText('')
@@ -81,7 +82,7 @@ function ChatSession({ item, csrf, initial, onChanged, dispatch, onAnalyze, anal
     <div className="chat-box">
       <div className="chat-log" role="log" aria-live="polite" aria-label="AI 대화 내용">
         {!item.analysis && <div className="chat-msg assistant"><PendingNotice item={item} error={analysisError} /></div>}
-        {entries.length === 0 && <p className="muted">아래 버튼을 누르거나 질문을 입력해 보세요. 예: 비슷한 과거 사례는 누가 담당했어?</p>}
+        {open && entries.length === 0 && <p className="muted">아래 버튼을 누르거나 질문을 입력해 보세요. 예: 비슷한 과거 사례는 누가 담당했어?</p>}
         {entries.map((entry) => entry.kind === 'analysis' ? (
           <div key={`analysis-${entry.revision}`} className="chat-msg assistant analysis">
             {entry.current ? <AnalysisBubble analysis={entry.analysis} item={item} current revision={entry.revision} dispatch={dispatch} csrf={csrf} onChanged={onChanged} />
@@ -97,16 +98,16 @@ function ChatSession({ item, csrf, initial, onChanged, dispatch, onAnalyze, anal
       <div className="chips" aria-label="추천 질문">
         {startable && <button type="button" className="pill primary-pill" disabled={analyzing} onClick={() => onAnalyze(item.id)}>{analyzing ? '분석 요청 중…' : item.analysisRun?.status === 'failed' ? '분석 다시 시도' : '분석해줘'}</button>}
         {again && <button type="button" className="pill" onClick={() => dispatch({ type: 'REANALYZE', id: item.id })}>재분석</button>}
-        {CHIPS.map((chip) => <button key={chip.label} type="button" className="pill" disabled={busy || full} onClick={() => send(chip.text)}>{chip.label}</button>)}
+        {open && CHIPS.map((chip) => <button key={chip.label} type="button" className="pill" disabled={busy || full} onClick={() => send(chip.text)}>{chip.label}</button>)}
       </div>
       <form className="chat-form" onSubmit={(e) => { e.preventDefault(); send(text) }}>
-        <textarea rows={2} maxLength={2000} value={text} aria-label="질문 입력" placeholder="AI에게 질문하기" disabled={full}
+        <textarea rows={2} maxLength={2000} value={text} aria-label="질문 입력" placeholder={open ? 'AI에게 질문하기' : '분석이 끝나면 질문할 수 있습니다'} disabled={full || !open}
           onChange={(e) => setText(e.target.value)}
           onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); send(text) } }} />
         <div className="actions">
           <span className="muted small">질문 {turns}/{initial.limit}</span>
           {busy ? <button type="button" className="ghost" onClick={stop}>중지</button>
-            : <button type="submit" className="primary" disabled={!text.trim() || full}>보내기</button>}
+            : <button type="submit" className="primary" disabled={!text.trim() || full || !open}>보내기</button>}
         </div>
       </form>
     </div>

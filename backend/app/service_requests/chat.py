@@ -59,6 +59,11 @@ class ChatLimit(AuthError):
     message = f'이 요청의 대화는 질문 {MAX_USER_TURNS}개까지 할 수 있습니다.'
 
 
+class ChatNeedsAnalysis(AuthError):
+    status_code, code = 409, 'CHAT_NEEDS_ANALYSIS'
+    message = '먼저 분석을 실행해 주세요. 분석이 끝나면 질문할 수 있습니다.'
+
+
 class InvalidChatMessage(AuthError):
     status_code, code = 422, 'INVALID_CHAT_MESSAGE'
     message = f'질문은 1자 이상 {MAX_MESSAGE_CHARS}자 이하의 글이어야 합니다.'
@@ -212,7 +217,7 @@ def _load(number: int) -> tuple[dict[str, Any], list[str], dict[str, Any]]:
     with request_database() as connection:
         with connection.cursor(row_factory=dict_row) as cursor:
             row = cursor.execute(
-                """SELECT r.status, r.reason, r.message, r.equipment_snapshot, ok.result FROM service_request r
+                """SELECT r.status, r.reason, r.message, r.equipment_snapshot, ok.result, ok.result IS NOT NULL AS analysed FROM service_request r
                    LEFT JOIN LATERAL (SELECT result FROM service_analysis WHERE request_id=r.id AND status='succeeded'
                                       ORDER BY created_at DESC, id DESC LIMIT 1) ok ON TRUE
                    WHERE r.id=%s""", (number,)).fetchone()
@@ -294,6 +299,8 @@ async def chat_turn(identity: str, request: Request, session: SessionInfo = Depe
                     runtime: ChatRuntime = Depends(get_chat_runtime)):
     number = request_number(identity)
     row, notes, state = await asyncio.to_thread(_load, number)
+    if not row['analysed']:
+        raise ChatNeedsAnalysis()  # the conversation is about an analysis: the first one comes from the 분석해줘 button
     if state['turns'] >= MAX_USER_TURNS:
         raise ChatLimit()
     if len(await request.body()) > MAX_BODY_BYTES:

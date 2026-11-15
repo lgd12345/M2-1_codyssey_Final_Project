@@ -123,3 +123,6 @@ export function proposalUrl(id, proposalId, action) {
   if (!REQUEST.test(id ?? '') || !Number.isInteger(proposalId) || proposalId < 1 || !['confirm', 'cancel'].includes(action)) throw new Error('올바르지 않은 제안 주소입니다.')
   return `/service-requests/${id}/proposals/${proposalId}/${action}`
 }
+
+// The conversation is about an analysis: before the first one only the `분석해줘` button works.
+export const chatOpen = item => Boolean(item?.analysis)

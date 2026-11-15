@@ -12,7 +12,7 @@ from test_service_analysis_api import Runner, good_result, use_runner, start  # 
 from test_service_requests_api import setup, BASE, DSN, pytestmark  # noqa: F401
 from test_service_workflow_api import INSUFFICIENT, approved, item, post, reviewed  # noqa: F401
 from test_service_chat import Script, use_model, answer_after_tool, send, events  # noqa: F401
-from test_service_chat import chat_env  # noqa: F401
+from test_service_chat import bare_env  # noqa: F401
 
 NOTE = '전화 확인: 알람 2023이 스핀들 정지 직후에 발생함'
 
@@ -32,10 +32,10 @@ def tool_output(response):
 
 
 @pytest.fixture
-def env(chat_env, use_runner):
-    clients, identity = chat_env
+def env(bare_env, use_runner):
+    clients, identity = bare_env
     runner = use_runner(Runner(good_result(**INSUFFICIENT)))
-    assert start(clients, identity).status_code == 202  # reviewable (추가 정보 필요)
+    assert start(clients, identity).status_code == 202  # analysed once, reviewable (추가 정보 필요)
     return clients, identity, runner
 
 
@@ -85,11 +85,12 @@ def test_an_invalid_note_is_not_proposed(env, text):
     assert out['ok'] is False and proposals(identity) == []
 
 
-def test_a_re_analysis_is_not_proposed_where_none_is_possible(chat_env):
-    clients, identity = chat_env  # received, never analysed: nothing to analyse again
-    use_model(Script(answer_after_tool('propose_reanalysis', {}, '불가')))
-    out = tool_output(send(clients, identity))
-    assert out['ok'] is False and proposals(identity) == []
+def test_a_re_analysis_is_not_proposed_where_none_is_possible(bare_env):
+    from app.service_requests import proposals as flow
+    clients, identity = bare_env  # received, never analysed: nothing to analyse again
+    with psycopg.connect(DSN) as db:
+        out = flow.propose(db, int(identity[4:]), 'reanalysis')
+    assert out['ok'] is False and out['error']['code'] == 'invalid_state' and proposals(identity) == []
 
 
 def test_the_proposals_are_listed_for_operators_only(env):
@@ -165,7 +166,7 @@ def test_confirming_after_the_request_moved_on_is_refused_and_leaves_it_pending(
     assert [p[3] for p in proposals(identity)] == ['pending'] and item(clients, 'staff', identity)['additionalInfo'] == []
 
 
-def test_a_proposal_belongs_to_its_request(env, chat_env):
+def test_a_proposal_belongs_to_its_request(env):
     clients, identity, _ = env
     pid = propose_info(clients, identity)['proposal_id']
     assert decide(clients, 'CLM-999999', pid, 'confirm').status_code == 404

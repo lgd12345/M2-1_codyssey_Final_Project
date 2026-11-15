@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { CHIPS, chatPageUrl, evidenceFrom, draftStateLabel, groupTurns, proposalCard, proposalUrl, timeline, handlerLine, mailDraftUrl, toolLabel, toolStatus, transportBody } from './domain/chat.js'
+import { CHIPS, chatPageUrl, evidenceFrom, chatOpen, draftStateLabel, groupTurns, proposalCard, proposalUrl, timeline, handlerLine, mailDraftUrl, toolLabel, toolStatus, transportBody } from './domain/chat.js'
 
 const SHA = 'a'.repeat(64)
 const part = (name, output, state = 'output-available') => ({ type: `tool-${name}`, toolCallId: `c-${name}`, state, input: {}, output })
@@ -149,5 +149,14 @@ test('deciding a proposal addresses only a request number and a numeric proposal
   assert.equal(proposalUrl('CLM-005', 4, 'confirm'), '/service-requests/CLM-005/proposals/4/confirm')
   assert.equal(proposalUrl('CLM-005', 4, 'cancel'), '/service-requests/CLM-005/proposals/4/cancel')
   for (const bad of [['x', 4, 'confirm'], ['CLM-005', '4/x', 'confirm'], ['CLM-005', 0, 'confirm'], ['CLM-005', 4, 'delete']]) assert.throws(() => proposalUrl(...bad))
+})
+
+test('the conversation opens only once the request has an analysis', () => {
+  assert.equal(chatOpen({ analysis: null, status: '접수됨' }), false)
+  assert.equal(chatOpen({ analysis: null, status: '분석 중' }), false)
+  assert.equal(chatOpen({ status: '접수됨' }), false)
+  assert.equal(chatOpen({ analysis: { summary: '요약' }, status: '검토 대기' }), true)
+  assert.equal(chatOpen({ analysis: { summary: '요약' }, status: '분석 중' }), true)  // a re-analysis does not close it
+  assert.equal(chatOpen(undefined), false)
 })
 

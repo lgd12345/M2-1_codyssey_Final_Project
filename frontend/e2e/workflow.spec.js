@@ -229,6 +229,14 @@ test('the operator chat answers from tool results, shows evidence and keeps its 
   await expect(staff.page.getByRole('heading', { name: 'AI 분석·대화', exact: true })).toBeVisible()
   await expect(staff.page.getByText('읽기 전용이며', { exact: false })).toBeVisible()
 
+  // Before the first analysis the conversation is closed: only the start button works.
+  await expect(staff.page.getByLabel('질문 입력', { exact: true })).toBeDisabled()
+  await expect(staff.page.getByRole('button', { name: '사례 담당자는?', exact: true })).toHaveCount(0)
+  await expect(staff.page.getByRole('button', { name: '분석해줘', exact: true })).toBeEnabled()
+  await staff.page.getByRole('button', { name: '분석해줘', exact: true }).click()
+  await expect(statusButton(staff.page, '검토 대기')).toBeVisible({ timeout: 15000 })
+  await expect(staff.page.getByLabel('질문 입력', { exact: true })).toBeEnabled()
+
   await staff.page.getByRole('button', { name: '사례 담당자는?', exact: true }).click()
   const log = staff.page.getByRole('log', { name: 'AI 대화 내용' })
   await expect(log.getByText('이 요청과 비슷한 과거 사례를 찾아', { exact: false })).toBeVisible()
@@ -238,11 +246,12 @@ test('the operator chat answers from tool results, shows evidence and keeps its 
   await expect(log).not.toContainText('**')
   const trail = log.getByRole('list', { name: '조회 과정' }).getByRole('listitem')
   await expect(trail).toHaveText(['과거 사례 검색 · 완료', '사례 담당 기록 조회 · 완료', '매뉴얼 검색 · 완료'])
-  await expect(log.getByText('과거 사례 1건 (보기)', { exact: true })).toBeVisible()
+  const evidence = log.locator('.chat-evidence')  // the cards of this answer, apart from the analysis bubble above
+  await expect(evidence.getByText('과거 사례 1건 (보기)', { exact: true })).toBeVisible()
   await expect(log.getByText('사례 담당 기록 1건', { exact: true })).toBeVisible()
   await expect(log.getByText('FSR-00005 · 작업자 EMP-0003 · 천안직영센터 · CENTER-003', { exact: true })).toBeVisible()
-  await staff.page.getByText('관련 문서 1건 (보기)', { exact: true }).click()
-  await staff.page.getByRole('button', { name: '원본 페이지 보기', exact: true }).click()
+  await evidence.getByText('관련 문서 1건 (보기)', { exact: true }).click()
+  await evidence.getByRole('button', { name: '원본 페이지 보기', exact: true }).click()
   const image = staff.page.getByRole('img', { name: 'E2E 매뉴얼 p.2-31 원본 페이지' })
   await expect(image).toBeVisible()
   await expect.poll(() => image.evaluate((img) => img.complete && img.naturalWidth > 0), { timeout: 10000 }).toBe(true)  // really decoded
@@ -250,7 +259,7 @@ test('the operator chat answers from tool results, shows evidence and keeps its 
   await expect(staff.page.getByText('질문 1/30', { exact: true })).toBeVisible()
 
   // The chat only reads: the request itself is unchanged.
-  expect((await serverItem(staff.page, id)).status).toBe('접수됨')
+  expect((await serverItem(staff.page, id)).status).toBe('검토 대기')
 
   // History is kept by the server.
   await staff.page.reload()
@@ -269,7 +278,8 @@ test('a department mail is only a draft until the operator presses send, and the
   const customer = await newContext(browser, process.env.E2E_CUSTOMER, 'portal')
   const staff = await newContext(browser, process.env.E2E_STAFF, 'cases')
   const id = await createRequest(customer.page, '메일 카드 확인용 증상 설명입니다.')
-  await staff.page.goto(`/#/cases/${id}`)
+  await analyse(staff.page, id)
+  await expect(statusButton(staff.page, '검토 대기')).toBeVisible({ timeout: 15000 })
   await staff.page.getByLabel('질문 입력', { exact: true }).fill('서비스 출동 요청 메일 초안 만들어 주세요')
   await staff.page.getByRole('button', { name: '보내기', exact: true }).click()
   const card = staff.page.getByRole('region', { name: '서비스 메일' })
