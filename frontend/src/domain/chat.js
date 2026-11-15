@@ -12,6 +12,8 @@ export const CHIPS = [
 const LABELS = {
   search_cases: '과거 사례 검색', search_manual: '매뉴얼 검색', lookup_identifier: '번호 조회',
   open_source: '원본 페이지 열람', lookup_case: '사례 담당 기록 조회',
+  get_history: '이력 조회', list_mail_drafts: '메일 목록 조회', read_mail_draft: '메일 내용 조회',
+  list_departments: '부서 목록 조회', draft_department_mail: '메일 초안 작성', propose_additional_info: '추가 정보 저장 제안', propose_reanalysis: '재분석 제안',
 }
 export const toolLabel = name => LABELS[name] ?? name
 

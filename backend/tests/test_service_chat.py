@@ -197,7 +197,8 @@ def test_the_model_gets_the_request_as_untrusted_data_and_the_read_only_rules(ch
 def test_only_read_tools_exist_in_a_fixed_order():
     assert chat.TOOL_NAMES == ['search_cases', 'search_manual', 'lookup_identifier', 'open_source', 'lookup_case',
                               'list_departments', 'draft_department_mail',
-                              'propose_additional_info', 'propose_reanalysis']
+                              'propose_additional_info', 'propose_reanalysis',
+                              'get_history', 'list_mail_drafts', 'read_mail_draft']
 
 
 # ---------- safety ----------

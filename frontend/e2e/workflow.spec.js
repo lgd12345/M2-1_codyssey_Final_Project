@@ -404,6 +404,11 @@ test('operators edit the department mail addresses on a settings page; customers
   await add.getByLabel('수신 주소 (한 줄에 하나)').fill('partner@example.com')
   await add.getByRole('button', { name: '부서 추가', exact: true }).click()
   await expect(staff.page.getByRole('listitem', { name: '협력사 대응 부서' })).toBeVisible()
+  // The test database is shared with other tests of this worker: switch the new department off again.
+  const supplier = staff.page.getByRole('listitem', { name: '협력사 대응 부서' })
+  await supplier.getByRole('checkbox', { name: '사용' }).uncheck()
+  await supplier.getByRole('button', { name: '저장', exact: true }).click()
+  await expect(supplier.getByText('저장했습니다.', { exact: true })).toBeVisible()
   await service.getByLabel('수신 주소 (한 줄에 하나)').fill('hodob76@gmail.com')
   await service.getByRole('button', { name: '저장', exact: true }).click()
   await expect(service.getByText('저장했습니다.', { exact: true })).toBeVisible()

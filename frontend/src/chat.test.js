@@ -16,6 +16,9 @@ test('every suggestion chip is a short ready-to-send question', () => {
 test('tools are named in plain Korean and unknown ones stay readable', () => {
   assert.equal(toolLabel('lookup_case'), '사례 담당 기록 조회')
   assert.equal(toolLabel('search_manual'), '매뉴얼 검색')
+  assert.equal(toolLabel('get_history'), '이력 조회')
+  assert.equal(toolLabel('list_mail_drafts'), '메일 목록 조회')
+  assert.equal(toolLabel('read_mail_draft'), '메일 내용 조회')
   assert.equal(toolLabel('something_new'), 'something_new')
 })
 

@@ -31,7 +31,7 @@ def test_operators_see_every_department_with_addresses_and_state(clean):
     answer = manage(clean)
     assert answer.status_code == 200
     rows = {d['key']: d for d in answer.json()['departments']}
-    assert set(rows) == {'service', 'quality', 'parts', 'sales'}
+    assert {'service', 'quality', 'parts', 'sales'} <= set(rows)  # others may exist: the browser tests share this database
     assert rows['service'] == {'key': 'service', 'name': '서비스', 'description': rows['service']['description'],
                                'recipients': [DEV], 'active': True, 'updatedBy': None, 'updatedAt': None}
 
