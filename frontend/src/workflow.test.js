@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { analysisRunNotice, canReanalyze, canStartAnalysis, isAnalysisRunning, canResolve, chatReady, customerStatus, showsActivityInput, showsDepartments, statusCounts, identifierCheckLine, canAddInfo, mailLines, STATUSES } from './domain/workflow.js'
+import { analysisRunNotice, canReanalyze, canStartAnalysis, isAnalysisRunning, canResolve, chatReady, customerStatus, showsActivityInput, showsDepartments, statusCounts, identifierCheckLine, mailLines, STATUSES } from './domain/workflow.js'
 
 const request = (extra = {}) => ({ id: 'CLM-1000', status: '처리 중', analysis: { summary: '실제 분석 결과' },
   analysisRun: { status: 'succeeded', errorCode: null }, ...extra })
@@ -16,14 +16,11 @@ test('closing needs a request that is being processed and no analysis running', 
   for (const status of ['접수됨', '종결']) assert.equal(canResolve(request({ status })), false, status)
 })
 
-test('re-analysis and additional information need a request being processed that already has an analysis', () => {
+test('re-analysis needs a request being processed that already has an analysis', () => {
   assert.equal(canReanalyze(request()), true)
   assert.equal(canReanalyze(request({ analysis: null })), false)
   assert.equal(canReanalyze(request({ analysisRun: { status: 'running' } })), false)  // one analysis at a time
   for (const status of ['접수됨', '종결']) assert.equal(canReanalyze(request({ status })), false, status)
-  assert.equal(canAddInfo(request()), true)
-  assert.equal(canAddInfo(request({ status: '종결' })), false)
-  assert.equal(canAddInfo(request({ status: '접수됨', analysis: null })), false)
 })
 
 test('customers see 접수됨, 처리 중 and 완료 only', () => {

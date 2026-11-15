@@ -4,8 +4,6 @@ export const STATUSES = ['접수됨', '처리 중', '종결']
 export const isAnalysisRunning = item => item?.analysisRun?.status === 'running'  // the request is 처리 중 from the start: ask the run
 export const canStartAnalysis = item => Boolean(item) && item.status !== '종결' && !item.analysis && !isAnalysisRunning(item)
 export const canReanalyze = item => Boolean(item) && item.status === '처리 중' && Boolean(item.analysis) && !isAnalysisRunning(item)
-// Information gathered outside the app feeds the next analysis.
-export const canAddInfo = item => Boolean(item) && item.status === '처리 중' && Boolean(item.analysis)
 export const canResolve = item => Boolean(item) && item.status === '처리 중' && !isAnalysisRunning(item)  // an analysis still running would finish into a closed request
 // The screen reveals itself in order: the analysis button first; the conversation, mail activities and the rest once an analysis exists.
 export const chatReady = item => Boolean(item?.analysis)

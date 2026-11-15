@@ -16,7 +16,7 @@ export function CaseDetail({ item, dispatch, me, onAnalyze, analyzing, analysisE
           <h1 id="detail-title">{item.title}</h1>
           <RequestCard item={item} />
           {csrf && <ChatPanel item={item} csrf={csrf} onChanged={onChanged} dispatch={dispatch} onAnalyze={onAnalyze} analyzing={analyzing} analysisError={analysisError} />}
-          {chatReady(item) && <AdditionalInfo item={item} dispatch={dispatch} />}
+          {chatReady(item) && <AdditionalInfo item={item} />}
           <Activity item={item} dispatch={dispatch} me={me} />
         </div>
         <aside className="issue-side" aria-label="상태와 세부 정보">

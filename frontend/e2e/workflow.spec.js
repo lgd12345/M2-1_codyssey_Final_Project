@@ -144,10 +144,15 @@ test('insufficient evidence: questions are for operators, who add information th
   await expect(customer.page.getByText('알람 번호를 알려주세요.', { exact: false })).toHaveCount(0)
   await noFollowUp(customer.page)
 
-  // The operator enters what they learned by phone or on site; it is recorded with who and when.
+  // There is no separate input box: what the operator learned by phone or on site goes through the conversation,
+  // where the agent proposes saving it and the card button does it (recorded with who and when).
   const note = '전화 확인: 알람 2023이 스핀들 정지 직후 발생'
-  await staff.page.getByLabel('추가 정보 입력', { exact: true }).fill(note)
-  await staff.page.getByRole('button', { name: '추가 정보 저장', exact: true }).click()
+  await expect(staff.page.getByLabel('추가 정보 입력', { exact: true })).toHaveCount(0)
+  await staff.page.getByLabel('질문 입력', { exact: true }).fill('전화로 확인한 내용이 있습니다. 추가 정보 제안해 주세요')
+  await staff.page.getByRole('button', { name: '보내기', exact: true }).click()
+  const proposal = staff.page.getByRole('region', { name: '추가 정보 저장 제안' })
+  await expect(proposal.getByText(note, { exact: true })).toBeVisible({ timeout: 15000 })
+  await proposal.getByRole('button', { name: '저장', exact: true }).click()
   const entry = staff.page.getByRole('list', { name: '운영진이 입력한 추가 정보' }).getByRole('listitem')
   await expect(entry).toHaveCount(1)
   await expect(entry).toContainText(note)

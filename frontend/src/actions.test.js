@@ -8,7 +8,6 @@ test('every screen action maps to a server request with only user-chosen data', 
   const cases = [
     [{ type: 'REANALYZE', id: 'CLM-005' }, 'POST', '/service-requests/CLM-005/reanalysis', undefined, 'accepted'],
     [{ type: 'ADD_COMMENT', id: 'CLM-005', kind: 'public', text: '안내' }, 'POST', '/service-requests/CLM-005/comments', { kind: 'public', text: '안내' }, 'item'],
-    [{ type: 'ADD_INFO', id: 'CLM-005', text: '현장 확인 내용' }, 'POST', '/service-requests/CLM-005/additional-info', { text: '현장 확인 내용' }, 'item'],
     [{ type: 'RESOLVE', id: 'CLM-005', note: '완료 안내' }, 'POST', '/service-requests/CLM-005/resolution', { note: '완료 안내' }, 'item'],
   ]
   for (const [action, method, path, body, result] of cases) {

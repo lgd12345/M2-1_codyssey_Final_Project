@@ -10,7 +10,6 @@ export function requestFor(action, item) {
   switch (action.type) {
     case 'REANALYZE': return post(`${base}/reanalysis`, undefined, 'accepted')
     case 'ADD_COMMENT': return post(`${base}/comments`, { kind: action.kind, text: action.text })
-    case 'ADD_INFO': return post(`${base}/additional-info`, { text: action.text })
     case 'RESOLVE': return post(`${base}/resolution`, { note: action.note ?? '' })
     default: throw new Error('지원하지 않는 작업입니다.')
   }
