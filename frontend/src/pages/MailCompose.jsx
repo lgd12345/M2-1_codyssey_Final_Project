@@ -53,7 +53,7 @@ export function MailCompose({ item, departmentKey, csrf, onSent, onChanged }) {
       {!form && !error && <p className="muted" role="status">메일 양식을 불러오는 중…</p>}
       {form && (
         <>
-          <p className="muted small">받는 사람: {form.departmentName} 부서 등록 주소 {form.recipientCount}곳 · 보내기를 눌러야 발송됩니다.</p>
+          <p className="mail-to"><strong>받는 사람</strong> {form.departmentName} · {form.recipients.join(', ')}</p>
           <label>제목<input aria-label="메일 제목" value={subject} maxLength={150} disabled={Boolean(busy)} onChange={(e) => setSubject(e.target.value)} /></label>
           <label>본문<textarea aria-label="메일 본문" rows={12} maxLength={4000} value={body} disabled={Boolean(busy)} onChange={(e) => setBody(e.target.value)} /></label>
           <div className="ai-compose">

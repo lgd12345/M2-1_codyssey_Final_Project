@@ -272,8 +272,8 @@ test('a department mail is only a draft until the operator presses send, and the
   const card = staff.page.getByRole('region', { name: '서비스 메일' })
   await expect(card).toBeVisible({ timeout: 15000 })
   await expect(card.getByText('초안 · 아직 보내지 않았습니다', { exact: true })).toBeVisible()
-  await expect(card.getByText('서비스 부서 등록 주소 1곳', { exact: false })).toBeVisible()
-  await expect(staff.page.getByText('hodob76@gmail.com', { exact: false })).toHaveCount(0)  // the address is never shown or sent to the browser
+  await expect(card.getByText('받는 사람', { exact: true })).toBeVisible()
+  await expect(card.getByText('hodob76@gmail.com', { exact: false })).toBeVisible()  // operators see who will receive it
   const before = await serverItem(staff.page, id)
   expect(before.mailDrafts.map(d => d.status)).toEqual(['draft'])
 
@@ -307,7 +307,8 @@ test('a recommended activity unfolds a mail form under it from a template; nothi
   await expect(staff.page.getByRole('dialog')).toHaveCount(0)
   await expect(form.getByLabel('메일 제목', { exact: true })).toHaveValue(new RegExp(`^\\[출동 요청\\] ${id} \\| F400`))
   await expect(form.getByLabel('메일 본문', { exact: true })).toHaveValue(/서비스맨 출동 점검을 요청드립니다[\s\S]*요청 번호: CLM-/)
-  await expect(form.getByText('서비스 부서 등록 주소 1곳', { exact: false })).toBeVisible()
+  await expect(form.getByText('받는 사람', { exact: true })).toBeVisible()
+  await expect(form.getByText('서비스 · hodob76@gmail.com', { exact: false })).toBeVisible()
   await expect(staff.page.getByRole('log', { name: 'AI 대화 내용' }).locator('.chat-msg.user')).toHaveCount(0)
   expect((await serverItem(staff.page, id)).mailDrafts).toEqual([])
 

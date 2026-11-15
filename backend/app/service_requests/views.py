@@ -46,7 +46,7 @@ def load_related(connection, ids: list[int], *, staff: bool) -> dict[str, dict[i
                           row_number() OVER (PARTITION BY request_id ORDER BY created_at,id) AS revision
                    FROM service_analysis WHERE status='succeeded' AND request_id=ANY(%s) ORDER BY created_at,id""", (ids,)).fetchall()
             drafts = cursor.execute(
-                """SELECT d.id,d.request_id,d.department_key,d.subject,d.body,d.status,d.sent_at,s.name,cardinality(s.recipients) AS n
+                """SELECT d.id,d.request_id,d.department_key,d.subject,d.body,d.status,d.sent_at,s.name,s.recipients
                    FROM service_mail_draft d JOIN service_department s ON s.key=d.department_key
                    WHERE d.request_id=ANY(%s) ORDER BY d.id""", (ids,)).fetchall()
             mail = cursor.execute('SELECT request_id,kind,status,sent_at FROM service_mail WHERE request_id=ANY(%s) ORDER BY id',
@@ -106,7 +106,7 @@ def serialize(row: dict[str, Any], related: dict[str, dict[int, list[dict[str, A
         analysisHistory=[{'revision': h['revision'], 'at': _iso(h['finished_at']), 'analysis': analysis_flow.analysis_view(h['result'])}
                          for h in related['analyses'].get(number, [])],
         mailDrafts=[{'id': d['id'], 'department': d['department_key'], 'departmentName': d['name'], 'subject': d['subject'],
-                     'body': d['body'], 'status': d['status'], 'recipientCount': d['n'], 'sentAt': _iso(d['sent_at'])}
+                     'body': d['body'], 'status': d['status'], 'recipients': list(d['recipients']), 'sentAt': _iso(d['sent_at'])}
                     for d in related['drafts'].get(number, [])],
         additionalInfo=[{'id': str(n['id']), 'by': n['author'], 'text': n['text'], 'at': _iso(n['created_at'])}
                         for n in related['info'].get(number, [])],

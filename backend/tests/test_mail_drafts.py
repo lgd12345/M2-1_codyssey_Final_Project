@@ -67,8 +67,8 @@ def test_an_operator_draft_is_stored_and_sends_nothing(env):
     assert answer.status_code == 201
     view = item(clients, 'staff', identity)['mailDrafts']
     assert [(d['department'], d['status'], d['subject']) for d in view] == [('service', 'draft', GOOD['subject'])]
-    assert view[0]['departmentName'] == '서비스' and view[0]['body'] == GOOD['body'] and view[0]['recipientCount'] == 1
-    assert DEV not in str(view) and mail.messages == []
+    assert view[0]['departmentName'] == '서비스' and view[0]['body'] == GOOD['body'] and view[0]['recipients'] == [DEV]
+    assert mail.messages == []
     assert 'mailDrafts' not in item(clients, 'alice', identity)
 
 

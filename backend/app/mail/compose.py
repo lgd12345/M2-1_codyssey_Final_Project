@@ -20,9 +20,9 @@ MESSAGE_CHARS = 300
 
 def compose(connection, number: int, department_key: str) -> dict[str, Any]:
     with connection.cursor(row_factory=dict_row) as cursor:
-        dept = cursor.execute('SELECT name, active, cardinality(recipients) AS n FROM service_department WHERE key=%s',
+        dept = cursor.execute('SELECT name, active, recipients FROM service_department WHERE key=%s',
                               (department_key,)).fetchone()
-        if not dept or not dept['active'] or not dept['n'] or department_key not in SUBJECT:
+        if not dept or not dept['active'] or not dept['recipients'] or department_key not in SUBJECT:
             raise InvalidDraft('이 부서는 메일을 받을 수 없습니다. 부서와 수신 주소 등록을 확인해 주세요.')
         row = cursor.execute(
             """SELECT r.reason, r.message, r.equipment_snapshot, ok.result FROM service_request r
@@ -45,4 +45,4 @@ def compose(connection, number: int, department_key: str) -> dict[str, Any]:
             lines += [f"참고 FSR: {', '.join(fsr)}", '참고 사례는 기종이 다를 수 있으므로 현장 확인이 필요합니다.']
     subject = re.sub(r'\s+', ' ', f'{SUBJECT[department_key]} {identity} | {machine} {row["reason"]}').strip()[:150]
     return {'departmentKey': department_key, 'departmentName': dept['name'], 'subject': subject,
-            'body': '\n'.join(lines), 'recipientCount': dept['n']}
+            'body': '\n'.join(lines), 'recipients': list(dept['recipients'])}

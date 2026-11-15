@@ -58,7 +58,7 @@ export function AnalysisBubble({ analysis: a, item, current, revision, dispatch,
               </li>
             ))}
           </ol>
-          <p className="muted small">메일 작성란이 펼쳐지며, 내용을 확인하고 보내기를 눌러야 발송됩니다.</p>
+          <p className="muted small">`메일 작성`을 누르면 작성란이 펼쳐집니다. 내용을 확인한 뒤 `보내기`를 누르면 발송됩니다.</p>
         </>
       )}
       {a.status === 'insufficient_evidence' && a.questions.length > 0 && (

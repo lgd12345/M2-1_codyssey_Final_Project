@@ -354,3 +354,4 @@ input:not([type='checkbox']), select, textarea { border-radius: 8px; }
 .mail-compose input, .mail-compose textarea { width: 100%; font-weight: 400; }
 .ai-compose { display: flex; gap: 0.5rem; }
 .ai-compose input { flex: 1; }
+.mail-to { margin: 0; font-size: 0.9rem; }

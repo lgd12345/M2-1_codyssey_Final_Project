@@ -73,7 +73,7 @@ def test_each_department_gets_a_fixed_template_filled_from_the_request(analysed,
     assert data['subject'].startswith(subject_start) and identity in data['subject'] and 'F400' in data['subject']
     for expected in (phrase, f'요청 번호: {identity}', '기종: F400', '접수 사유: 공구 교환 이상', 'ATC 교환 중 멈춥니다.'):
         assert expected in data['body']
-    assert data['departmentName'] and data['recipientCount'] == 1
+    assert data['departmentName'] and data['recipients'] == [DEV]  # the operator sees who will receive it
     assert '\n' not in data['subject'] and len(data['subject']) <= 150
     assert mail.messages == [] and draft_count(identity) == 0  # opening the window saves and sends nothing
 
@@ -82,7 +82,7 @@ def test_the_template_carries_the_analysis_causes_and_case_numbers_but_never_a_w
     clients, identity, _ = analysed
     data = template(clients, identity).json()
     assert 'ATC 암 구동 불량 (가능성 높음)' in data['body'] and 'FSR-00001' in data['body']
-    assert 'EMP-' not in data['body'] and '@' not in str(data) and DEV not in str(data)
+    assert 'EMP-' not in data['body'] and '@' not in data['body'] and DEV not in data['subject'] + data['body']
 
 
 def test_without_an_analysis_the_template_still_opens_with_the_request_facts_only(setup, use_runner):

@@ -137,7 +137,7 @@ function MailCard({ draft, itemId, csrf, onChanged }) {
   return (
     <section className="mail-card" aria-label={`${draft.departmentName} 메일`}>
       <h3>{draft.departmentName} 메일 <span className={`lozenge status-${draft.status}`}>{draftStateLabel(draft.status)}</span></h3>
-      <p className="muted small">받는 사람: {draft.departmentName} 부서 등록 주소 {draft.recipientCount}곳</p>
+      <p className="mail-to"><strong>받는 사람</strong> {draft.departmentName} · {draft.recipients.join(', ')}</p>
       {open ? (
         <>
           <input aria-label="메일 제목" value={subject} maxLength={150} onChange={(e) => setSubject(e.target.value)} />
