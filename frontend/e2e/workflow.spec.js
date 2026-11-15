@@ -290,3 +290,18 @@ test('a department mail is only a draft until the operator presses send, and the
   await customer.context.close()
   await staff.context.close()
 })
+
+test('a recommended activity asks the chat for a mail draft; nothing is sent until the card button is pressed', async ({ browser }) => {
+  const customer = await newContext(browser, process.env.E2E_CUSTOMER, 'portal')
+  const staff = await newContext(browser, process.env.E2E_STAFF, 'cases')
+  const id = await createRequest(customer.page, '권장 활동 확인용 증상 설명입니다.')
+  await analyse(staff.page, id)
+  await expect(staff.page.getByRole('heading', { name: '권장 활동 1건' })).toBeVisible()
+  await staff.page.getByRole('list', { name: '권장 활동' }).getByRole('button', { name: '메일 작성', exact: true }).click()
+  const card = staff.page.getByRole('region', { name: '서비스 메일' })
+  await expect(card.getByText('초안 · 아직 보내지 않았습니다', { exact: true })).toBeVisible({ timeout: 15000 })
+  await expect(staff.page.getByRole('log', { name: 'AI 대화 내용' }).getByText('서비스맨 출동 요청 메일 초안을 만들어 주세요.', { exact: true })).toBeVisible()
+  expect((await serverItem(staff.page, id)).mailDrafts.map(d => d.status)).toEqual(['draft'])
+  await customer.context.close()
+  await staff.context.close()
+})

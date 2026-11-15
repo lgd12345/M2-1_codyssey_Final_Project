@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { useChat } from '@ai-sdk/react'
 import { DefaultChatTransport } from 'ai'
 import { call } from '../api.js'
+import { CHAT_ASK_EVENT } from '../domain/analysis.js'
 import { CHIPS, chatPageUrl, draftStateLabel, evidenceFrom, groupTurns, handlerLine, mailDraftUrl, toolLabel, toolStatus, transportBody } from '../domain/chat.js'
 import { Modal } from '../ui.jsx'
 
@@ -49,6 +50,14 @@ function ChatSession({ item, csrf, initial, onChanged }) {
   const turns = messages.filter((m) => m.role === 'user').length
   const full = turns >= initial.limit
   useEffect(() => { end.current?.scrollIntoView?.({ block: 'nearest' }) }, [messages, status])
+  // The analysis box asks the chat for things (such as a mail draft) through one named event.
+  const sendRef = useRef(null)
+  sendRef.current = (value) => send(value)
+  useEffect(() => {
+    const onAsk = (event) => sendRef.current?.(String(event.detail ?? ''))
+    window.addEventListener(CHAT_ASK_EVENT, onAsk)
+    return () => window.removeEventListener(CHAT_ASK_EVENT, onAsk)
+  }, [])
 
   function send(value) {
     const question = value.trim()

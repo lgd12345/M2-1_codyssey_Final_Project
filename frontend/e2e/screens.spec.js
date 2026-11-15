@@ -515,17 +515,18 @@ test('operator detail: AI tabs and evidence, original pages, notes, department p
   await expect(page.getByText('✦ AI 생성')).toBeVisible()
   await expect(page.getByText('AI가 작성한 검토용 초안입니다. 인용된 근거와 원본 매뉴얼을 확인한 뒤 판단해 주세요.', { exact: false })).toBeVisible()
 
-  // Tab 1: causes with their sources, steps and open questions.
-  await expect(page.getByRole('tab', { name: '문제 해결 단계', exact: true })).toHaveAttribute('aria-selected', 'true')
-  await expect(page.getByRole('heading', { name: '추정 원인' })).toBeVisible()
+  // Short by design: causes with their sources, then the recommended activities. No tabs, steps or parts here.
+  await expect(page.getByRole('tab', { name: '문제 해결 단계', exact: true })).toHaveCount(0)
+  await expect(page.getByRole('heading', { name: '원인 후보' })).toBeVisible()
   await expect(page.getByText('ATC 암 구동 불량', { exact: true })).toBeVisible()
   await expect(page.getByText('가능성 높음', { exact: true })).toBeVisible()
   await expect(page.getByText('출처: E2E 매뉴얼 p.45 · FSR-00001 · VMCT-05')).toBeVisible()
-  await expect(page.getByText('알람 이력 확인', { exact: true })).toBeVisible()
-  await expect(page.getByText('정지 위치를 알려주세요.', { exact: true })).toBeVisible()
-  // Tab 2: past cases; the excerpt opens and closes and carries its caution.
-  await page.getByRole('tab', { name: '과거 정비 이력', exact: true }).click()
-  await expect(page.getByRole('heading', { name: '유사 과거 사례 1건' })).toBeVisible()
+  await expect(page.getByText('알람 이력 확인', { exact: true })).toHaveCount(0)
+  await expect(page.getByText('ATC 암 모터', { exact: true })).toHaveCount(0)
+  await expect(page.getByRole('heading', { name: '권장 활동 1건' })).toBeVisible()
+  await expect(page.getByRole('list', { name: '권장 활동' }).getByText('서비스맨 출동 요청 메일', { exact: true })).toBeVisible()
+  // Past cases fold open; the excerpt opens and closes and carries its caution.
+  await page.getByText('과거 사례 1건 (보기)', { exact: true }).click()
   const fsr = page.getByRole('button', { name: /FSR-00001/ })
   await expect(fsr).toHaveAttribute('aria-expanded', 'false')
   await fsr.click()
@@ -534,12 +535,8 @@ test('operator detail: AI tabs and evidence, original pages, notes, department p
   await expect(page.getByText('적용 시 주의: 과거 사례는 참고용입니다.', { exact: false })).toBeVisible()
   await fsr.click()
   await expect(page.getByText('공구 교환 중 정지', { exact: true })).toHaveCount(0)
-  // Tab 3: parts. Tab 4: manuals.
-  await page.getByRole('tab', { name: '권장 부품', exact: true }).click()
-  await expect(page.getByText('ATC 암 모터', { exact: true })).toBeVisible()
-  await expect(page.getByText('출처: E2E 매뉴얼 p.45')).toBeVisible()
-  await page.getByRole('tab', { name: '매뉴얼 열람', exact: true }).click()
-  await expect(page.getByRole('heading', { name: '관련 매뉴얼 1건' })).toBeVisible()
+  // Manuals fold open too.
+  await page.getByText('관련 문서 1건 (보기)', { exact: true }).click()
   await page.getByRole('button', { name: /E2E 매뉴얼/ }).click()
   await expect(page.getByText('ATC 구동부 점검 절차', { exact: true })).toBeVisible()
   await expect(page.getByText('적용 시 주의: 변환 텍스트입니다.', { exact: false })).toBeVisible()

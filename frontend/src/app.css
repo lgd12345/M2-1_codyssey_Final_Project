@@ -339,3 +339,8 @@ input:not([type='checkbox']), select, textarea { border-radius: 8px; }
 .mail-card h3 { margin: 0; font-size: 0.95rem; }
 .mail-card input, .mail-card textarea { width: 100%; }
 .mail-card .actions { display: flex; justify-content: flex-end; gap: 0.5rem; }
+
+.activities { list-style: decimal; margin: 0.2rem 0 0.4rem; padding-left: 1.4rem; display: grid; gap: 0.3rem; }
+.activities li { display: list-item; }
+.activities li > span { margin-right: 0.6rem; }
+.evidence-fold { margin-top: 0.5rem; }
