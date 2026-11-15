@@ -1,7 +1,7 @@
 import React, { useState } from 'react'
 import { canApprove, canReanalyze, canResolve, isEditable, mailLines } from '../domain/workflow.js'
 import { Avatar, formatTime } from '../ui.jsx'
-import { AnalysisSection } from './AnalysisSection.jsx'
+import { AdditionalInfo } from './AnalysisSection.jsx'
 import { DeptSection } from './DeptSection.jsx'
 import { Activity } from './Activity.jsx'
 import { ChatPanel } from './ChatPanel.jsx'
@@ -16,8 +16,8 @@ export function CaseDetail({ item, dispatch, me, onAnalyze, analyzing, analysisE
         <div className="issue-main">
           <h1 id="detail-title">{item.title}</h1>
           <RequestCard item={item} />
-          <AnalysisSection item={item} dispatch={dispatch} onAnalyze={onAnalyze} analyzing={analyzing} error={analysisError} />
-          {csrf && <ChatPanel item={item} csrf={csrf} onChanged={onChanged} />}
+          {csrf && <ChatPanel item={item} csrf={csrf} onChanged={onChanged} dispatch={dispatch} onAnalyze={onAnalyze} analyzing={analyzing} analysisError={analysisError} />}
+          {item.analysis && <AdditionalInfo item={item} dispatch={dispatch} />}
           <DeptSection item={item} dispatch={dispatch} />
           <Activity item={item} dispatch={dispatch} me={me} />
         </div>

@@ -319,7 +319,7 @@ input:not([type='checkbox']), select, textarea { border-radius: 8px; }
 .mail-lines { list-style: none; margin: 0; padding: 0; }
 
 .chat-box { display: grid; gap: 0.6rem; }
-.chat-log { display: grid; gap: 0.6rem; max-height: 28rem; overflow-y: auto; padding: 0.2rem; }
+.chat-log { display: grid; gap: 0.6rem; padding: 0.2rem; }
 .chat-msg { max-width: 92%; border-radius: var(--radius); padding: 0.5rem 0.8rem; }
 .chat-msg p { margin: 0; white-space: pre-wrap; }
 .chat-msg.user { justify-self: end; background: var(--blue-bg, #e9f2ff); }
@@ -344,3 +344,6 @@ input:not([type='checkbox']), select, textarea { border-radius: 8px; }
 .activities li { display: list-item; }
 .activities li > span { margin-right: 0.6rem; }
 .evidence-fold { margin-top: 0.5rem; }
+.chat-msg.analysis { max-width: 100%; justify-self: stretch; }
+.analysis-bubble { display: grid; gap: 0.3rem; }
+.pill.primary-pill { background: var(--blue-fg, #0052cc); color: #fff; }

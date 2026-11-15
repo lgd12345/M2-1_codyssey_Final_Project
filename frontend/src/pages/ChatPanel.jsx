@@ -3,13 +3,16 @@ import { useChat } from '@ai-sdk/react'
 import { DefaultChatTransport } from 'ai'
 import { call } from '../api.js'
 import { CHAT_ASK_EVENT } from '../domain/analysis.js'
-import { CHIPS, chatPageUrl, draftStateLabel, evidenceFrom, groupTurns, handlerLine, mailDraftUrl, toolLabel, toolStatus, transportBody } from '../domain/chat.js'
+import { CHIPS, chatPageUrl, draftStateLabel, evidenceFrom, handlerLine, mailDraftUrl, timeline, toolLabel, toolStatus, transportBody } from '../domain/chat.js'
+import { canReanalyze, canStartAnalysis } from '../domain/workflow.js'
+import { AnalysisBubble, PendingNotice } from './AnalysisSection.jsx'
 import { Modal } from '../ui.jsx'
 
 const STATUS_TEXT = { running: '조회 중', done: '완료', failed: '실패' }
 
-// 운영진이 요청 하나에 대해 AI에게 묻는 대화. 읽기 전용이며 대화 기록은 서버가 보관한다.
-export function ChatPanel({ item, csrf, onChanged }) {
+// 분석과 대화를 한 창에서: 분석 결과는 대화의 말풍선이고, 분석 시작·재분석·메일 작성은 같은 창의 버튼이다.
+// 대화 기록은 서버가 보관하고, 대화 자체는 읽기 전용이다.
+export function ChatPanel({ item, csrf, onChanged, dispatch, onAnalyze, analyzing, analysisError }) {
   const [initial, setInitial] = useState(null)
   const [failed, setFailed] = useState(false)
   useEffect(() => {
@@ -20,12 +23,12 @@ export function ChatPanel({ item, csrf, onChanged }) {
   return (
     <section className="block chat" aria-labelledby="chat-title">
       <div className="block-head">
-        <h2 id="chat-title"><span className="spark" aria-hidden="true">✦</span> AI 대화</h2>
-        <span className="muted small">ⓘ 읽기 전용입니다. 요청을 바꾸거나 메일을 보내지 않습니다.</span>
+        <h2 id="chat-title"><span className="spark" aria-hidden="true">✦</span> AI 분석·대화</h2>
+        <span className="muted small">ⓘ AI가 작성한 검토용 초안입니다. 인용된 근거와 원본 매뉴얼을 확인한 뒤 판단해 주세요. 대화는 읽기 전용이며 요청을 바꾸거나 메일을 보내지 않습니다.</span>
       </div>
       {failed && <p className="error" role="alert">대화 기록을 불러오지 못했습니다.</p>}
       {!failed && !initial && <p className="muted" role="status">대화를 불러오는 중…</p>}
-      {initial && <ChatSession key={item.id} item={item} csrf={csrf} initial={initial} onChanged={onChanged} />}
+      {initial && <ChatSession key={item.id} item={item} csrf={csrf} initial={initial} onChanged={onChanged} dispatch={dispatch} onAnalyze={onAnalyze} analyzing={analyzing} analysisError={analysisError} />}
     </section>
   )
 }
@@ -38,7 +41,7 @@ function friendly(error) {
   return error.message && error.message.length < 200 ? error.message : '답변을 받지 못했습니다. 다시 시도해 주세요.'
 }
 
-function ChatSession({ item, csrf, initial, onChanged }) {
+function ChatSession({ item, csrf, initial, onChanged, dispatch, onAnalyze, analyzing, analysisError }) {
   const transport = useMemo(() => new DefaultChatTransport({
     api: `/api/v1/service-requests/${item.id}/chat`, credentials: 'same-origin', headers: { 'X-CSRF-Token': csrf },
     prepareSendMessagesRequest: ({ id, messages, trigger }) => ({ body: transportBody({ id, messages, trigger }) }),
@@ -49,7 +52,23 @@ function ChatSession({ item, csrf, initial, onChanged }) {
   const busy = status === 'submitted' || status === 'streaming'
   const turns = messages.filter((m) => m.role === 'user').length
   const full = turns >= initial.limit
-  useEffect(() => { end.current?.scrollIntoView?.({ block: 'nearest' }) }, [messages, status])
+  // Follow new messages, but never jump past the analysis when the page first opens.
+  const opened = useRef(false)
+  useEffect(() => {
+    if (opened.current) end.current?.scrollIntoView?.({ block: 'nearest' })
+    opened.current = true
+  }, [messages.length, status])
+  const history = item.analysisHistory ?? (item.analysis ? [{ revision: 1, at: null, analysis: item.analysis }] : [])
+  // Messages that just streamed in carry no server time: stamp them when first seen so they stay in order against analyses.
+  const seen = useRef(new Map())
+  const stamped = messages.map((m) => {
+    if (m.metadata?.pydantic_ai?.timestamp) return m
+    if (!seen.current.has(m.id)) seen.current.set(m.id, new Date().toISOString())
+    return { ...m, metadata: { ...m.metadata, pydantic_ai: { timestamp: seen.current.get(m.id) } } }
+  })
+  const entries = timeline(stamped, history)
+  const startable = canStartAnalysis(item) && Boolean(onAnalyze)
+  const again = Boolean(item.analysis) && canReanalyze(item) && Boolean(dispatch) && item.status !== '분석 중'
   // The analysis box asks the chat for things (such as a mail draft) through one named event.
   const sendRef = useRef(null)
   sendRef.current = (value) => send(value)
@@ -70,14 +89,22 @@ function ChatSession({ item, csrf, initial, onChanged }) {
   return (
     <div className="chat-box">
       <div className="chat-log" role="log" aria-live="polite" aria-label="AI 대화 내용">
-        {messages.length === 0 && <p className="muted">아래 버튼을 누르거나 질문을 입력해 보세요. 예: 비슷한 과거 사례는 누가 담당했어?</p>}
-        {groupTurns(messages).map((turn) => <Turn key={turn.id} turn={turn} itemId={item.id} />)}
+        {!item.analysis && <div className="chat-msg assistant"><PendingNotice item={item} error={analysisError} /></div>}
+        {entries.length === 0 && <p className="muted">아래 버튼을 누르거나 질문을 입력해 보세요. 예: 비슷한 과거 사례는 누가 담당했어?</p>}
+        {entries.map((entry) => entry.kind === 'analysis' ? (
+          <div key={`analysis-${entry.revision}`} className="chat-msg assistant analysis">
+            {entry.current ? <AnalysisBubble analysis={entry.analysis} item={item} current revision={entry.revision} dispatch={dispatch} />
+              : <details><summary>이전 분석 ({entry.revision}회차) 보기</summary><AnalysisBubble analysis={entry.analysis} item={item} current={false} revision={entry.revision} /></details>}
+          </div>
+        ) : <Turn key={entry.id} turn={entry} itemId={item.id} />)}
         {(item.mailDrafts ?? []).length > 0 && <MailDrafts item={item} csrf={csrf} onChanged={onChanged} />}
         {status === 'submitted' && <p className="muted small" role="status">AI가 확인하는 중…</p>}
         <div ref={end} />
       </div>
       {error && <p className="error" role="alert">{friendly(error)}</p>}
       <div className="chips" aria-label="추천 질문">
+        {startable && <button type="button" className="pill primary-pill" disabled={analyzing} onClick={() => onAnalyze(item.id)}>{analyzing ? '분석 요청 중…' : item.analysisRun?.status === 'failed' ? '분석 다시 시도' : '분석해줘'}</button>}
+        {again && <button type="button" className="pill" onClick={() => dispatch({ type: 'REANALYZE', id: item.id })}>재분석</button>}
         {CHIPS.map((chip) => <button key={chip.label} type="button" className="pill" disabled={busy || full} onClick={() => send(chip.text)}>{chip.label}</button>)}
       </div>
       <form className="chat-form" onSubmit={(e) => { e.preventDefault(); send(text) }}>

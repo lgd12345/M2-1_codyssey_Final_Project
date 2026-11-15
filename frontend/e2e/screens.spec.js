@@ -50,7 +50,7 @@ const rowFor = (page, id) => page.getByRole('row').filter({ hasText: id })
 
 async function analyse(staff, id, wanted = '검토 대기') {
   await staff.goto(`/#/cases/${id}`)
-  await staff.getByRole('button', { name: 'AI 분석 시작', exact: true }).click()
+  await staff.getByRole('button', { name: '분석해줘', exact: true }).click()
   await expect(statusButton(staff, wanted)).toBeVisible({ timeout: PAGE_BUDGET })
 }
 
@@ -289,7 +289,7 @@ test('an account without a company cannot file requests and is told why; operato
   const staff = await session(browser, process.env.E2E_STAFF, 'cases')
   const id = await createRequest(staff.page, { message: '운영진이 대신 접수한 요청입니다.', portal: false })
   await expect(staff.page.getByRole('heading', { level: 1 })).toBeVisible()
-  await expect(staff.page.getByRole('button', { name: 'AI 분석 시작', exact: true })).toBeVisible()
+  await expect(staff.page.getByRole('button', { name: '분석해줘', exact: true })).toBeVisible()
   await expect(staff.page.getByText('운영진이 대신 접수한 요청입니다.').first()).toBeVisible()
   expect((await serverItem(staff.page, id)).status).toBe('접수됨')
   await staff.page.goto('/#/cases/new')

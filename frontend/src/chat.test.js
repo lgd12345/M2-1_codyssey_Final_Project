@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { CHIPS, chatPageUrl, evidenceFrom, draftStateLabel, groupTurns, handlerLine, mailDraftUrl, toolLabel, toolStatus, transportBody } from './domain/chat.js'
+import { CHIPS, chatPageUrl, evidenceFrom, draftStateLabel, groupTurns, timeline, handlerLine, mailDraftUrl, toolLabel, toolStatus, transportBody } from './domain/chat.js'
 
 const SHA = 'a'.repeat(64)
 const part = (name, output, state = 'output-available') => ({ type: `tool-${name}`, toolCallId: `c-${name}`, state, input: {}, output })
@@ -99,4 +99,37 @@ test('send and cancel addresses carry only the request number and a numeric draf
   assert.equal(mailDraftUrl('CLM-005', 7, 'send'), '/service-requests/CLM-005/mail-drafts/7/send')
   assert.equal(mailDraftUrl('CLM-005', 7, 'cancel'), '/service-requests/CLM-005/mail-drafts/7/cancel')
   for (const bad of [['x', 7, 'send'], ['CLM-005', '7/../', 'send'], ['CLM-005', 0, 'send'], ['CLM-005', 7, 'delete']]) assert.throws(() => mailDraftUrl(...bad))
+})
+
+const msg = (id, role, at) => ({ id, role, metadata: at ? { pydantic_ai: { timestamp: at } } : undefined, parts: [{ type: 'text', text: id }] })
+const run = (revision, at) => ({ revision, at, analysis: { summary: `분석 ${revision}` } })
+
+test('analyses and chat turns share one timeline in the order they happened', () => {
+  const turns = [msg('q1', 'user', '2026-11-15T01:00:00Z'), msg('a1', 'assistant', '2026-11-15T01:00:05Z'),
+                 msg('q2', 'user', '2026-11-15T03:00:00Z')]
+  const items = timeline(turns, [run(1, '2026-11-15T00:30:00+00:00'), run(2, '2026-11-15T02:00:00+00:00')])
+  assert.deepEqual(items.map(i => i.kind === 'analysis' ? `분석${i.revision}` : i.id), ['분석1', 'q1', 'a1', '분석2', 'q2'])
+})
+
+test('only the newest analysis is marked current, and only it may offer new actions', () => {
+  const items = timeline([], [run(1, '2026-11-15T00:30:00Z'), run(2, '2026-11-15T02:00:00Z')])
+  assert.deepEqual(items.map(i => i.current), [false, true])
+})
+
+test('turns without a time (just sent) stay after the turns before them and after analyses already shown', () => {
+  const items = timeline([msg('q1', 'user', '2026-11-15T01:00:00Z'), msg('a1', 'assistant'), msg('q2', 'user')],
+    [run(1, '2026-11-15T00:00:00Z')])
+  assert.deepEqual(items.map(i => i.kind === 'analysis' ? '분석1' : i.id), ['분석1', 'q1', 'a1', 'q2'])
+})
+
+test('an empty conversation with no analysis is an empty timeline, and bad input is tolerated', () => {
+  assert.deepEqual(timeline([], []), [])
+  assert.deepEqual(timeline(undefined, undefined), [])
+  assert.equal(timeline([], [run(1, 'not a date')]).length, 1)
+})
+
+test('answers split over several stored messages still read as one turn on the timeline', () => {
+  const items = timeline([msg('q1', 'user', '2026-11-15T01:00:00Z'), msg('a1', 'assistant', '2026-11-15T01:00:01Z'),
+    msg('a2', 'assistant', '2026-11-15T01:00:02Z')], [])
+  assert.deepEqual(items.map(i => [i.kind, i.parts.length]), [['turn', 1], ['turn', 2]])
 })

@@ -33,7 +33,7 @@ async function createRequest(page, message) {
 
 async function analyse(staff, id) {
   await staff.goto(`/#/cases/${id}`)
-  await staff.getByRole('button', { name: 'AI 분석 시작', exact: true }).click()
+  await staff.getByRole('button', { name: '분석해줘', exact: true }).click()
   await expect(staff.getByText('분석 중입니다.', { exact: false })).toBeVisible()
 }
 
@@ -226,8 +226,8 @@ test('the operator chat answers from tool results, shows evidence and keeps its 
   const staff = await newContext(browser, process.env.E2E_STAFF, 'cases')
   const id = await createRequest(customer.page, 'ATC가 작동하지 않습니다. 채팅 확인용 증상 설명입니다.')
   await staff.page.goto(`/#/cases/${id}`)
-  await expect(staff.page.getByRole('heading', { name: 'AI 대화', exact: true })).toBeVisible()
-  await expect(staff.page.getByText('읽기 전용입니다', { exact: false })).toBeVisible()
+  await expect(staff.page.getByRole('heading', { name: 'AI 분석·대화', exact: true })).toBeVisible()
+  await expect(staff.page.getByText('읽기 전용이며', { exact: false })).toBeVisible()
 
   await staff.page.getByRole('button', { name: '사례 담당자는?', exact: true }).click()
   const log = staff.page.getByRole('log', { name: 'AI 대화 내용' })
@@ -305,3 +305,43 @@ test('a recommended activity asks the chat for a mail draft; nothing is sent unt
   await customer.context.close()
   await staff.context.close()
 })
+
+test('analysis and conversation are one window: analysis is the first bubble and a re-analysis stacks a new one', async ({ browser }) => {
+  const customer = await newContext(browser, process.env.E2E_CUSTOMER, 'portal')
+  const staff = await newContext(browser, process.env.E2E_STAFF, 'cases')
+  const id = await createRequest(customer.page, '한 창 확인용 증상 설명입니다.')
+  await staff.page.goto(`/#/cases/${id}`)
+  await expect(staff.page.getByRole('heading', { name: 'AI 분석·대화', exact: true })).toBeVisible()
+  // One section only: there is no separate AI analysis box, and the start button lives in the conversation.
+  await expect(staff.page.getByRole('heading', { name: 'AI 분석', exact: true })).toHaveCount(0)
+  const log = staff.page.getByRole('log', { name: 'AI 대화 내용' })
+  await expect(log.getByText('아직 분석 결과가 없습니다.', { exact: false })).toBeVisible()
+  await staff.page.getByRole('button', { name: '분석해줘', exact: true }).click()
+  await expect(log.getByText('E2E 통제된 분석 응답', { exact: false })).toBeVisible({ timeout: 15000 })
+  await expect(staff.page.getByRole('button', { name: '분석해줘', exact: true })).toHaveCount(0)
+  await expect(log.getByRole('heading', { name: '원인 후보' })).toBeVisible()
+  await expect(log.getByRole('heading', { name: '권장 활동 1건' })).toBeVisible()
+  await expect(log.getByText('과거 사례 1건 (보기)', { exact: true })).toBeVisible()
+  await expect(log.getByText('관련 문서 1건 (보기)', { exact: true })).toBeVisible()
+
+  // A question follows the analysis in the same log.
+  await staff.page.getByRole('button', { name: '사례 담당자는?', exact: true }).click()
+  await expect(log.getByText('비슷한 사례는 FSR-00005이며 담당 작업자는 EMP-0003입니다.', { exact: true })).toBeVisible({ timeout: 15000 })
+
+  // A re-analysis adds a new bubble below; the first one folds into "이전 분석".
+  await staff.page.getByRole('button', { name: '재분석', exact: true }).click()
+  await expect(log.getByText('분석 2회차', { exact: true })).toBeVisible({ timeout: 20000 })
+  await expect(log.getByText('이전 분석 (1회차) 보기', { exact: true })).toBeVisible()
+  const order = await log.locator('.chat-msg').evaluateAll((nodes) => nodes.map((n) => (n.classList.contains('analysis') ? 'analysis' : n.classList.contains('user') ? 'user' : 'answer')))
+  expect(order.filter((kind) => kind === 'analysis')).toHaveLength(2)
+  expect(order.indexOf('user')).toBeGreaterThan(order.indexOf('analysis'))
+  expect(order.lastIndexOf('analysis')).toBeGreaterThan(order.indexOf('user'))
+
+  // The conversation survives a reload in the same order, and customers get none of it.
+  await staff.page.reload()
+  await expect(staff.page.getByRole('log', { name: 'AI 대화 내용' }).getByText('분석 2회차', { exact: true })).toBeVisible()
+  expect(JSON.stringify(await serverItem(customer.page, id))).not.toContain('analysisHistory')
+  await customer.context.close()
+  await staff.context.close()
+})
+

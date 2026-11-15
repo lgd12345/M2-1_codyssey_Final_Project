@@ -62,7 +62,7 @@ export function groupTurns(messages) {
   for (const message of messages ?? []) {
     const last = turns[turns.length - 1]
     if (message.role === 'assistant' && last?.role === 'assistant') last.parts = [...last.parts, ...(message.parts ?? [])]
-    else turns.push({ id: message.id, role: message.role, parts: [...(message.parts ?? [])] })
+    else turns.push({ id: message.id, role: message.role, metadata: message.metadata, parts: [...(message.parts ?? [])] })
   }
   return turns
 }
@@ -82,4 +82,25 @@ export const draftStateLabel = status => DRAFT_STATES[status] ?? status
 export function mailDraftUrl(id, draftId, action) {
   if (!REQUEST.test(id ?? '') || !Number.isInteger(draftId) || draftId < 1 || !['send', 'cancel'].includes(action)) throw new Error('올바르지 않은 메일 주소입니다.')
   return `/service-requests/${id}/mail-drafts/${draftId}/${action}`
+}
+
+const timeOf = value => { const n = Date.parse(value ?? ''); return Number.isNaN(n) ? null : n }
+
+// Analyses (oldest first) and the stored/streamed chat turns as one list in the order they happened.
+// A turn without a time (one just sent) follows the turn before it, so it never jumps ahead of earlier answers.
+export function timeline(messages, analyses) {
+  const entries = []
+  let carry = null
+  groupTurns(messages).forEach((turn, index) => {
+    const own = timeOf(turn.metadata?.pydantic_ai?.timestamp)
+    const at = own ?? carry ?? Number.POSITIVE_INFINITY
+    carry = own ?? carry
+    entries.push({ kind: 'turn', ...turn, at, order: index + 1 })
+  })
+  const list = analyses ?? []
+  list.forEach((entry, index) => entries.push({
+    kind: 'analysis', revision: entry.revision, analysis: entry.analysis, at: timeOf(entry.at) ?? 0,
+    current: index === list.length - 1, order: 0,
+  }))
+  return entries.sort((a, b) => (a.at === b.at ? a.order - b.order : a.at < b.at ? -1 : 1))
 }
