@@ -342,6 +342,7 @@ input:not([type='checkbox']), select, textarea { border-radius: 8px; }
 
 .activities { list-style: decimal; margin: 0.2rem 0 0.4rem; padding-left: 1.4rem; display: grid; gap: 0.3rem; }
 .activities li { display: list-item; }
+.activity-row { display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap; }
 .activities li > span { margin-right: 0.6rem; }
 .evidence-fold { margin-top: 0.5rem; }
 .chat-msg.analysis { max-width: 100%; justify-self: stretch; }
