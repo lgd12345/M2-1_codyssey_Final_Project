@@ -67,7 +67,7 @@ test('starting the analysis makes the request processing; the operator closes it
   await expect(staff.page.getByRole('button', { name: '재분석', exact: true })).toBeVisible()  // the rest appears after the analysis
   await customer.page.reload()
   await expect(customer.page.getByText('처리 중', { exact: true }).first()).toBeVisible()
-  await expect(customer.page.getByText('처리를 시작했습니다.', { exact: false })).toBeVisible()
+  await expect(customer.page.getByText('담당부서에서 처리를 시작했습니다.', { exact: true })).toBeVisible()
   await expect(customer.page.getByText('E2E 통제된 분석 응답', { exact: false })).toHaveCount(0)
   await expect(customer.page.getByRole('tab', { name: '기술 가이드', exact: true })).toHaveCount(0)
   await expect(customer.page.getByText('E2E 매뉴얼', { exact: true })).toHaveCount(0)

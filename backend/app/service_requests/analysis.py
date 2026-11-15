@@ -204,7 +204,7 @@ def begin(connection, number: int, user_id: UUID, *, first: bool = True,
         started = row[0] == '접수됨'
         if started:
             connection.execute("UPDATE service_request SET status='처리 중' WHERE id=%s", (number,))
-            add_history(connection, number, '처리 시작 · 분석 시작', '처리를 시작했습니다.')
+            add_history(connection, number, '처리 시작 · 분석 시작', '담당부서에서 처리를 시작했습니다.')
         if history:
             add_history(connection, number, history)
         notes = [note[0] for note in connection.execute(

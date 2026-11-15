@@ -97,7 +97,7 @@ def test_the_request_is_processing_from_the_moment_its_analysis_starts(setup, us
     view = item(clients, 'staff', identity)
     assert view['status'] == '처리 중' and view['analysisRun'] == {'status': 'succeeded', 'errorCode': None}
     assert item(clients, 'alice', identity)['status'] == '처리 중'
-    assert [h['text'] for h in item(clients, 'alice', identity)['history']] == ['서비스 요청이 접수되었습니다.', '처리를 시작했습니다.']
+    assert [h['text'] for h in item(clients, 'alice', identity)['history']] == ['서비스 요청이 접수되었습니다.', '담당부서에서 처리를 시작했습니다.']
     assert any(h['text'] == '처리 시작 · 분석 시작' for h in view['history'])
 
 
@@ -111,7 +111,32 @@ def test_while_the_analysis_runs_the_request_is_already_processing(setup, use_ru
         analysis_module.begin(db, int(identity[4:]), staff)  # claimed, model not finished
     view = item(clients, 'staff', identity)
     assert view['status'] == '처리 중' and view['analysisRun']['status'] == 'running' and view['analysis'] is None
+    customer = item(clients, 'alice', identity)
+    assert customer['status'] == '처리 중'
+    assert [h['text'] for h in customer['history']][-1] == '담당부서에서 처리를 시작했습니다.'
+    with psycopg.connect(DSN) as db:
+        assert db.execute("""SELECT a.created_at=h.at FROM service_analysis a JOIN service_history h
+            ON h.request_id=a.request_id AND h.public_text='담당부서에서 처리를 시작했습니다.'
+            WHERE a.request_id=%s""", (int(identity[4:]),)).fetchone() == (True,)
     assert start(clients, identity).status_code == 409  # one analysis at a time
+
+
+def test_processing_and_analysis_roll_back_when_start_history_cannot_be_written(setup, monkeypatch):
+    clients, equipment = setup
+    identity = submit(clients, equipment)
+    from app.service_requests import analysis as analysis_module
+
+    def fail_history(*args, **kwargs):
+        raise RuntimeError('history storage failed')
+
+    monkeypatch.setattr(analysis_module, 'add_history', fail_history)
+    with psycopg.connect(DSN) as db:
+        staff = db.execute("SELECT id FROM app_user WHERE login_id LIKE 'staff-%'").fetchone()[0]
+        with pytest.raises(RuntimeError, match='history storage failed'):
+            analysis_module.begin(db, int(identity[4:]), staff)
+        assert db.execute('SELECT status FROM service_request WHERE id=%s', (int(identity[4:]),)).fetchone() == ('접수됨',)
+        assert db.execute('SELECT count(*) FROM service_analysis WHERE request_id=%s', (int(identity[4:]),)).fetchone() == (0,)
+    assert item(clients, 'alice', identity)['status'] == '접수됨'
 
 
 def test_a_failed_first_analysis_leaves_the_request_processing_and_can_be_retried(setup, use_runner):
@@ -124,6 +149,7 @@ def test_a_failed_first_analysis_leaves_the_request_processing_and_can_be_retrie
     runner.error = None
     assert start(clients, identity).status_code == 202
     assert item(clients, 'staff', identity)['analysis']['summary']
+    assert [h['text'] for h in item(clients, 'alice', identity)['history']].count('담당부서에서 처리를 시작했습니다.') == 1
 
 
 def test_a_second_first_analysis_is_refused_because_a_re_analysis_exists(setup, use_runner):
@@ -145,6 +171,7 @@ def test_reanalysis_replaces_recommendations_and_counts_revisions(setup, use_run
     assert after['status'] == '처리 중' and after['revision'] == 2 and after['analysis']['summary'] == '새 분석'
     assert {d['key']: d['aiSelected'] for d in after['departments']} == {'service': False, 'quality': True, 'parts': False, 'sales': False}
     assert any(h['text'] == '재분석 요청' for h in after['history'])
+    assert [h['text'] for h in item(clients, 'alice', identity)['history']].count('담당부서에서 처리를 시작했습니다.') == 1
 
 
 def test_reanalysis_needs_a_request_that_is_being_processed(setup, use_runner):
