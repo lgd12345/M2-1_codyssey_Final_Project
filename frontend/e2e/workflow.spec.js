@@ -33,7 +33,7 @@ async function createRequest(page, message) {
 
 async function analyse(staff, id) {
   await staff.goto(`/#/cases/${id}`)
-  await staff.getByRole('button', { name: '분석해줘', exact: true }).click()
+  await staff.getByRole('button', { name: '분석 시작', exact: true }).click()
   await expect(staff.getByText('분석 중입니다.', { exact: false })).toBeVisible()
 }
 
@@ -53,14 +53,14 @@ test('starting the analysis makes the request processing; the operator closes it
   // Before the analysis: received, only the start button, nothing else to review or close.
   await staff.page.goto(`/#/cases/${id}`)
   await expect(statusBadge(staff.page, '접수됨')).toBeVisible()
-  await expect(staff.page.getByRole('button', { name: '분석해줘', exact: true })).toBeVisible()
+  await expect(staff.page.getByRole('button', { name: '분석 시작', exact: true })).toBeVisible()
   await expect(staff.page.getByText('연결 업무', { exact: true })).toHaveCount(0)
   await expect(staff.page.getByRole('button', { name: '요청 종결', exact: true })).toHaveCount(0)
   await expect(staff.page.getByRole('button', { name: '승인', exact: true })).toHaveCount(0)
   await expect(staff.page.getByText('담당자', { exact: true })).toHaveCount(0)
 
   // Starting the analysis is what makes it 처리 중, for the customer too.
-  await staff.page.getByRole('button', { name: '분석해줘', exact: true }).click()
+  await staff.page.getByRole('button', { name: '분석 시작', exact: true }).click()
   await expect(statusBadge(staff.page, '처리 중')).toBeVisible()
   await analysisDone(staff.page)
   await expect(staff.page.getByText('E2E 통제된 분석 응답', { exact: false })).toBeVisible()
@@ -69,10 +69,10 @@ test('starting the analysis makes the request processing; the operator closes it
   await expect(customer.page.getByText('처리 중', { exact: true }).first()).toBeVisible()
   await expect(customer.page.getByText('처리를 시작했습니다.', { exact: false })).toBeVisible()
   await expect(customer.page.getByText('E2E 통제된 분석 응답', { exact: false })).toHaveCount(0)
-  await customer.page.getByRole('tab', { name: '기술 가이드', exact: true }).click()
-  await expect(customer.page.getByText('E2E 매뉴얼', { exact: true })).toHaveCount(0)  // the guides come with the result
+  await expect(customer.page.getByRole('tab', { name: '기술 가이드', exact: true })).toHaveCount(0)
+  await expect(customer.page.getByText('E2E 매뉴얼', { exact: true })).toHaveCount(0)
 
-  // Closing needs the result to be written; it reaches the customer as the result and the guides.
+  // Closing publishes the operator's result only.
   const close = staff.page.getByRole('button', { name: '요청 종결', exact: true })
   await expect(close).toBeDisabled()
   await staff.page.getByLabel('처리 결과 (고객에게 보입니다)', { exact: true }).fill('점검 결과를 안내드렸습니다.')
@@ -91,8 +91,9 @@ test('starting the analysis makes the request processing; the operator closes it
   await customer.page.reload()
   await expect(customer.page.getByText('이 서비스 요청은 완료되었습니다.', { exact: false })).toBeVisible()
   await expect(customer.page.getByText('점검 결과를 안내드렸습니다.', { exact: false })).toBeVisible()
-  await customer.page.getByRole('tab', { name: '기술 가이드', exact: true }).click()
-  await expect(customer.page.getByText('E2E 매뉴얼', { exact: true })).toBeVisible()
+  await expect(customer.page.getByRole('tab', { name: '기술 가이드', exact: true })).toHaveCount(0)
+  await expect(customer.page.getByText('E2E 매뉴얼', { exact: true })).toHaveCount(0)
+  expect(await serverItem(customer.page, id)).not.toHaveProperty('guides')
   await noFollowUp(customer.page)  // a finished request offers nothing to do
   await customer.context.close()
   await staff.context.close()
@@ -196,8 +197,8 @@ test('the operator chat answers from tool results, shows evidence and keeps its 
   // Before the first analysis the conversation is closed: only the start button works.
   await expect(staff.page.getByLabel('질문 입력', { exact: true })).toHaveCount(0)
   await expect(staff.page.getByRole('button', { name: '사례 담당자는?', exact: true })).toHaveCount(0)
-  await expect(staff.page.getByRole('button', { name: '분석해줘', exact: true })).toBeEnabled()
-  await staff.page.getByRole('button', { name: '분석해줘', exact: true }).click()
+  await expect(staff.page.getByRole('button', { name: '분석 시작', exact: true })).toBeEnabled()
+  await staff.page.getByRole('button', { name: '분석 시작', exact: true }).click()
   await analysisDone(staff.page)
   await expect(staff.page.getByLabel('질문 입력', { exact: true })).toBeEnabled()
   await expect(staff.page.getByText('읽기 전용이며', { exact: false })).toBeVisible()
@@ -325,9 +326,9 @@ test('analysis and conversation are one window: analysis is the first bubble and
   await expect(staff.page.getByRole('heading', { name: 'AI 분석', exact: true })).toHaveCount(0)
   const log = staff.page.getByRole('log', { name: 'AI 대화 내용' })
   await expect(log.getByText('아직 분석 결과가 없습니다.', { exact: false })).toBeVisible()
-  await staff.page.getByRole('button', { name: '분석해줘', exact: true }).click()
+  await staff.page.getByRole('button', { name: '분석 시작', exact: true }).click()
   await expect(log.getByText('E2E 통제된 분석 응답', { exact: false })).toBeVisible({ timeout: 15000 })
-  await expect(staff.page.getByRole('button', { name: '분석해줘', exact: true })).toHaveCount(0)
+  await expect(staff.page.getByRole('button', { name: '분석 시작', exact: true })).toHaveCount(0)
   await expect(log.getByRole('heading', { name: '원인 후보' })).toBeVisible()
   await expect(log.getByRole('heading', { name: '권장 활동 1건' })).toBeVisible()
   await expect(log.getByText('과거 사례 1건 (보기)', { exact: true })).toBeVisible()

@@ -362,7 +362,7 @@ async def chat_turn(identity: str, request: Request, session: SessionInfo = Depe
     number = request_number(identity)
     row, notes, state = await asyncio.to_thread(_load, number)
     if not row['analysed']:
-        raise ChatNeedsAnalysis()  # the conversation is about an analysis: the first one comes from the 분석해줘 button
+        raise ChatNeedsAnalysis()  # the conversation is about an analysis: the first one comes from the 분석 시작 button
     if row['status'] == '종결':
         raise ChatClosed()
     if state['turns'] >= MAX_USER_TURNS:

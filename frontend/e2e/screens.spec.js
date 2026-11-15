@@ -51,7 +51,7 @@ const rowFor = (page, id) => page.getByRole('row').filter({ hasText: id })
 // A request is 처리 중 from the moment the analysis starts; the analysis is finished once the conversation opens.
 async function analyse(staff, id) {
   await staff.goto(`/#/cases/${id}`)
-  await staff.getByRole('button', { name: '분석해줘', exact: true }).click()
+  await staff.getByRole('button', { name: '분석 시작', exact: true }).click()
   await expect(staff.getByLabel('질문 입력', { exact: true })).toBeEnabled({ timeout: PAGE_BUDGET })
 }
 
@@ -291,7 +291,7 @@ test('an account without a company cannot file requests and is told why; operato
   const staff = await session(browser, process.env.E2E_STAFF, 'cases')
   const id = await createRequest(staff.page, { message: '운영진이 대신 접수한 요청입니다.', portal: false })
   await expect(staff.page.getByRole('heading', { level: 1 })).toBeVisible()
-  await expect(staff.page.getByRole('button', { name: '분석해줘', exact: true })).toBeVisible()
+  await expect(staff.page.getByRole('button', { name: '분석 시작', exact: true })).toBeVisible()
   await expect(staff.page.getByText('운영진이 대신 접수한 요청입니다.').first()).toBeVisible()
   expect((await serverItem(staff.page, id)).status).toBe('접수됨')
   await staff.page.goto('/#/cases/new')
@@ -374,7 +374,7 @@ test('customer list: company sharing, every filter, sorting and the customer-saf
   await expect(header).toHaveAttribute('aria-sort', 'descending')
   expect(await ids()).toEqual([...(await ids())].sort().reverse())
 
-  // Detail: facts, history, guides (none before the request is closed), and no contact or follow-up controls.
+  // Customer detail contains facts and history only, never manuals or follow-up controls.
   await page.getByRole('link', { name: `${first} 상세 보기` }).click()
   await expect(page).toHaveURL(new RegExp(`#/portal/${first}$`))
   const facts = page.locator('.pd-meta')
@@ -382,10 +382,9 @@ test('customer list: company sharing, every filter, sorting and the customer-saf
   await expect(facts).toContainText(process.env.E2E_CUSTOMER)
   await expect(facts.getByText('처리 중', { exact: true })).toBeVisible()
   await expect(page.getByText('목록 확인 첫째 요청').first()).toBeVisible()
-  await expect(page.getByRole('tab', { name: '이력', exact: true })).toHaveAttribute('aria-selected', 'true')
   await expect(page.getByRole('heading', { name: '요청 이력' })).toBeVisible()
-  await page.getByRole('tab', { name: '기술 가이드', exact: true }).click()
-  await expect(page.getByText('해당하는 기술 가이드가 아직 없습니다.', { exact: false })).toBeVisible()
+  await expect(page.getByRole('tab', { name: '기술 가이드', exact: true })).toHaveCount(0)
+  await expect(page.getByRole('button', { name: '원본 페이지 보기', exact: true })).toHaveCount(0)
   await expect(page.getByRole('tab', { name: '연락처', exact: true })).toHaveCount(0)
   for (const hidden of ['AI 분석', 'E2E 통제된 분석 응답', '연결 업무', '내부 메모', '승인']) {
     await expect(page.getByText(hidden, { exact: false })).toHaveCount(0)
@@ -393,7 +392,6 @@ test('customer list: company sharing, every filter, sorting and the customer-saf
   // After filing there is nothing for a customer to press: no information, callback or close-request actions.
   for (const name of ['정보 추가', '콜백 요청', '종결 요청']) await expect(page.getByRole('button', { name, exact: true })).toHaveCount(0)
   await expect(page.locator('.pd-actions')).toHaveCount(0)
-  await page.getByRole('tab', { name: '이력', exact: true }).click()
   await expect(page.getByText('서비스 요청이 접수되었습니다.')).toBeVisible()
   // Another company cannot open it.
   await bob.page.goto(`/#/portal/${first}`)
@@ -486,10 +484,10 @@ test('operator queue: counts per status, search, every filter, empty state and n
 })
 
 // ---------------------------------------------------------------------------------------------------------------
-// Operator detail: AI panels, evidence, department proposals, notes, approval, department inbox
+// Operator detail: analysis, evidence, original pages and reanalysis
 // ---------------------------------------------------------------------------------------------------------------
 
-test('operator detail: AI tabs and evidence, original pages, notes, department proposals and reset', async ({ browser }) => {
+test('operator detail: analysis timeline, evidence, original pages and reanalysis', async ({ browser }) => {
   const customer = await session(browser, process.env.E2E_CUSTOMER, 'portal')
   const staff = await session(browser, process.env.E2E_STAFF, 'cases')
   const id = await createRequest(customer.page, { message: 'ATC 교환 중 정지합니다. 화면 점검용.' })
@@ -505,11 +503,13 @@ test('operator detail: AI tabs and evidence, original pages, notes, department p
 
   // Request card can be collapsed.
   const toggleDetails = page.getByRole('button', { name: '세부 정보 숨기기' })
-  await expect(page.getByText('발생 상황')).toBeVisible()
-  await toggleDetails.click()
   await expect(page.getByText('발생 상황')).toHaveCount(0)
+  await expect(page.getByText('장비 · 보증')).toHaveCount(0)
+  await expect(page.locator('.qa')).toBeVisible()
+  await toggleDetails.click()
+  await expect(page.locator('.qa')).toHaveCount(0)
   await page.getByRole('button', { name: '세부 정보 보기' }).click()
-  await expect(page.getByText('발생 상황')).toBeVisible()
+  await expect(page.locator('.qa')).toBeVisible()
 
   await analyse(page, id)
   await expect(page.getByText('분석 중입니다.', { exact: false })).toHaveCount(0)
@@ -583,7 +583,7 @@ test('operator detail: AI tabs and evidence, original pages, notes, department p
   await closeAll(customer, staff)
 })
 
-test('closing: the result and the guides reach the customer together, and not before', async ({ browser }) => {
+test('closing: customer receives the result but never manuals or original pages', async ({ browser }) => {
   const customer = await session(browser, process.env.E2E_CUSTOMER, 'portal')
   const staff = await session(browser, process.env.E2E_STAFF, 'cases')
   const id = await createRequest(customer.page, { message: '종결 안내 확인용 요청입니다.' })
@@ -591,9 +591,9 @@ test('closing: the result and the guides reach the customer together, and not be
   await analyse(page, id)
 
   // While the request is being processed the customer sees progress only: no guides, no page, no result.
-  expect((await customer.page.request.get(`/api/v1/service-requests/${id}/evidence/E1/page`)).status()).toBe(404)
+  expect((await customer.page.request.get(`/api/v1/service-requests/${id}/evidence/E1/page`)).status()).toBe(403)
   await customer.page.goto(`/#/portal/${id}`)
-  await customer.page.getByRole('tab', { name: '기술 가이드', exact: true }).click()
+  await expect(customer.page.getByRole('tab', { name: '기술 가이드', exact: true })).toHaveCount(0)
   await expect(customer.page.getByText('E2E 매뉴얼', { exact: true })).toHaveCount(0)
 
   // The operator writes the result once; closing is the operator's own button.
@@ -602,33 +602,21 @@ test('closing: the result and the guides reach the customer together, and not be
   await expect(statusBadge(page, '종결')).toBeVisible()
   await expect(page.getByText('종결됨', { exact: true })).toBeVisible()
 
-  // The customer: completed, the result, and the manual titles behind the analysis, never the AI text.
+  // The customer sees completion and the operator's result, never AI evidence.
   await customer.page.goto(`/#/portal/${id}`)
   await customer.page.reload()
   await expect(customer.page.getByText('ATC 구동부를 점검하고 정상 동작을 확인했습니다.', { exact: false })).toBeVisible()
   await customer.page.goto(`/#/portal/${id}`)
   await customer.page.reload()
   await expect(customer.page.locator('.pd-meta').getByText('완료', { exact: true })).toBeVisible()
-  const guidesTab = customer.page.getByRole('tab', { name: '기술 가이드', exact: true })
-  await guidesTab.click()
-  await guidesTab.hover()  // the pointer stays on the tab it just chose; its label must stay readable
-  const tabColors = await guidesTab.evaluate(el => { const s = getComputedStyle(el); return [s.color, s.backgroundColor] })
-  expect(tabColors[0], 'selected tab text vs background').not.toBe(tabColors[1])
-  expect(tabColors[1], 'selected tab keeps its selected background while hovered').toBe(await guidesTab.evaluate(el => getComputedStyle(el).borderTopColor))
-  await expect(customer.page.getByText('E2E 매뉴얼', { exact: true })).toBeVisible()
-  await expect(customer.page.getByText('AI가 접수 내용을 바탕으로 찾은 자료입니다.', { exact: false })).toBeVisible()
-  await customer.page.getByRole('button', { name: '원본 페이지 보기', exact: true }).click()
-  const guide = customer.page.getByRole('dialog', { name: /원본 페이지 · E2E 매뉴얼/ })
-  await expect(guide.getByRole('img')).toBeVisible()
-  expect(await guide.getByRole('img').evaluate(image => image.complete && image.naturalWidth > 0)).toBe(true)
-  await customer.page.keyboard.press('Escape')
-  const pageApi = `/api/v1/service-requests/${id}/evidence/E1/page`
-  const opened = await customer.page.request.get(pageApi)
-  expect(opened.status()).toBe(200)
-  expect(opened.headers()['content-type']).toBe('image/png')
-  expect((await customer.page.request.get(`/api/v1/service-requests/${id}/evidence/E2/page`)).status()).toBe(404)  // cases are not guides
+  await expect(customer.page.getByRole('tab', { name: '기술 가이드', exact: true })).toHaveCount(0)
+  await expect(customer.page.getByRole('button', { name: '원본 페이지 보기', exact: true })).toHaveCount(0)
+  await expect(customer.page.getByText('E2E 매뉴얼', { exact: true })).toHaveCount(0)
+  for (const evidence of ['E1', 'E2']) {
+    expect((await customer.page.request.get(`/api/v1/service-requests/${id}/evidence/${evidence}/page`)).status()).toBe(403)
+  }
   const seen = JSON.stringify(await serverItem(customer.page, id))
-  for (const secret of ['ATC 구동부 점검 절차', 'E2E 통제된 분석 응답', '부품 수배']) expect(seen).not.toContain(secret)
+  for (const secret of ['guides', 'E2E 매뉴얼', 'ATC 구동부 점검 절차', 'E2E 통제된 분석 응답', '부품 수배']) expect(seen).not.toContain(secret)
   expect(customer.errors.concat(staff.errors)).toEqual([])
   await closeAll(customer, staff)
 })

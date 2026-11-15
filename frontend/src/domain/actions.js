@@ -24,11 +24,8 @@ export function evidencePageUrl(id, evidenceId, revision) {
 }
 
 
-// The server already filtered history and comments to customer-safe content and wording.
+// Customer history consists only of server-provided public system events, never comments or replies.
 export function customerEvents(item) {
-  const history = item.history.map((entry, index) => ({ id: `h${index}`, at: entry.at, who: '시스템', text: entry.text }))
-  const comments = item.comments.map(comment => ({
-    id: comment.id, at: comment.at, who: '서비스 담당자', text: comment.text, message: true,
-  }))
-  return [...history, ...comments].sort((a, b) => (a.at < b.at ? 1 : a.at > b.at ? -1 : 0))
+  return item.history.map((entry, index) => ({ id: `h${index}`, at: entry.at, who: '시스템', text: entry.text }))
+    .sort((a, b) => (a.at < b.at ? 1 : a.at > b.at ? -1 : 0))
 }

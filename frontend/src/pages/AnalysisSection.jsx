@@ -115,13 +115,13 @@ function EvidenceRow({ e, open, setOpen, itemId, revision }) {
 }
 
 
-// 분석 결과가 아직 없을 때(진행 중, 실패, 시작 전)의 안내. 시작 버튼은 대화창의 `분석해줘` 칩이다.
+// 분석 결과가 아직 없을 때(진행 중, 실패, 시작 전)의 안내. 시작 버튼은 대화창의 `분석 시작` 칩이다.
 export function PendingNotice({ item, error }) {
   const running = isAnalysisRunning(item)
   const notice = analysisRunNotice(item.analysisRun)
   return (
     <div className="analysis-pending">
-      <p className="muted" role="status">{running ? '분석 중입니다. 매뉴얼과 과거 사례를 검색하고 있으며 완료되면 이 대화에 표시됩니다.' : '아직 분석 결과가 없습니다. ‘분석해줘’를 누르면 분석이 시작되고, 끝나면 질문할 수 있습니다.'}</p>
+      <p className="muted" role="status">{running ? '분석 중입니다. 매뉴얼과 과거 사례를 검색하고 있으며 완료되면 이 대화에 표시됩니다.' : '아직 분석 결과가 없습니다. ‘분석 시작’을 누르면 분석이 시작되고, 끝나면 질문할 수 있습니다.'}</p>
       {notice && <p className="error" role="alert">{notice}</p>}
       {error && <p className="error" role="alert">{error}</p>}
     </div>

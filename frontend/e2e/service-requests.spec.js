@@ -84,14 +84,14 @@ test('real intake persists, is shared with company/staff and isolated from other
   await expect(staff.getByText('아직 분석 결과가 없습니다.', { exact: false })).toBeVisible()
 
   // Analysis lifecycle through the real UI/API/DB. Only the model call is a controlled server-side double.
-  await staff.getByRole('button', { name: '분석해줘', exact: true }).click()
+  await staff.getByRole('button', { name: '분석 시작', exact: true }).click()
   await expect(staff.getByText('분석 중입니다.', { exact: false })).toBeVisible()
   await expect(staff.getByText('E2E 통제된 분석 응답', { exact: false })).toBeVisible({ timeout: 15000 })
   await expect(staff.getByText('접수 확인: 이메일 주소가 없어 보내지 않음', { exact: true })).toBeVisible()  // demo accounts have no e-mail login
   const checks = staff.getByRole('list', { name: '식별자 확인' }).getByRole('listitem')
   await expect(checks).toHaveText(['알람 2023: 색인된 매뉴얼에서 찾음', '부품번호 2064-75-114-00: 색인된 매뉴얼에서 찾지 못함'])
   await expect(staff.getByText('ATC 암 구동 불량', { exact: false })).toBeVisible()
-  await expect(staff.getByRole('button', { name: '분석해줘', exact: true })).toHaveCount(0)
+  await expect(staff.getByRole('button', { name: '분석 시작', exact: true })).toHaveCount(0)
   await staff.getByText('과거 사례 1건 (보기)', { exact: true }).click()
   await expect(staff.getByText('FSR-00001', { exact: false }).first()).toBeVisible()
   await expect(staff.getByRole('checkbox')).toHaveCount(0)  // no department selection any more

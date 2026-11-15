@@ -14,14 +14,7 @@ from app.service_requests import views, workflow
 from app.service_requests.routes import (
     Input, NoBody, execute_analysis, queue_mail, request_database, request_number,
 )
-from typing import Literal
-
 router = APIRouter(prefix='/api/v1/service-requests', tags=['service-requests-workflow'])
-
-
-class CommentIn(Input):
-    kind: Literal['internal', 'public']
-    text: str = Field(min_length=1, max_length=4000)
 
 
 class AdditionalInfoIn(Input):
@@ -29,19 +22,11 @@ class AdditionalInfoIn(Input):
 
 
 class ResolveIn(Input):
-    note: str = Field(min_length=1, max_length=2000)  # the processing result: the customer's guide page and completion mail
+    note: str = Field(min_length=1, max_length=2000)  # processing result: customer portal and completion mail
 
 
 def _operator_item(connection, number: int) -> dict:
     return views.fetch_items(connection, 'r.id=%s', (number,), staff=True)[0]
-
-
-@router.post('/{identity}/comments', status_code=201)
-def add_comment(identity: str, body: CommentIn, session: SessionInfo = Depends(require_operator_csrf)):
-    number = request_number(identity)
-    with request_database() as connection:
-        workflow.comment(connection, number, session.user, body.kind, body.text)
-        return _operator_item(connection, number)
 
 
 @router.post('/{identity}/additional-info', status_code=201)

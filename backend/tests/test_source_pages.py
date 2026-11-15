@@ -82,43 +82,42 @@ def test_a_citation_without_a_stored_reference_has_no_page(setup, use_runner, re
     assert clients['staff'].get(page_url('CLM-999999')).status_code == 404
 
 
-def test_customers_may_open_guide_pages_only_once_closed_and_only_for_their_company(setup, use_runner, renderer):
+def test_customers_cannot_open_manual_pages_before_or_after_closure(setup, use_runner, renderer):
     clients, equipment = setup
     calls = renderer()
     use_runner(Runner(result_with_ref()))
     identity = reviewed(clients, equipment)
     for who in ('alice', 'colleague', 'bob'):
-        assert clients[who].get(page_url(identity)).status_code == 404  # not closed yet: indistinguishable from missing
+        assert clients[who].get(page_url(identity)).status_code == 403
     assert calls == []
     assert post(clients, 'staff', identity, 'resolution', note='처리했습니다.').status_code == 200
-    for who in ('alice', 'colleague'):
-        opened = clients[who].get(page_url(identity))
-        assert opened.status_code == 200 and opened.content == PNG
-    assert clients['bob'].get(page_url(identity)).status_code == 404
-    unassigned = clients['unassigned'].get(page_url(identity))
-    assert unassigned.status_code == 403 and unassigned.json()['code'] == 'COMPANY_REQUIRED'
+    for who in ('alice', 'colleague', 'bob', 'unassigned'):
+        for evidence in ('E1', 'E2', 'E9'):
+            assert clients[who].get(page_url(identity, evidence)).status_code == 403
+        assert clients[who].get(page_url('CLM-999999')).status_code == 403
     assert TestClient(app).get(page_url(identity)).status_code == 401
-    assert clients['alice'].get(page_url(identity, 'E2')).status_code == 404  # cases are never guides
-    assert len(calls) == 2
+    assert calls == []
 
 
-def test_customer_guides_say_whether_a_page_exists_and_never_expose_the_reference(setup, use_runner, renderer):
+def test_customer_detail_and_list_never_expose_manuals_even_with_page_references(setup, use_runner, renderer):
     clients, equipment = setup
     renderer()
     use_runner(Runner(result_with_ref()))
     identity = closed(clients, equipment)
-    guides = item(clients, 'alice', identity)['guides']
-    assert guides == [{'id': 'E1', 'title': 'F400 매뉴얼', 'source': 'F400 매뉴얼 p.45', 'viewable': True}]
-    seen = json.dumps(item(clients, 'alice', identity), ensure_ascii=False)
-    assert SHA not in seen and 'document_sha256' not in seen and 'ref' not in json.loads(seen)['guides'][0]
+    listed = next(x for x in clients['alice'].get(BASE).json()['requests'] if x['id'] == identity)
+    for view in (item(clients, 'alice', identity), listed):
+        assert not {'guides', 'evidence', 'analysis'} & set(view)
+        seen = json.dumps(view, ensure_ascii=False)
+        for secret in (SHA, 'document_sha256', 'F400 매뉴얼', 'viewable'):
+            assert secret not in seen
 
 
-def test_old_citations_without_a_reference_are_listed_but_not_viewable(setup, use_runner, renderer):
+def test_old_citations_without_a_reference_are_not_exposed_to_customers(setup, use_runner, renderer):
     clients, equipment = setup
     renderer()
     use_runner(Runner())
     identity = closed(clients, equipment)
-    assert item(clients, 'alice', identity)['guides'][0]['viewable'] is False
+    assert 'guides' not in item(clients, 'alice', identity)
 
 
 @pytest.mark.parametrize('failure,status,code', [
@@ -272,5 +271,5 @@ def test_customers_cannot_choose_an_earlier_revision(setup, use_runner, renderer
     calls = renderer()
     use_runner(Runner(result_with_ref()))
     identity = closed(clients, equipment)
-    assert clients[who].get(page_url(identity), params={'revision': 1}).status_code == 404
+    assert clients[who].get(page_url(identity), params={'revision': 1}).status_code == 403
     assert calls == []

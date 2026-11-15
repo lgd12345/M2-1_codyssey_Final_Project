@@ -209,8 +209,9 @@ def test_a_chat_never_changes_the_request(chat_env):
     use_model(Script(answer_after_tool('search_manual', {'query': 'ATC'})))
     assert send(clients, identity).status_code == 200
     after = item(clients, 'staff', identity)
-    assert (after['status'], after['history'], after['comments'], after['analysis'], after['mail']) == (
-        before['status'], before['history'], before['comments'], before['analysis'], before['mail'])
+    assert (after['status'], after['history'], after['analysis'], after['mail']) == (
+        before['status'], before['history'], before['analysis'], before['mail'])
+    assert 'comments' not in after
     assert 'chat' not in str(item(clients, 'alice', identity))
 
 

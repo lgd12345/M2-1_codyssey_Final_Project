@@ -121,8 +121,7 @@ export function App({ theme }) {
 
   useEffect(() => { setAnalysisError('') }, [route.id])
 
-  // Screen actions go to the server one at a time, in click order: a draft saved on blur must reach the
-  // server before an approval click that follows it, otherwise the approval could use an older draft.
+  // Send workflow actions to the server one at a time, in click order.
   const [actionError, setActionError] = useState('')
   const latest = useRef(workspace)
   latest.current = workspace

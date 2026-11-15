@@ -40,7 +40,7 @@ def closed(clients, equipment):
 # ---------- authorization ----------
 
 OPERATOR_ACTIONS = [
-    ('post', 'comments', {'kind': 'internal', 'text': '메모'}), ('post', 'additional-info', {'text': '확인'}),
+    ('post', 'additional-info', {'text': '확인'}),
     ('post', 'reanalysis', None), ('post', 'resolution', {'note': RESULT}),
 ]
 
@@ -59,7 +59,7 @@ def test_operator_actions_require_staff_session_csrf_and_origin(setup, use_runne
         assert send(no_csrf, headers={'Origin': 'http://testserver'}).status_code == 403
     assert send(clients['staff'], headers={'Origin': 'https://evil.example'}).status_code == 403
     after = item(clients, 'staff', identity)
-    assert after['status'] == '처리 중' and after['comments'] == [] and after['additionalInfo'] == [] and 'resolution' in after
+    assert after['status'] == '처리 중' and 'comments' not in after and after['additionalInfo'] == [] and 'resolution' in after
     assert after['resolution'] is None
 
 
@@ -224,62 +224,32 @@ def test_a_closed_request_takes_no_more_additional_information_or_proposals(setu
     assert post(clients, 'staff', done, 'additional-info', text='뒤늦은 정보').status_code == 409
 
 
-# ---------- comments ----------
-
-def test_comments_are_authored_by_the_session_and_internal_notes_never_reach_customers(setup, use_runner):
-    clients, equipment = setup
-    use_runner(Runner())
-    identity = reviewed(clients, equipment)
-    assert post(clients, 'staff', identity, 'comments', kind='internal', text='보증 만료 건').status_code == 201
-    assert post(clients, 'staff', identity, 'comments', kind='public', text='확인 후 연락드리겠습니다.').status_code == 201
-    for bad in [{'kind': 'internal', 'text': '  '}, {'kind': 'customer', 'text': 'x'}, {'kind': 'public', 'text': 'x' * 4001},
-                {'kind': 'public', 'text': 'x', 'by': 'forged'}, {'text': 'x'}]:
-        assert post(clients, 'staff', identity, 'comments', **bad).status_code == 422
-    staff_comments = item(clients, 'staff', identity)['comments']
-    assert [(c['kind'], c['text']) for c in staff_comments] == [('internal', '보증 만료 건'), ('public', '확인 후 연락드리겠습니다.')]
-    assert all(c['by'].startswith('staff-') and c['at'] and c['id'] for c in staff_comments)
-    for who in ['alice', 'colleague']:
-        customer = item(clients, who, identity)
-        assert [(c['kind'], c['text']) for c in customer['comments']] == [('public', '확인 후 연락드리겠습니다.')]
-        assert '보증 만료' not in str(customer)
-
-
-def test_the_only_comments_in_the_system_are_operator_notes_and_operator_replies(setup, use_runner):
-    clients, equipment = setup
-    use_runner(Runner())
-    identity = reviewed(clients, equipment)
-    post(clients, 'staff', identity, 'comments', kind='internal', text='메모')
-    post(clients, 'staff', identity, 'comments', kind='public', text='안내')
-    assert {c['kind'] for c in item(clients, 'staff', identity)['comments']} == {'internal', 'public'}
-    assert {c['kind'] for c in item(clients, 'alice', identity)['comments']} == {'public'}
-
-
 # ---------- customer projection ----------
 
 def test_customer_view_never_contains_internal_workflow_data(setup, use_runner):
     clients, equipment = setup
     use_runner(Runner())
     identity = reviewed(clients, equipment)
-    post(clients, 'staff', identity, 'comments', kind='internal', text='내부전용메모')
     post(clients, 'staff', identity, 'additional-info', text='내부전용추가정보')
     customer = item(clients, 'alice', identity)
     listed = next(x for x in clients['alice'].get(BASE).json()['requests'] if x['id'] == identity)
     for view in (customer, listed):
         assert view['status'] == '처리 중'
-        assert not {'analysis', 'analysisRun', 'analysisHistory', 'departments', 'revision', 'additionalInfo', 'mailDrafts', 'proposals'} & set(view)
+        assert not {'comments', 'analysis', 'analysisRun', 'analysisHistory', 'departments', 'revision', 'additionalInfo', 'mailDrafts', 'proposals'} & set(view)
         dump = str(view)
         for secret in ['내부전용메모', '내부전용추가정보', 'ATC 점검 방문', 'staff-', 'ATC 암 구동']:
             assert secret not in dump, secret
 
 
-def test_customer_guides_appear_only_with_the_closing_result_and_list_manual_titles_only(setup, use_runner):
+def test_customer_receives_only_closing_result_and_no_manual_guides(setup, use_runner):
     clients, equipment = setup
     use_runner(Runner())
     identity = reviewed(clients, equipment)
-    assert item(clients, 'alice', identity)['guides'] == []  # AI output is not shown while the request is being processed
+    assert 'guides' not in item(clients, 'alice', identity)
     post(clients, 'staff', identity, 'resolution', note=RESULT)
     customer = item(clients, 'alice', identity)
-    assert customer['guides'] == [{'id': 'E1', 'title': 'F400 매뉴얼', 'source': 'F400 매뉴얼 p.45', 'viewable': False}]  # no stored page reference
+    assert 'guides' not in customer
+    assert 'F400 매뉴얼' not in str(customer)
     assert customer['resolution'] == {'note': RESULT} and customer['status'] == '완료'
     assert 'ATC 구동부 점검' not in str(customer) and 'FSR-00001' not in str(customer)
     assert 'guides' not in item(clients, 'staff', identity)
@@ -295,7 +265,7 @@ def test_customer_follow_up_actions_do_not_exist(setup, use_runner, who, suffix,
     answer = clients[who].post(f'{BASE}/{identity}/{suffix}', json=payload)
     assert answer.status_code in (404, 405)
     after = item(clients, 'staff', identity)
-    assert after['comments'] == before['comments'] and after['history'] == before['history']
+    assert after == before
 
 
 def test_insufficient_evidence_stays_processing_and_the_operator_adds_information_and_re_analyses(setup, use_runner):

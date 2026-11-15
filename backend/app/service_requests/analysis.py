@@ -224,16 +224,7 @@ def finish_success(connection, analysis_id: UUID, result: dict[str, Any]) -> Non
         if not row:
             return
         number = row[0]
-        # A new analysis replaces earlier recommendations and any review edits made to them.
-        connection.execute('DELETE FROM service_request_department WHERE request_id=%s', (number,))
-        recommended = {item['key']: item for item in result['departments']}
-        for key in DEPARTMENT_KEYS:
-            item = recommended.get(key)
-            draft = item['draft'] if item else ''
-            connection.execute(
-                """INSERT INTO service_request_department(request_id,key,ai_selected,selected,reason,ai_draft,draft)
-                   VALUES (%s,%s,%s,%s,%s,%s,%s)""",
-                (number, key, item is not None, item is not None, item['reason'] if item else NO_RECOMMENDATION, draft, draft))
+        # Recommended mail activities are projected directly from this saved analysis result.
         insufficient = result['status'] == 'insufficient_evidence'
         connection.execute("UPDATE service_request SET revision=(SELECT count(*) FROM service_analysis WHERE request_id=%s AND status='succeeded') "
                            "WHERE id=%s", (number, number))

@@ -86,7 +86,7 @@ def test_stored_result_maps_back_to_the_analysis_contract_losslessly(setup, use_
 
 
 def test_customers_must_never_see_analysis_drafts_or_internal_state():
-    clean = {'id': 'CLM-001', 'status': '처리 중', 'comments': [], 'history': [], 'intake': {}}
+    clean = {'id': 'CLM-001', 'status': '처리 중', 'history': [], 'intake': {}}
     assert customer_leaks(clean) == []
     leaky = {**clean, 'analysis': {}, 'departments': [], 'linked': [], 'analysisRun': {}, 'approval': None}
     assert set(customer_leaks(leaky)) == {'analysis', 'departments', 'linked', 'analysisRun', 'approval'}

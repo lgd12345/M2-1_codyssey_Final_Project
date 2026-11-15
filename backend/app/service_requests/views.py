@@ -7,7 +7,6 @@ from psycopg.rows import dict_row
 
 from app.service_requests import analysis as analysis_flow
 
-DEPARTMENT_NAMES = {'service': '서비스', 'quality': '품질', 'parts': '부품·자재', 'sales': '영업'}
 CUSTOMER_STATUS = {'접수됨': '접수됨', '처리 중': '처리 중', '종결': '완료'}
 RECEIVED_PUBLIC = '서비스 요청이 접수되었습니다.'
 
@@ -29,16 +28,12 @@ def _group(rows, key='request_id'):
 
 def load_related(connection, ids: list[int], *, staff: bool) -> dict[str, dict[int, list[dict[str, Any]]]]:
     if not ids:
-        return {'comments': {}, 'history': {}, 'departments': {}, 'info': {}, 'mail': {}, 'drafts': {}, 'analyses': {}, 'proposals': {}}
+        return {'history': {}, 'info': {}, 'mail': {}, 'drafts': {}, 'analyses': {}, 'proposals': {}}
     with connection.cursor(row_factory=dict_row) as cursor:
-        kinds = ['internal', 'public'] if staff else ['public']
-        comments = cursor.execute(
-            'SELECT * FROM service_comment WHERE request_id=ANY(%s) AND kind=ANY(%s) ORDER BY created_at,id',
-            (ids, kinds)).fetchall()
         history = cursor.execute(
             f"SELECT * FROM service_history WHERE request_id=ANY(%s) {'' if staff else 'AND public_text IS NOT NULL'} ORDER BY at,id",
             (ids,)).fetchall()
-        departments = info = mail = drafts = analyses = proposals = []
+        info = mail = drafts = analyses = proposals = []
         if staff:
             proposals = cursor.execute('SELECT id,request_id,kind,text,status FROM service_chat_proposal WHERE request_id=ANY(%s) ORDER BY id', (ids,)).fetchall()
             analyses = cursor.execute(
@@ -53,8 +48,7 @@ def load_related(connection, ids: list[int], *, staff: bool) -> dict[str, dict[i
                                   (ids,)).fetchall()
             info = cursor.execute('SELECT * FROM service_additional_info WHERE request_id=ANY(%s) ORDER BY created_at,id',
                                   (ids,)).fetchall()
-            departments = cursor.execute('SELECT * FROM service_request_department WHERE request_id=ANY(%s)', (ids,)).fetchall()
-    return {'comments': _group(comments), 'history': _group(history), 'departments': _group(departments), 'info': _group(info), 'mail': _group(mail), 'drafts': _group(drafts), 'analyses': _group(analyses), 'proposals': _group(proposals)}
+    return {'history': _group(history), 'info': _group(info), 'mail': _group(mail), 'drafts': _group(drafts), 'analyses': _group(analyses), 'proposals': _group(proposals)}
 
 
 def _iso(value) -> str | None:
@@ -69,30 +63,19 @@ def serialize(row: dict[str, Any], related: dict[str, dict[int, list[dict[str, A
     item = {
         'id': f'CLM-{number:03d}', 'title': row['title'], 'createdAt': created,
         'intake': {'company': snapshot['company'], 'machine': snapshot['machine'],
-                   'symptom': row['message'], 'alarm': ', '.join(row['alarm_numbers']), 'occurred': '',
-                   'type': row['reason'], 'creator': f"{row['creator_login']} ({snapshot['company']})",
-                   'asset': None},
+                   'symptom': row['message'], 'alarm': ', '.join(row['alarm_numbers']),
+                   'type': row['reason'], 'creator': f"{row['creator_login']} ({snapshot['company']})"},
     }
-    comments = related['comments'].get(number, [])
     if not staff:
         item['status'] = CUSTOMER_STATUS[row['status']]
-        item['comments'] = [{'id': str(c['id']), 'by': '', 'kind': c['kind'], 'text': c['text'], 'at': _iso(c['created_at'])}
-                            for c in comments]
         item['history'] = [{'at': created, 'text': RECEIVED_PUBLIC}] + [
             {'at': _iso(h['at']), 'text': h['public_text']} for h in history]
         item['resolution'] = {'note': row['resolution']['note']} if row['resolution'] else None
-        # Once the request is closed, the titles of the manuals behind its analysis (never excerpts, causes or drafts).
-        reviewed = row['status'] == '종결' and row.get('ok_result')
-        # `viewable` says the original page can be opened; the stored reference itself is internal.
-        item['guides'] = [{'id': e['id'], 'title': e['title'], 'source': e['source'], 'viewable': bool(e.get('ref'))}
-                          for e in reviewed['evidence'] if e['kind'] == 'manual'] if reviewed else []
         return item
     ok = row.get('ok_result')
-    departments = {d['key']: d for d in related['departments'].get(number, [])}
+    departments = {d['key']: d for d in ok['departments']} if ok else {}
     item.update(
         status=row['status'],
-        comments=[{'id': str(c['id']), 'by': c['author'], 'kind': c['kind'], 'text': c['text'], 'at': _iso(c['created_at'])}
-                  for c in comments],
         history=[{'at': created, 'text': '접수'}] + [{'at': _iso(h['at']), 'text': h['text']} for h in history],
         mail=[{'kind': m['kind'], 'status': m['status'], 'at': _iso(m['sent_at'])} for m in related['mail'].get(number, [])],
         proposals=[{'id': p['id'], 'kind': p['kind'], 'text': p['text'], 'status': p['status']} for p in related['proposals'].get(number, [])],
@@ -107,8 +90,10 @@ def serialize(row: dict[str, Any], related: dict[str, dict[int, list[dict[str, A
         analysis=analysis_flow.analysis_view(ok) if ok else None,
         analysisRun={'status': row['run_status'], 'errorCode': row['run_error']} if row.get('run_status') else None,
         # The departments the AI picked: they become the recommended mail activities.
-        departments=[{'key': key, 'aiSelected': d['ai_selected'], 'reason': d['reason'], 'aiDraft': d['ai_draft']}
-                     for key in analysis_flow.DEPARTMENT_KEYS if (d := departments.get(key))] if ok else [],
+        departments=[{'key': key, 'aiSelected': key in departments,
+                      'reason': departments[key]['reason'] if key in departments else analysis_flow.NO_RECOMMENDATION,
+                      'aiDraft': departments[key]['draft'] if key in departments else ''}
+                     for key in analysis_flow.DEPARTMENT_KEYS] if ok else [],
     )
     return item
 

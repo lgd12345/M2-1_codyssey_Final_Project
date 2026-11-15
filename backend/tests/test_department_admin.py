@@ -13,14 +13,21 @@ from test_mail_drafts import DEV
 URL = f'{BASE}/departments'
 
 
-@pytest.fixture
-def clean(setup):
-    clients, _ = setup
-    yield clients
+def reset_departments():
+    # Browser checks may run first on this worker. Establish the baseline before, not only after a test.
     with psycopg.connect(DSN) as db:
         db.execute("DELETE FROM service_department WHERE key NOT IN ('service','quality','parts','sales')")
         db.execute("UPDATE service_department SET recipients=ARRAY[%s], active=TRUE, updated_by=NULL, updated_at=NULL", (DEV,))
-        db.execute("UPDATE service_department SET name='서비스' WHERE key='service'")
+        db.execute("UPDATE service_department SET name=CASE key WHEN 'service' THEN '서비스' WHEN 'quality' THEN '품질관리' "
+                   "WHEN 'parts' THEN '부품·자재' ELSE '영업' END")
+
+
+@pytest.fixture
+def clean(setup):
+    clients, _ = setup
+    reset_departments()
+    yield clients
+    reset_departments()
 
 
 def manage(clients):

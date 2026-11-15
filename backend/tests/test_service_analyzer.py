@@ -134,13 +134,13 @@ def test_case_search_unavailable_is_reported_when_no_case_search_succeeded():
     assert run(output(), registry)['case_search'] == 'unavailable'
 
 
-def test_prompt_contains_stored_facts_as_untrusted_data_and_instructions_forbid_approval():
+def test_prompt_contains_stored_facts_as_untrusted_data_and_requires_operator_actions():
     prompt = build_prompt(REQUEST)
     for fact in ['F400', '2023', 'ATC 교환 중 멈춥니다', '공구 교환 이상']:
         assert fact in prompt
     assert 'contact' not in prompt and '010' not in prompt
     assert '신뢰할 수 없는' in INSTRUCTIONS
-    for needed in ['search_cases', 'search_manual', 'service', 'quality', 'parts', 'sales', '승인']:
+    for needed in ['search_cases', 'search_manual', 'service', 'quality', 'parts', 'sales', '메일 발송', '종결']:
         assert needed in INSTRUCTIONS
 
 

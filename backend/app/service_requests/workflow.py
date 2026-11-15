@@ -1,4 +1,4 @@
-"""State transitions after filing: comments, additional information and closure.
+"""State transitions after filing: additional information and closure.
 
 A request is 접수됨 -> 처리 중 (its first analysis starts, see analysis.begin) -> 종결 (an operator writes the result).
 Every transition locks the request row first, so concurrent clicks cannot close twice. The server decides actors and times.
@@ -34,16 +34,6 @@ def lock(connection, number: int) -> dict[str, Any]:
     return row
 
 
-def add_comment(connection, number: int, actor, kind: str, text: str) -> None:
-    connection.execute('INSERT INTO service_comment(request_id,author_id,author,kind,text) VALUES (%s,%s,%s,%s,%s)',
-                       (number, actor.id, actor.login_id, kind, text))
-
-
-def comment(connection, number: int, actor, kind: str, text: str) -> None:
-    lock(connection, number)
-    add_comment(connection, number, actor, kind, text)
-
-
 def add_additional_info(connection, number: int, actor, text: str) -> None:
     """Operator-entered facts from outside the app. Only while the request is being processed."""
     row = lock(connection, number)
@@ -55,7 +45,7 @@ def add_additional_info(connection, number: int, actor, text: str) -> None:
 
 
 def resolve(connection, number: int, actor, note: str) -> None:
-    """Close the request with the result the customer will read (guide page and completion mail)."""
+    """Close the request with the result shown in the customer portal and completion mail."""
     row = lock(connection, number)
     if row['status'] != '처리 중' or connection.execute(
             "SELECT 1 FROM service_analysis WHERE request_id=%s AND status='running'", (number,)).fetchone():

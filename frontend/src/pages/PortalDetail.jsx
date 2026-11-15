@@ -1,21 +1,16 @@
-import React, { useState } from 'react'
+import React from 'react'
 import { customerStatus } from '../domain/workflow.js'
 import { customerEvents } from '../domain/actions.js'
 import { formatDate, formatTime } from '../ui.jsx'
-import { SourcePageButton } from './SourcePage.jsx'
 
 const TONE = { 접수됨: 'neutral', '처리 중': 'blue', 완료: 'green' }
-const TABS = [['history', '이력'], ['guides', '기술 가이드']]
 
-// TRUMPF 서비스 케이스 상세: 요청 번호·접수자·접수일·기계·설명과 기술 가이드·이력 탭.
-// 고객은 접수한 요청의 진행을 확인할 뿐 접수 이후에 하는 작업은 없다. AI 분석, 내부 메모, 부서 초안은 나오지 않는다.
+// 고객은 접수한 요청의 진행과 처리 결과만 확인한다. AI 분석·매뉴얼·내부 정보는 표시하지 않는다.
 export function PortalDetail({ item }) {
-  const [tab, setTab] = useState('history')
   if (!item) return <section className="center-card"><h1>서비스 요청을 찾을 수 없습니다</h1><a href="#/portal">내 서비스 요청으로</a></section>
 
   const status = customerStatus(item)
   const done = status === '완료'
-  const guides = item.guides ?? []
   const events = customerEvents(item)
 
   return (
@@ -37,36 +32,16 @@ export function PortalDetail({ item }) {
 
       {done && <div className="notice ok" role="status"><strong>이 서비스 요청은 완료되었습니다.</strong>{item.resolution?.note && <p>{item.resolution.note}</p>}</div>}
 
-      <div className="quick" role="tablist" aria-label="요청 상세">
-        {TABS.map(([key, label]) => <button key={key} role="tab" aria-selected={tab === key} className={tab === key ? 'quick-btn active' : 'quick-btn'} onClick={() => setTab(key)}>{label}</button>)}
-      </div>
-
-      <div className="panel pd-panel" role="tabpanel">
-        {tab === 'history' && (
-          <>
-            <h2>요청 이력</h2>
-            <ul className="activity portal-events">
-              {events.map((e) => (
-                <li key={e.id} className={e.message ? 'comment' : 'event'}>
-                  <div><p className="comment-meta"><strong>{e.who}</strong> <time>{formatTime(e.at)}</time></p><p className="comment-text">{e.text}</p></div>
-                </li>
-              ))}
-            </ul>
-          </>
-        )}
-        {tab === 'guides' && (
-          <>
-            <h2>기술 가이드</h2>
-            {guides.length === 0 ? <p className="muted">입력하신 내용에 해당하는 기술 가이드가 아직 없습니다.</p> : (
-              <>
-                <p className="muted small">AI가 접수 내용을 바탕으로 찾은 자료입니다. 스스로 점검해 볼 때 참고해 주세요.</p>
-                <ul className="guides">{guides.map((g) => <li key={g.id}><div><strong>{g.title}</strong><small>{g.source}</small></div>{g.viewable ? <SourcePageButton itemId={item.id} evidenceId={g.id} title={g.title} /> : <span className="muted small">원본 페이지 정보 없음</span>}</li>)}</ul>
-              </>
-            )}
-          </>
-        )}
-      </div>
-
+      <section className="panel pd-panel" aria-labelledby="pd-history-title">
+        <h2 id="pd-history-title">요청 이력</h2>
+        <ul className="activity portal-events">
+          {events.map((e) => (
+            <li key={e.id} className="event">
+              <div><p className="comment-meta"><strong>{e.who}</strong> <time>{formatTime(e.at)}</time></p><p className="comment-text">{e.text}</p></div>
+            </li>
+          ))}
+        </ul>
+      </section>
     </article>
   )
 }

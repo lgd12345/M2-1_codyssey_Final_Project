@@ -1,6 +1,6 @@
 """Explicitly approved current-DB acceptance test; never run in default regression.
 
-Uses existing admin/user accounts, membership and labelled verification equipment.
+Uses existing admin/user accounts, membership and the shared model catalogue.
 Does not migrate, reset databases, provision accounts, or touch the RAG corpus.
 Only its randomly namespaced requests and temporary foreign fixtures are removed.
 """
@@ -46,20 +46,24 @@ def prepare(dsn: str) -> dict:
         if {row[1]: (row[2],row[3]) for row in users} != {'admin': ('admin',True), 'user': ('user',True)}:
             raise ValueError('Required existing accounts/roles are not ready')
         fixture['accounts'] = {row[1]: str(row[0]) for row in users}
-        equipment = connection.execute('''SELECT e.id FROM service_equipment e
-            JOIN service_company_member m ON m.company_id=e.company_id
-            WHERE m.user_id=%s AND e.machine=%s AND e.serial=%s''',
-            (fixture['accounts']['user'], 'E2E 검증용 장비', 'E2E-LIVE-USER-001')).fetchone()
+        for account in fixture['accounts'].values():
+            if not connection.execute('SELECT company_id FROM service_company_member WHERE user_id=%s', (account,)).fetchone():
+                raise ValueError('Both existing accounts need company membership for intake')
+        equipment = connection.execute('SELECT id,machine FROM service_equipment ORDER BY machine,id LIMIT 1').fetchone()
         if not equipment:
-            raise ValueError('Approved user membership/labelled verification equipment is not ready')
+            raise ValueError('Import the shared model catalogue first')
         fixture['user_equipment_id'] = str(equipment[0])
         fixture['company_name'] = 'E2E 타사 접근제한 검증 ' + fixture['run_tag'][:8]
         fixture['other_company_id'] = str(connection.execute(
             'INSERT INTO service_company(name) VALUES (%s) RETURNING id', (fixture['company_name'],)).fetchone()[0])
-        fixture['other_serial'] = 'E2E-ACCESS-' + fixture['run_tag']
-        fixture['other_equipment_id'] = str(connection.execute('''INSERT INTO service_equipment(company_id,machine,serial)
-            VALUES (%s,%s,%s) RETURNING id''', (fixture['other_company_id'], 'E2E 접근제한 검증용 장비',
-            fixture['other_serial'])).fetchone()[0])
+        from psycopg.types.json import Jsonb
+        message = '[LIVE-E2E:' + fixture['run_tag'] + '] foreign-company fixture'
+        number = connection.execute(
+            '''INSERT INTO service_request(equipment_id,company_id,created_by,title,reason,message,equipment_snapshot)
+               VALUES (%s,%s,%s,%s,%s,%s,%s) RETURNING id''',
+            (equipment[0], fixture['other_company_id'], fixture['accounts']['admin'], message,
+             '공구 교환 이상', message, Jsonb({'machine': equipment[1], 'company': fixture['company_name']}))).fetchone()[0]
+        fixture['foreign_request_id'] = f'CLM-{number:03d}'
     return fixture
 
 
@@ -71,10 +75,6 @@ def cleanup(dsn: str, fixture: dict) -> int:
         removed = connection.execute('''DELETE FROM service_request
             WHERE left(message,length(%s))=%s AND created_by=ANY(%s)''',
             (marker, marker, [UUID(value) for value in fixture['accounts'].values()])).rowcount
-        equipment = connection.execute('DELETE FROM service_equipment WHERE id=%s AND company_id=%s AND serial=%s',
-            (fixture['other_equipment_id'], fixture['other_company_id'], fixture['other_serial']))
-        if equipment.rowcount != 1:
-            raise ValueError('Temporary equipment cleanup scope mismatch')
         company = connection.execute('DELETE FROM service_company WHERE id=%s AND name=%s',
             (fixture['other_company_id'], fixture['company_name']))
         if company.rowcount != 1:
@@ -105,7 +105,7 @@ def main() -> int:
                    'LIVE_E2E_EXPECTED_USER_ID': fixture['accounts']['user'],
                    'LIVE_E2E_EXPECTED_ADMIN_ID': fixture['accounts']['admin'],
                    'LIVE_E2E_USER_EQUIPMENT_ID': fixture['user_equipment_id'],
-                   'LIVE_E2E_OTHER_EQUIPMENT_ID': fixture['other_equipment_id']}
+                   'LIVE_E2E_FOREIGN_REQUEST_ID': fixture['foreign_request_id']}
             print('Running explicit current-DB E2E; not an isolated regression database.', flush=True)
             process = subprocess.Popen([node, str(cli), 'test', '--config', 'playwright.live.config.js'], cwd=frontend, env=env)
             try:

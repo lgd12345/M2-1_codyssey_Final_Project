@@ -34,8 +34,9 @@ test('customer history shows only server-provided customer wording and never int
     comments: [{ id: '1', by: '', kind: 'public', text: '확인 중입니다.', at: '2026-11-14T03:00:00Z' }],
   })
   assert.deepEqual(events.map(event => [event.who, event.text]), [
-    ['서비스 담당자', '확인 중입니다.'], ['시스템', '처리를 시작했습니다.'], ['시스템', '서비스 요청이 접수되었습니다.']])
-  assert.equal(events.filter(event => event.message).length, 1)
+    ['시스템', '처리를 시작했습니다.'], ['시스템', '서비스 요청이 접수되었습니다.']])
+  assert.equal(events.filter(event => event.message).length, 0)
+  assert.equal(customerEvents({ history: [] }).length, 0)
 })
 
 test('AI answers cannot be rated: those action types are not supported', () => {

@@ -43,13 +43,7 @@ function RequestCard({ item }) {
         <dl className="qa">
           <div><dt>접수 사유</dt><dd>{intake.type}</dd></div>
           <div><dt>기종</dt><dd>{intake.company} · {intake.machine}</dd></div>
-          <div><dt>발생 상황</dt><dd>{intake.occurred || '미입력'}</dd></div>
           <div><dt>메시지</dt><dd className="pre">{intake.symptom}</dd></div>
-          {intake.asset && (
-            <div className="asset"><dt>장비 · 보증</dt>
-              <dd><span className={intake.asset.warranty === '보증 만료' ? 'lozenge lozenge-red' : 'lozenge lozenge-green'}>{intake.asset.warranty}</span> {intake.asset.warrantyNote}<br />
-                <small>설치 {intake.asset.installDate} · 출하 {intake.asset.shipDate} · 이전 서비스 {intake.asset.previous}건</small></dd></div>
-          )}
         </dl>
       )}
     </div>
@@ -60,18 +54,18 @@ function StatusBadge({ item }) {
   return <div className="status-menu"><span className={`status-btn status-${item.status === '종결' ? 'green' : 'blue'}`} role="status" aria-label={`상태 ${item.status}`}>{item.status}</span></div>
 }
 
-// 처리 결과를 한 번 적으면 고객의 안내 문서와 완료 메일에 함께 나간다. 종결은 운영진이 직접 한다.
+// 처리 결과는 고객 포털과 완료 메일에 전달된다. 종결은 운영진이 직접 한다.
 function ResolvePanel({ item, dispatch }) {
   const [note, setNote] = useState('')
   if (item.status === '종결') {
-    return <div className="side-panel approved"><h3>종결됨</h3><p><strong>{item.resolution.by}</strong> · {formatTime(item.resolution.at)}</p><p className="small pre">{item.resolution.note}</p><p className="muted small">고객 포털에서 완료로 표시되고, 처리 결과와 안내 문서가 보입니다.</p></div>
+    return <div className="side-panel resolved"><h3>종결됨</h3><p><strong>{item.resolution.by}</strong> · {formatTime(item.resolution.at)}</p><p className="small pre">{item.resolution.note}</p><p className="muted small">고객 포털에서 완료로 표시되고, 처리 결과가 보입니다.</p></div>
   }
   if (isAnalysisRunning(item)) return <div className="side-panel"><h3>분석 중</h3><p className="muted small">분석이 끝나면 처리 결과를 적어 종결할 수 있습니다.</p></div>
-  if (!canResolve(item)) return <div className="side-panel"><h3>처리 대기</h3><p className="muted small">‘분석해줘’로 분석을 시작하면 처리 중이 되고, 그 뒤에 처리 결과를 적어 종결할 수 있습니다.</p></div>
+  if (!canResolve(item)) return <div className="side-panel"><h3>처리 대기</h3><p className="muted small">‘분석 시작’을 선택하면 처리 중이 되고, 그 뒤에 처리 결과를 적어 종결할 수 있습니다.</p></div>
   return (
-    <div className="side-panel approval">
+    <div className="side-panel resolution">
       <h3>처리 결과 · 종결</h3>
-      <p className="small">처리 결과는 고객에게 안내 문서와 완료 메일로 함께 전달됩니다.</p>
+      <p className="small">처리 결과는 고객 포털과 완료 메일로 전달됩니다.</p>
       <label className="small">처리 결과 (고객에게 보입니다)<textarea rows={4} maxLength={2000} value={note} onChange={(e) => setNote(e.target.value)} /></label>
       <button className="primary" disabled={!dispatch || !note.trim()} onClick={() => dispatch({ type: 'RESOLVE', id: item.id, note: note.trim() })}>요청 종결</button>
     </div>

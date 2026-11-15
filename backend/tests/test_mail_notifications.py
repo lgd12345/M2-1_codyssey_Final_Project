@@ -93,7 +93,7 @@ def test_an_internal_action_sends_nothing(mailer, recorded_mail, use_runner):
     use_runner(Runner(good_result()))
     identity = file_request(mailer)
     assert start(clients, identity).status_code == 202
-    assert post(clients, 'staff', identity, 'comments', kind='internal', text='메모').status_code == 201
+    assert post(clients, 'staff', identity, 'additional-info', text='추가 확인 정보').status_code == 201
     assert post(clients, 'staff', identity, 'additional-info', text='전화 확인').status_code == 201
     assert [kind for kind, *_ in rows(identity)] == ['received', 'approved']  # only the start of processing, once
 

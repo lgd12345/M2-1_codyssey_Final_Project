@@ -97,7 +97,7 @@ function ChatSession({ item, csrf, initial, onChanged, dispatch, onAnalyze, anal
       </div>
       {error && <p className="error" role="alert">{friendly(error)}</p>}
       <div className="chips" aria-label="추천 질문">
-        {startable && <button type="button" className="pill primary-pill" disabled={analyzing} onClick={() => onAnalyze(item.id)}>{analyzing ? '분석 요청 중…' : item.analysisRun?.status === 'failed' ? '분석 다시 시도' : '분석해줘'}</button>}
+        {startable && <button type="button" className="pill primary-pill" disabled={analyzing} onClick={() => onAnalyze(item.id)}>{analyzing ? '분석 요청 중…' : item.analysisRun?.status === 'failed' ? '분석 다시 시도' : '분석 시작'}</button>}
         {again && <button type="button" className="pill" onClick={() => dispatch({ type: 'REANALYZE', id: item.id })}>재분석</button>}
         {open && !closed && CHIPS.map((chip) => <button key={chip.label} type="button" className="pill" disabled={busy || full} onClick={() => send(chip.text)}>{chip.label}</button>)}
       </div>
