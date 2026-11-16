@@ -31,16 +31,16 @@ async function chooseMachine(page) {
   await page.getByRole('listbox', { name: '기종 목록', exact: true }).getByRole('option', { name: 'F400', exact: true }).click()
 }
 
-// Customer intake through the real form. `portal` false = the operator's own "새 요청" modal.
-async function createRequest(page, { reason = '공구 교환 이상', message, portal = true }) {
-  await page.goto(portal ? '/#/portal/new' : '/#/cases/new')
+// Only customers file requests; operators handle the requests already received.
+async function createRequest(page, { reason = '공구 교환 이상', message }) {
+  await page.goto('/#/portal/new')
   await page.getByRole('combobox', { name: '접수 사유 *', exact: true }).selectOption(reason)
   await chooseMachine(page)
   await page.getByLabel('메시지 *', { exact: true }).fill(message)
   const response = page.waitForResponse(r => r.url().endsWith(API) && r.request().method() === 'POST')
   await page.getByRole('button', { name: '전송', exact: true }).click()
   const created = await (await response).json()
-  await expect(page).toHaveURL(new RegExp(`#/${portal ? 'portal' : 'cases'}/${created.id}$`))
+  await expect(page).toHaveURL(new RegExp(`#/portal/${created.id}$`))
   return created.id
 }
 
@@ -273,7 +273,7 @@ test('intake form: reason, model and message submit directly with the logged-in 
   await closeAll(customer)
 })
 
-test('an account without a company cannot file requests and is told why; operators can file on behalf of equipment', async ({ browser }) => {
+test('an account without a company cannot file requests; operators cannot file even through direct URLs or the API', async ({ browser }) => {
   const nobody = await session(browser, process.env.E2E_UNASSIGNED, 'portal')
   await expect(nobody.page.getByText('고객사 소속이 등록되지 않았습니다.', { exact: false })).toBeVisible()
   await expect(nobody.page.getByText('조건에 맞는 서비스 요청이 없습니다.')).toBeVisible()
@@ -289,15 +289,23 @@ test('an account without a company cannot file requests and is told why; operato
   await closeAll(nobody)
 
   const staff = await session(browser, process.env.E2E_STAFF, 'cases')
-  const id = await createRequest(staff.page, { message: '운영진이 대신 접수한 요청입니다.', portal: false })
-  await expect(staff.page.getByRole('heading', { level: 1 })).toBeVisible()
-  await expect(staff.page.getByRole('button', { name: '분석 시작', exact: true })).toBeVisible()
-  await expect(staff.page.getByText('운영진이 대신 접수한 요청입니다.').first()).toBeVisible()
-  expect((await serverItem(staff.page, id)).status).toBe('접수됨')
-  await staff.page.goto('/#/cases/new')
-  await expect(staff.page.getByRole('dialog', { name: '새 서비스 요청' })).toBeVisible()
-  await staff.page.keyboard.press('Escape')
-  await expect(staff.page).toHaveURL(/#\/cases$/)
+  await expect(staff.page.getByRole('link', { name: '새 요청', exact: true })).toHaveCount(0)
+  for (const hash of ['cases/new', 'portal/new', 'portal']) {
+    await staff.page.goto(`/#/${hash}`)
+    await expect(staff.page).toHaveURL(/#\/cases$/)
+    await expect(staff.page.getByRole('dialog')).toHaveCount(0)
+    await expect(staff.page.getByRole('link', { name: '새 서비스 요청', exact: true })).toHaveCount(0)
+  }
+  const customer = await session(browser, process.env.E2E_CUSTOMER, 'portal')
+  const models = (await (await customer.page.request.get(`${API}/context`)).json()).equipment
+  const denied = await staff.page.request.post(API, {
+    headers: { Origin: new URL(staff.page.url()).origin, 'X-CSRF-Token': (await (await staff.page.request.get('/api/v1/auth/me')).json()).csrf_token },
+    data: { equipment_id: models[0].id, reason: '공구 교환 이상', message: '차단되어야 하는 운영진 접수' },
+  })
+  expect(denied.status()).toBe(403)
+  expect((await denied.json()).code).toBe('CUSTOMER_REQUIRED')
+  expect((await (await staff.page.request.get(API)).json()).requests.filter(r => r.intake.symptom === '차단되어야 하는 운영진 접수')).toHaveLength(0)
+  await closeAll(customer)
   expect(staff.errors).toEqual([])
   await closeAll(staff)
 })
@@ -467,12 +475,8 @@ test('operator queue: counts per status, search, every filter, empty state and n
   await expect(page.getByText('총 0건')).toBeVisible()
   await chips.getByRole('button', { name: '모두 지우기' }).click()
 
-  // Navigation: the "새 요청" button opens the form; a row opens the detail; "뒤로" returns.
-  await page.getByRole('link', { name: '새 요청', exact: true }).click()
-  await expect(page.getByRole('dialog', { name: '새 서비스 요청' })).toBeVisible()
-  // Escape is idempotent: repeat until the key handler (attached just after the dialog paints) has taken it.
-  await expect.poll(async () => { await page.keyboard.press('Escape'); return new URL(page.url()).hash }).toBe('#/cases')
-  await expect(page.getByRole('dialog')).toHaveCount(0)
+  // Operators cannot file; a row opens the detail and "뒤로" returns.
+  await expect(page.getByRole('link', { name: '새 요청', exact: true })).toHaveCount(0)
   await page.getByRole('link', { name: `${analysed} 상세 보기` }).click()
   await expect(page).toHaveURL(new RegExp(`#/cases/${analysed}$`))
   await page.getByRole('link', { name: '← 뒤로' }).click()
@@ -624,6 +628,37 @@ test('closing: customer receives the result but never manuals or original pages'
 // ---------------------------------------------------------------------------------------------------------------
 // Narrow screens and failures
 // ---------------------------------------------------------------------------------------------------------------
+
+test('operator requests use readable mobile cards, usable filters and a status above the detail at 320–1280px', async ({ browser }) => {
+  const customer = await session(browser, process.env.E2E_CUSTOMER, 'portal')
+  const staff = await session(browser, process.env.E2E_STAFF, 'cases')
+  const id = await createRequest(customer.page, { message: '반응형 확인 ' + 'LONG_IDENTIFIER_'.repeat(40) })
+  await staff.page.reload()  // The list was opened before intake; explicitly fetch the newly created request.
+  for (const width of [320, 390, 768, 1280]) {
+    await staff.page.setViewportSize({ width, height: 900 })
+    await staff.page.goto('/#/cases')
+    await staff.page.getByRole('searchbox', { name: '검색' }).fill(id)
+    const row = rowFor(staff.page, id)
+    await expect(row).toBeVisible()
+    expect(await overflowing(staff.page), `request list ${width}`).toEqual([])
+    if (width <= 900) {
+      expect(await row.evaluate(r => getComputedStyle(r).display)).toBe('grid')
+      expect(await row.evaluate(r => r.scrollWidth <= r.clientWidth + 1)).toBe(true)
+      expect(await staff.page.getByLabel('시작일', { exact: true }).evaluate(e => e.getBoundingClientRect().width)).toBeLessThan(width / 2)
+      const queue = staff.page.getByRole('button', { name: /^모든 요청/ })
+      expect(await queue.evaluate(e => e.getBoundingClientRect().height)).toBeGreaterThanOrEqual(44)
+    }
+    await staff.page.getByRole('combobox', { name: '기계', exact: true }).selectOption('F400')
+    await expect(row).toBeVisible()
+    await staff.page.getByRole('link', { name: `${id} 상세 보기` }).click()
+    const badge = staff.page.getByRole('status', { name: '상태 접수됨' })
+    await expect(badge).toBeVisible()
+    expect(await badge.evaluate(e => e.getBoundingClientRect().top)).toBeLessThan(await staff.page.locator('.request-card').evaluate(e => e.getBoundingClientRect().top))
+    expect(await overflowing(staff.page), `request detail ${width}`).toEqual([])
+  }
+  expect(customer.errors.concat(staff.errors)).toEqual([])
+  await closeAll(customer, staff)
+})
 
 test('every screen fits a phone-sized viewport without sideways scrolling and keeps its main actions reachable', async ({ browser }) => {
   const phone = { viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true }

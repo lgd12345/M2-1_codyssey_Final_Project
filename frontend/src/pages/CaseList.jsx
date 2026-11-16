@@ -3,12 +3,11 @@ import { caseHref } from '../navigation.js'
 import { STATUSES, statusCounts } from '../domain/workflow.js'
 import { CALL_REASONS } from '../domain/catalog.js'
 import { Lozenge, formatDate } from '../ui.jsx'
-import { NewCaseModal } from './NewCaseModal.jsx'
 
 const unique = (items) => [...new Set(items)]
 
 // Jira의 큐 사이드바(건수 포함)와 TRUMPF "My service cases"(기간·필터·결과 표)를 합친 목록.
-export function CaseList({ cases, onCreate, equipment, modalOpen }) {
+export function CaseList({ cases }) {
   const [queue, setQueue] = useState('전체')
   const [search, setSearch] = useState('')
   const [filters, setFilters] = useState({ machine: '', creator: '', type: '', from: '', to: '' })
@@ -53,7 +52,6 @@ export function CaseList({ cases, onCreate, equipment, modalOpen }) {
       <section className="queue-main" aria-labelledby="list-title">
         <div className="page-head row">
           <div><p className="page-eyebrow">CLAIM OPERATIONS</p><h1 id="list-title" className="page-title">서비스 요청</h1><p className="page-lead">접수된 요청을 분석하고, 필요한 부서에 메일로 전달한 뒤 처리 결과를 적어 종결합니다.</p></div>
-          <a className="button primary" href="#/cases/new">새 요청</a>
         </div>
 
         <div className="filters">
@@ -73,19 +71,19 @@ export function CaseList({ cases, onCreate, equipment, modalOpen }) {
         )}
 
         <div className="panel table-wrap">
-          <table className="results">
-            <thead><tr><th>요청 번호</th><th>요약</th><th>기계</th><th>유형</th><th>상태</th><th>접수자</th><th>접수일</th><th><span className="sr-only">상세</span></th></tr></thead>
-            <tbody>
+          <table className="results" role="table" aria-label="서비스 요청 목록">
+            <thead role="rowgroup"><tr role="row"><th>요청 번호</th><th>요약</th><th>기계</th><th>유형</th><th>상태</th><th>접수자</th><th>접수일</th><th><span className="sr-only">상세</span></th></tr></thead>
+            <tbody role="rowgroup">
               {shown.length === 0 && <tr><td colSpan={8} className="empty">조건에 맞는 요청이 없습니다.</td></tr>}
               {shown.map((c) => (
-                <tr key={c.id}>
-                  <td><a href={caseHref(c.id)} className="key">{c.id}</a></td>
-                  <td><a href={caseHref(c.id)} className="title-link">{c.title}</a></td>
-                  <td>{c.intake.machine}</td>
-                  <td>{c.intake.type}</td>
-                  <td><Lozenge status={c.status} /></td>
-                  <td>{c.intake.creator}</td>
-                  <td>{formatDate(c.createdAt)}</td>
+                <tr key={c.id} role="row">
+                  <td data-label="요청 번호"><a href={caseHref(c.id)} className="key">{c.id}</a></td>
+                  <td data-label="요약"><a href={caseHref(c.id)} className="title-link">{c.title}</a></td>
+                  <td data-label="기계">{c.intake.machine}</td>
+                  <td data-label="유형">{c.intake.type}</td>
+                  <td data-label="상태"><Lozenge status={c.status} /></td>
+                  <td data-label="접수자">{c.intake.creator}</td>
+                  <td data-label="접수일">{formatDate(c.createdAt)}</td>
                   <td><a href={caseHref(c.id)} aria-label={`${c.id} 상세 보기`} className="arrow">›</a></td>
                 </tr>
               ))}
@@ -95,7 +93,6 @@ export function CaseList({ cases, onCreate, equipment, modalOpen }) {
         </div>
       </section>
 
-      {modalOpen && <NewCaseModal onCreate={onCreate} equipment={equipment} />}
     </div>
   )
 }

@@ -80,7 +80,7 @@ export function PortalList({ cases, company, onCreate, equipment, modalOpen }) {
         <p className="table-foot muted small">총 {shown.length}건</p>
       </div>
 
-      {modalOpen && <NewCaseModal onCreate={onCreate} equipment={equipment} portal />}
+      {modalOpen && <NewCaseModal onCreate={onCreate} equipment={equipment} />}
     </section>
   )
 }

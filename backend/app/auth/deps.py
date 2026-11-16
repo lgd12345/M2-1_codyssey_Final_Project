@@ -77,3 +77,14 @@ def require_operator(session: SessionInfo = Depends(require_user)) -> SessionInf
 
 def require_operator_csrf(session: SessionInfo = Depends(require_csrf)) -> SessionInfo:
     return require_operator(session)
+
+
+class CustomerRequired(AuthError):
+    status_code, code = 403, 'CUSTOMER_REQUIRED'
+    message = '서비스 요청 접수는 고객 계정만 이용할 수 있습니다.'
+
+
+def require_customer_csrf(session: SessionInfo = Depends(require_csrf)) -> SessionInfo:
+    if session.user.role != 'user':
+        raise CustomerRequired()
+    return session

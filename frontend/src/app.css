@@ -346,3 +346,55 @@ input:not([type='checkbox']), select, textarea { border-radius: 8px; }
 .proposal-card .actions { display: flex; justify-content: flex-end; gap: 0.5rem; }
 .ai-button { border: 1px solid var(--blue-fg, #0052cc); color: var(--blue-fg, #0052cc); background: #fff; border-radius: var(--radius); padding: 0.35rem 0.9rem; font-weight: 600; cursor: pointer; }
 .ai-button:disabled { opacity: 0.55; cursor: default; }
+
+/* 서비스 요청: 넓은 화면은 표, 휴대폰은 같은 행을 읽기 쉬운 카드로 표시한다. */
+.queue-main, .issue-side, .pd-head > div { min-width: 0; }
+.crumbs .status-menu { margin-left: auto; }
+.crumbs .status-btn { display: inline-block; border-radius: 8px; white-space: nowrap; }
+.issue .pre, .portal-detail .pre, .pd-desc { overflow-wrap: anywhere; }
+@media (max-width: 1100px) {
+  .queue-side ul { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0.4rem; }
+  .queue-item { min-height: 44px; align-items: center; gap: 0.4rem; border: 1px solid var(--border); border-radius: 8px; }
+  .queue-side h2 { margin-bottom: 0.6rem; }
+}
+@media (max-width: 900px) {
+  .app-shell > main.app-main { width: calc(100% - 32px); padding-bottom: 40px; }
+  .queue-layout { gap: 1rem; }
+  .queue-item { flex-direction: column; justify-content: center; gap: 0; padding: 0.45rem 0.1rem; font-size: 0.78rem; }
+  .page-head.row { align-items: flex-start; }
+  .queue-main .page-lead { margin-bottom: 1rem; }
+  .filters { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.6rem; }
+  .filters label { min-width: 0; }
+  .filters input, .filters select { min-width: 0; max-width: 100%; width: 100%; }
+  .filters .search { width: 100%; grid-column: 1 / -1; }
+  .queue-main .table-wrap { overflow: visible; border: 0; background: transparent; }
+  .queue-main .results, .queue-main .results tbody { display: block; }
+  .queue-main .results thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+  .queue-main .results tbody { display: grid; gap: 0.8rem; }
+  .queue-main .results tbody tr { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); padding: 0.8rem; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); }
+  .queue-main .results td { min-width: 0; padding: 0.4rem; border: 0; white-space: normal; overflow-wrap: anywhere; }
+  .queue-main .results td::before { content: attr(data-label); display: block; margin-bottom: 0.2rem; color: var(--muted); font-size: 0.72rem; }
+  .queue-main .results td:nth-child(2), .queue-main .results td:last-child { grid-column: 1 / -1; min-width: 0; }
+  .queue-main .results td:last-child::before { display: none; }
+  .queue-main .results .title-link { display: block; font-size: 1rem; font-weight: 600; }
+  .queue-main .results .arrow { display: flex; align-items: center; justify-content: center; min-height: 44px; margin-top: 0.3rem; border-top: 1px solid var(--border); font-size: 0.9rem; color: var(--link); }
+  .queue-main .results .arrow::after { content: ' 상세 보기'; white-space: pre; }
+  .issue-grid { gap: 1rem; }
+  .request-head { flex-wrap: wrap; }
+  .request-head p { min-width: 0; flex-basis: calc(100% - 3rem); }
+  .request-head .linkish { margin-left: 2.2rem; min-height: 44px; }
+  .request-card, .ai-box, .pd-panel { padding: 0.8rem; }
+  .chat-msg { max-width: 100%; min-width: 0; }
+  .chat-form .actions, .ai-compose { flex-wrap: wrap; gap: 0.5rem; }
+  .ai-compose input { min-width: 0; flex-basis: 100%; }
+  .detail-list div { grid-template-columns: 4.5rem minmax(0, 1fr); }
+  .pd-meta { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.8rem; }
+  .pd-meta div { min-width: 0; }
+  .modal-backdrop { padding: 1rem 0.6rem; }
+  .modal { padding: 1.2rem; }
+}
+@media (min-width: 701px) and (max-width: 900px) {
+  .queue-main .results tbody { grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; }
+  .queue-main .results tr:has(.empty) { grid-column: 1 / -1; }
+  .queue-item { flex-direction: row; justify-content: space-between; padding: 0.5rem 0.7rem; font-size: 0.85rem; }
+}

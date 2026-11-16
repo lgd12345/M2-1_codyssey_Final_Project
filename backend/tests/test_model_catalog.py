@@ -33,13 +33,15 @@ def test_import_is_idempotent_models_shared_but_requests_remain_company_private(
             import_models(db, path)
             assert db.execute("SELECT count(*) FROM service_equipment WHERE machine LIKE 'VMCT-%'").fetchone()[0] == 2
         contexts = [clients[who].get(f'{BASE}/context').json() for who in ['alice', 'bob', 'staff']]
-        assert contexts[0]['equipment'] == contexts[1]['equipment'] == contexts[2]['equipment']
+        assert contexts[0]['equipment'] == contexts[1]['equipment']
+        assert contexts[2] == {'company': None, 'equipment': [], 'can_submit': False}
         model = next(m for m in contexts[0]['equipment'] if m['machine'] == 'VMCT-01')
         assert set(model) == {'id', 'machine'}
         item = clients['alice'].post(BASE, json=body(model['id'])).json()
         assert item['intake']['machine'] == 'VMCT-01'
         assert 'serial' not in item['intake']
         assert clients['bob'].get(f"{BASE}/{item['id']}").status_code == 404
+        assert clients['staff'].get(f"{BASE}/{item['id']}").status_code == 200
         assert clients['alice'].post(BASE, json={**body(model['id']), 'reason': '기계 고장'}).status_code == 422
     finally:
         with psycopg.connect(DSN) as db:

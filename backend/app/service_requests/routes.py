@@ -12,7 +12,7 @@ import psycopg
 from psycopg.rows import dict_row
 from psycopg.types.json import Jsonb
 
-from app.auth.deps import database, require_user, require_csrf, require_operator_csrf
+from app.auth.deps import database, require_user, require_customer_csrf, require_operator_csrf
 from app.auth.service import AuthError, SessionInfo
 from app.mail import outbox as mail_outbox
 from app.mail.deps import get_mail_sender
@@ -84,6 +84,8 @@ def access_company(connection, session):
 
 @router.get('/context')
 def context(session: SessionInfo = Depends(require_user)):
+    if session.user.role != 'user':
+        return {'company': None, 'equipment': [], 'can_submit': False}
     with request_database() as connection:
         company = membership(connection, session)
         if not company:
@@ -94,7 +96,7 @@ def context(session: SessionInfo = Depends(require_user)):
 
 
 @router.post('', status_code=201)
-def create(body: Intake, background: BackgroundTasks, session: SessionInfo = Depends(require_csrf),
+def create(body: Intake, background: BackgroundTasks, session: SessionInfo = Depends(require_customer_csrf),
            sender=Depends(get_mail_sender)):
     with request_database() as connection:
         company = membership(connection, session)
@@ -113,7 +115,7 @@ def create(body: Intake, background: BackgroundTasks, session: SessionInfo = Dep
                                   body.reason, body.message, Jsonb(body.alarm_numbers),
                                   Jsonb(snapshot))).fetchone()
         queue_mail(connection, background, sender, row['id'], 'received')
-        return views.fetch_items(connection, 'r.id=%s', (row['id'],), staff=session.user.role == 'admin')[0]
+        return views.fetch_items(connection, 'r.id=%s', (row['id'],), staff=False)[0]
 
 
 @router.get('')

@@ -10,7 +10,7 @@ export function CaseDetail({ item, dispatch, me, onAnalyze, analyzing, analysisE
   if (!item) return <section className="center-card"><h1>요청을 찾을 수 없습니다</h1><a href="#/cases">대기열로</a></section>
   return (
     <article className="issue" aria-labelledby="detail-title">
-      <div className="crumbs"><a href="#/cases">← 뒤로</a><span className="key">{item.id}</span></div>
+      <div className="crumbs"><a href="#/cases">← 뒤로</a><span className="key">{item.id}</span><StatusBadge item={item} /></div>
       <div className="issue-grid">
         <div className="issue-main">
           <h1 id="detail-title">{item.title}</h1>
@@ -20,7 +20,6 @@ export function CaseDetail({ item, dispatch, me, onAnalyze, analyzing, analysisE
           <Activity item={item} />
         </div>
         <aside className="issue-side" aria-label="상태와 세부 정보">
-          <StatusBadge item={item} />
           <ResolvePanel item={item} dispatch={dispatch} />
           <DetailsPanel item={item} />
         </aside>

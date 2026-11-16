@@ -1,10 +1,10 @@
 import React, { useLayoutEffect, useRef, useState } from 'react'
 import { CALL_REASONS } from '../domain/catalog.js'
-import { caseHref, portalHref } from '../navigation.js'
+import { portalHref } from '../navigation.js'
 import { ModelPicker } from './ModelPicker.jsx'
 
-export function NewCaseModal({ onCreate, equipment = [], portal = false }) {
-  const home = portal ? '/portal' : '/cases'
+export function NewCaseModal({ onCreate, equipment = [] }) {
+  const home = '/portal'
   const [reason, setReason] = useState('')
   const [equipmentId, setEquipmentId] = useState('')
   const [message, setMessage] = useState('')
@@ -27,7 +27,7 @@ export function NewCaseModal({ onCreate, equipment = [], portal = false }) {
     submitting.current = true; setBusy(true); setError('')
     try {
       const created = await onCreate({ equipment_id: equipmentId, reason, message: message.trim() })
-      window.location.hash = (portal ? portalHref(created.id) : caseHref(created.id)).slice(1)
+      window.location.hash = portalHref(created.id).slice(1)
     } catch (failure) { setError(failure.message) }
     finally { submitting.current = false; setBusy(false) }
   }

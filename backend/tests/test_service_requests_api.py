@@ -96,7 +96,7 @@ def test_equipment_is_derived_from_authenticated_membership_not_query_or_body(se
     context = clients['alice'].get(f'{BASE}/context?company=Company B').json()
     assert [m['id'] for m in context['equipment']] == list(map(str, equipment))
     assert context['company']['name'].startswith('Company A')
-    assert len(clients['staff'].get(f'{BASE}/context').json()['equipment']) == 2
+    assert clients['staff'].get(f'{BASE}/context').json() == {'company': None, 'equipment': [], 'can_submit': False}
     assert clients['alice'].post(BASE, json=body(uuid4())).status_code == 404
     forged = {**body(equipment[0]), 'company': 'Company B', 'created_by': 'staff', 'createdAt': '2000-01-01'}
     assert clients['alice'].post(BASE, json=forged).status_code == 422
@@ -131,11 +131,27 @@ def test_invalid_intake_is_rejected_without_partial_save(setup, change):
     assert clients['alice'].get(BASE).json() == {'requests': []}
 
 
-def test_server_allocates_unique_ids_and_staff_can_submit_for_selected_equipment(setup):
+def test_server_allocates_unique_ids_for_customer_requests(setup):
     clients, equipment = setup
     first = clients['alice'].post(BASE, json=body(equipment[0])).json()
-    second = clients['staff'].post(BASE, json=body(equipment[1])).json()
+    second = clients['bob'].post(BASE, json=body(equipment[1])).json()
     assert first['id'] != second['id']
     assert second['id'] in [x['id'] for x in clients['bob'].get(BASE).json()['requests']]
     for identity in ['CLM-000', 'CLM-9999999999999999999999999', 'not-an-id']:
         assert clients['staff'].get(f'{BASE}/{identity}').status_code == 404
+
+
+@pytest.mark.parametrize('has_membership', [True, False])
+def test_operators_cannot_submit_even_with_a_company_and_valid_csrf(setup, has_membership):
+    clients, equipment = setup
+    with psycopg.connect(DSN) as db:
+        if not has_membership:
+            db.execute("DELETE FROM service_company_member WHERE user_id=(SELECT id FROM app_user WHERE login_id LIKE 'staff-%')")
+        before = {table: db.execute(f'SELECT count(*) FROM {table}').fetchone()[0]
+                  for table in ('service_request', 'service_history', 'service_mail')}
+    response = clients['staff'].post(BASE, json=body(equipment[0]))
+    assert response.status_code == 403
+    assert response.json()['code'] == 'CUSTOMER_REQUIRED'
+    assert clients['staff'].get(f'{BASE}/context').json()['can_submit'] is False
+    with psycopg.connect(DSN) as db:
+        assert before == {table: db.execute(f'SELECT count(*) FROM {table}').fetchone()[0] for table in before}

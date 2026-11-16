@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { HOME, VIEW_OF_ROUTE, caseHref, homeForRole, isStaff, parseRoute, portalHref } from './navigation.js'
+import { HOME, VIEW_OF_ROUTE, caseHref, homeForRole, isStaff, parseRoute, portalHref, redirectFor } from './navigation.js'
 
 test('빈 해시는 root이고 공개 화면은 각각 구분된다', () => {
   assert.deepEqual(parseRoute(''), { name: 'root' })
@@ -44,6 +44,18 @@ test('로그인 후 화면은 역할에 속하고, 계정 역할마다 처음 �
   assert.equal(homeForRole('user'), '#/portal')
   assert.equal(homeForRole('customer'), '#/portal')
   assert.deepEqual(['admin', 'user', 'customer', undefined].map(isStaff), [true, false, false, false])
+})
+
+test('접수는 고객만 가능하고 운영진의 구형 접수 주소와 고객 포털은 대기열로 보낸다', () => {
+  const staff = { authenticated: true, user: { role: 'admin' } }
+  const customer = { authenticated: true, user: { role: 'user' } }
+  for (const hash of ['#/cases/new', '#/portal/new', '#/portal', '#/portal/CLM-001']) {
+    assert.equal(redirectFor(parseRoute(hash), staff), '#/cases')
+  }
+  assert.equal(redirectFor(parseRoute('#/portal/new'), customer), null)
+  assert.equal(redirectFor(parseRoute('#/cases/new'), customer), '#/portal')
+  assert.equal(redirectFor(parseRoute('#/cases/new'), { authenticated: false }), '#/login')
+  assert.equal(redirectFor(parseRoute('#/cases/CLM-001'), staff), null)
 })
 
 test('알 수 없는 경로나 형식이 다른 번호는 notfound다', () => {

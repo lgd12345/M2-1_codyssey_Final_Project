@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { call } from './api.js'
 import { Login } from './Login.jsx'
-import { HOME, VIEW_OF_ROUTE, homeForRole, isStaff, parseRoute } from './navigation.js'
+import { VIEW_OF_ROUTE, homeForRole, isStaff, parseRoute, redirectFor } from './navigation.js'
 import { isAnalysisRunning } from './domain/workflow.js'
 import { requestFor } from './domain/actions.js'
 import { HomePage, SiteFooter, SiteHeader, SupportPage } from './Site.jsx'
@@ -12,22 +12,10 @@ import { PortalDetail } from './pages/PortalDetail.jsx'
 import { Departments } from './pages/Departments.jsx'
 
 const TITLES = {
-  home: '공작기계 고객지원', support: '고객센터', login: '로그인', list: '서비스 요청', new: '새 요청', detail: '서비스 요청',
+  home: '공작기계 고객지원', support: '고객센터', login: '로그인', list: '서비스 요청', detail: '서비스 요청',
   'portal-list': '내 서비스 요청', 'portal-new': '새 서비스 요청', 'portal-detail': '서비스 요청', departments: '부서 메일 설정', notfound: '페이지를 찾을 수 없습니다',
 }
 const emptyWorkspace = () => ({ owner: null, cases: [], context: null, detail: null, pending: false, error: '' })
-
-function redirectFor(route, auth) {
-  if (!auth) return null
-  const authed = auth.authenticated === true
-  const role = auth.user?.role
-  const view = VIEW_OF_ROUTE[route.name]
-  if (route.name === 'root') return authed ? homeForRole(role) : '#/home'
-  if (!authed) return view ? '#/login' : null
-  if (route.name === 'login') return homeForRole(role)
-  if (view && view !== 'customer' && !isStaff(role)) return HOME.customer
-  return null
-}
 
 export function App({ theme }) {
   const preference = useSyncExternalStore(theme.subscribe, theme.getPreference)
@@ -178,7 +166,7 @@ export function App({ theme }) {
   else if (route.name === 'login') content = <Login onDone={session => { setAuth(session); window.location.hash = homeForRole(session.user.role).slice(1) }} />
   else if (view && (workspace.pending || workspace.owner !== auth.user.id)) content = <section className="center-card" role="status" aria-busy="true"><h1>요청을 불러오는 중</h1></section>
   else if (view && workspace.error) content = <section className="center-card"><h1>요청을 불러오지 못했습니다</h1><p className="error" role="alert">{workspace.error}</p><button onClick={() => setRefresh(value => value + 1)}>다시 시도</button></section>
-  else if (route.name === 'list' || route.name === 'new') content = <CaseList cases={cases} onCreate={createRequest} equipment={equipment} modalOpen={route.name === 'new'} />
+  else if (route.name === 'list') content = <CaseList cases={cases} />
   else if (route.name === 'detail') content = <CaseDetail key={route.id} item={item} me={me} dispatch={dispatch} onAnalyze={startAnalysis} analyzing={analysisStarting} analysisError={analysisError} csrf={auth?.csrf_token} onChanged={() => refreshDetail(route.id)} />
   else if (route.name === 'portal-list' || route.name === 'portal-new') content = <PortalList cases={cases} company={workspace.context?.company?.name} onCreate={createRequest} equipment={equipment} modalOpen={route.name === 'portal-new'} />
   else if (route.name === 'portal-detail') content = <PortalDetail key={route.id} item={item} />
