@@ -1,0 +1,349 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <meta name="description" content="MORRONO 프로젝트 발표. 실제 서비스 문의 CLM-146의 접수·분석·원본 확인·대화·메일 초안·재분석·종결 캡처와 AI 설계.">
+  <title>MORRONO — 프로젝트 발표</title>
+  <style>
+    :root{--paper:#f4f3ed;--ink:#162d32;--muted:#56676a;--line:#cbd3cd;--green:#00665b;--lime:#d2f78a;--white:#fffefa;--amber:#fff0cd;--bar:64px;font-family:Inter,Pretendard,"Noto Sans KR","Malgun Gothic",system-ui,sans-serif;color:var(--ink);background:#dfe4de;font-synthesis:none}
+    *{box-sizing:border-box}body{margin:0}button,a{-webkit-tap-highlight-color:transparent}a{color:var(--green);text-underline-offset:4px}button{font:inherit}button:focus-visible,a:focus-visible,main:focus-visible{outline:3px solid #bd6500;outline-offset:4px}button:disabled{opacity:.35;cursor:default}::selection{background:var(--lime);color:var(--ink)}
+    .slide{position:relative;display:flex;flex-direction:column;gap:clamp(16px,2.5vh,28px);max-width:1600px;min-height:760px;margin:0 auto 24px;padding:clamp(28px,3.8vw,62px);background:var(--paper);border-top:6px solid var(--green)}
+    .presenting main{height:calc(100dvh - var(--bar));overflow:hidden}.presenting .slide{height:100%;min-height:0;margin-bottom:0;overflow:auto}.slide[hidden]{display:none}
+    .eyebrow{margin:0;font-size:12px;font-weight:800;letter-spacing:.16em;text-transform:uppercase;color:var(--green)}h1,h2,h3,p,ul,ol{margin:0}h1{font-size:clamp(54px,6.8vw,100px);letter-spacing:-.055em;line-height:1.03}h2{font-size:clamp(30px,3.1vw,48px);letter-spacing:-.045em;line-height:1.25;word-break:keep-all}h3{font-size:clamp(18px,1.65vw,25px);letter-spacing:-.03em;line-height:1.4}p,li{font-size:clamp(16px,1.45vw,21px);line-height:1.65;word-break:keep-all}.muted{color:var(--muted)}.small{font-size:clamp(13px,1.12vw,16px);line-height:1.65}.lead{font-size:clamp(21px,2.2vw,34px);font-weight:650;line-height:1.5;letter-spacing:-.035em}.tag{display:inline-block;align-self:flex-start;border:1px solid var(--line);border-radius:99px;padding:6px 12px;font-size:12px;font-weight:750;letter-spacing:.025em}.tag.green{background:var(--lime);border-color:var(--lime)}.tag.pending{background:var(--amber);border-color:#e0c798;color:#6b4d11}.accent{color:var(--green)}.grow{flex:1}.stack{display:flex;flex-direction:column;gap:18px}.grid{display:grid;gap:20px;align-items:stretch}.two{grid-template-columns:repeat(2,minmax(0,1fr))}.three{grid-template-columns:repeat(3,minmax(0,1fr))}.four{grid-template-columns:repeat(4,minmax(0,1fr))}.card{padding:clamp(20px,2.2vw,32px);border:1px solid var(--line);border-radius:3px;background:var(--white)}.card h3{margin-bottom:12px}.card p+p{margin-top:12px}.card.dark{background:var(--ink);border-color:var(--ink);color:var(--white)}.card.dark .muted{color:#c0d2d0}.card.dark .eyebrow{color:var(--lime)}.card.lime{background:var(--lime);border-color:var(--lime)}.card ul{padding-left:20px}.card li+li{margin-top:10px}.number{display:block;margin-bottom:20px;color:var(--green);font-size:13px;font-weight:850;letter-spacing:.12em}.rule{padding:15px 0;border-top:1px solid var(--line)}.rule strong{display:block;margin-bottom:5px}.callout{padding:18px 24px;border-left:4px solid var(--green);background:#e6ece2}.callout.warn{background:var(--amber);border-color:#ba7c25}.foot{display:flex;justify-content:space-between;gap:20px;align-items:center;margin-top:auto;padding-top:14px;border-top:1px solid var(--line);font-size:11px;color:var(--muted);letter-spacing:.03em}.foot span:last-child{white-space:nowrap}.cover{background:var(--ink);color:var(--white);border-color:var(--lime)}.cover .eyebrow,.cover .accent{color:var(--lime)}.cover .muted{color:#b8cecb}.cover .foot{color:#b8cecb;border-color:#49605f}.cover-grid{grid-template-columns:1.3fr 1fr;gap:60px;align-items:center}.cover .tag{border-color:#66807b}.cover .card{background:#213d41;border-color:#49605f}.cover .card h3{color:var(--lime)}.cover-word{padding-top:16px}.cover-subtitle{margin-top:24px}.quote{border-top:1px solid var(--line);border-bottom:1px solid var(--line);padding:24px 0}.role-label{font-size:12px;font-weight:800;letter-spacing:.12em;color:var(--green);margin-bottom:14px}.flow{counter-reset:stage}.flow .card{position:relative}.flow .card:not(:last-child)::after{content:'→';position:absolute;right:-19px;top:35px;z-index:1;color:var(--green);background:var(--paper);font-size:23px}.state{display:inline-block;padding:6px 10px;margin-bottom:14px;border-radius:2px;background:#e5ebe3;color:var(--green);font-size:13px;font-weight:800}.architecture{display:grid;grid-template-columns:1fr 1.7fr 1fr;gap:24px;align-items:center}.architecture .center{border:2px solid var(--green);padding:22px}.architecture .center>h3{margin-bottom:18px}.node{padding:14px 18px;border:1px solid var(--line);background:var(--white);font-size:clamp(14px,1.25vw,18px);line-height:1.6}.node+.node{margin-top:12px}.node strong{display:block}.center .node{background:#e6ece2;border-color:#ccd6c8}.lane-title{font-size:12px;font-weight:800;letter-spacing:.08em;margin-bottom:12px;color:var(--green)}.tool-count{font-size:clamp(38px,4vw,60px);font-weight:850;letter-spacing:-.05em;line-height:1}.tool-count span{font-size:16px;font-weight:500;letter-spacing:0}.pill-row{display:flex;gap:8px;flex-wrap:wrap;margin-top:16px}.pill{padding:6px 10px;background:#e5ebe3;border-radius:2px;font-size:13px}.table-wrap{overflow-x:auto}table{width:100%;border-collapse:collapse;text-align:left;font-size:clamp(14px,1.2vw,18px);line-height:1.6}th{color:var(--green);font-size:12px;font-weight:850;letter-spacing:.04em;border-bottom:2px solid var(--green)}th,td{padding:13px 14px;vertical-align:top;border-bottom:1px solid var(--line)}th:first-child,td:first-child{padding-left:0}td:first-child{font-weight:750;width:24%}code{font-family:ui-monospace,Consolas,monospace;font-size:.85em}.timeline{display:grid;gap:0}.timeline article{display:grid;grid-template-columns:90px 1fr;gap:20px;padding:15px 0;border-top:1px solid var(--line)}.timeline time{font-weight:800;color:var(--green);font-size:15px}.timeline p{font-size:clamp(15px,1.25vw,19px)}.checklist{list-style:none;padding:0}.checklist li{padding:11px 0 11px 24px;border-top:1px solid var(--line);position:relative}.checklist li::before{content:'↗';position:absolute;left:0;color:var(--green)}.closing-link{display:inline-block;padding-bottom:5px;color:var(--lime);font-size:clamp(22px,3vw,44px);font-weight:700;letter-spacing:-.025em;text-decoration-thickness:1px}.cover .callout{background:#213d41;border-color:var(--lime)}.toolbar{position:fixed;bottom:0;left:0;right:0;z-index:5;display:none;height:var(--bar);align-items:center;justify-content:space-between;gap:20px;padding:0 24px;background:#10262a;color:#eef5e8}.presenting .toolbar{display:flex}.toolbar-group{display:flex;align-items:center;gap:8px}.toolbar button{padding:8px 12px;min-height:40px;border:1px solid #526c6d;border-radius:3px;background:transparent;color:inherit;font-size:13px;cursor:pointer}.toolbar button:hover:not(:disabled){background:#29474a}.toolbar .counter{min-width:65px;text-align:center;font-size:13px;font-variant-numeric:tabular-nums}.toolbar .hint{font-size:11px;color:#bacdca}.progress{position:absolute;top:0;left:0;height:3px;width:0;background:var(--lime);transition:width .15s}.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap;border:0}.noscript{padding:20px;text-align:center;background:var(--amber)}
+    .demo-layout{display:grid;grid-template-columns:minmax(0,1.9fr) minmax(250px,.85fr);gap:24px;flex:1;min-height:0}.demo-picture{display:flex;flex-direction:column;min-height:0;min-width:0;margin:0;border:1px solid var(--line);background:#e7ece8;overflow:hidden;border-radius:3px}.shot-link{display:flex;align-items:center;justify-content:center;flex:1;min-height:0;min-width:0;overflow:hidden;cursor:zoom-in}.shot-link img{display:block;width:100%;height:100%;min-height:0;object-fit:contain}.demo-picture figcaption{flex:none;padding:9px 12px;background:var(--white);font-size:11px;line-height:1.5;color:var(--muted);border-top:1px solid var(--line)}.demo-notes{display:flex;flex-direction:column;gap:16px;min-width:0}.demo-notes h3{font-size:clamp(20px,1.9vw,28px)}.demo-notes p,.demo-notes li{font-size:clamp(15px,1.2vw,18px)}.demo-notes ul{padding-left:20px}.demo-notes li+li{margin-top:10px}.demo-notes .callout{padding:14px 16px}.demo-notes .small{font-size:13px}.mini-shot{display:block;margin-top:auto;max-height:245px;text-align:center}.mini-shot img{display:block;width:100%;height:100%;max-height:245px;object-fit:contain}.capture-stack{display:flex;flex-direction:column;justify-content:center;gap:24px;padding:22px;flex:1;min-height:0}.capture-stack .shot-link{flex:none;min-height:0;overflow:visible}.capture-stack .shot-link img{height:auto;max-height:200px;object-fit:contain}.capture-label{font-size:12px;color:var(--green);font-weight:800;margin-bottom:8px}.toolbar a{display:inline-block;color:inherit;text-decoration:none;padding:8px 10px;border:1px solid #526c6d;border-radius:3px;font-size:13px;white-space:nowrap}.toolbar .hint{font-size:10px}.image-viewer{width:94vw;max-width:1800px;height:92vh;max-height:1100px;padding:18px;border:1px solid var(--line);border-radius:5px;background:var(--paper);color:var(--ink)}.image-viewer:not([open]){display:none}.image-viewer[open]{display:flex;flex-direction:column;gap:12px}.image-viewer::backdrop{background:#10262ae8}.image-viewer header{display:flex;gap:16px;align-items:center;justify-content:space-between;font-size:14px}.image-viewer button{padding:7px 14px;border:1px solid var(--line);border-radius:3px;background:var(--white);cursor:pointer}.image-viewer img{width:100%;height:100%;min-height:0;object-fit:contain}.image-viewer .viewer-actions{display:flex;gap:14px;align-items:center;white-space:nowrap}
+    @media screen and (max-width:850px){.demo-layout{display:flex;flex-direction:column;flex:none;min-height:auto}.demo-picture{flex:none;min-height:260px}.shot-link{flex:none}.shot-link img{height:auto;max-height:560px}.demo-notes{gap:14px}.mini-shot{max-height:200px;margin-top:0}.mini-shot img{max-height:200px}.capture-stack .shot-link img{max-height:none}.capture-stack{padding:16px;gap:20px}.toolbar .brand,.toolbar .hint{display:none}.toolbar a{font-size:12px;padding:8px}.toolbar button{font-size:12px;padding:7px 8px}.toolbar-group{gap:5px}.image-viewer header{align-items:flex-start;font-size:12px}.image-viewer .viewer-actions{gap:8px}.image-viewer{padding:12px}.presenting .slide.demo{overflow-y:auto}}
+    @media print{.demo-layout{display:grid;grid-template-columns:minmax(0,1.9fr) minmax(240px,.85fr);gap:18px;flex:1;min-height:0}.demo-picture{min-height:0;flex:1}.shot-link{flex:1;min-height:0}.shot-link img{height:100%;max-height:none}.demo-notes{gap:12px}.demo-notes p,.demo-notes li{font-size:13px}.demo-notes h3{font-size:20px}.demo-notes .small{font-size:11px}.demo-picture figcaption{font-size:9px;padding:7px 10px}.mini-shot,.mini-shot img{max-height:200px}.capture-stack{padding:18px;gap:18px}.capture-stack .shot-link img{height:auto;max-height:175px}.image-viewer{display:none!important}}
+    @media(max-width:850px){:root{--bar:60px}.slide{padding:28px;gap:20px}h1{font-size:64px}h2{font-size:32px}.cover-grid,.architecture{grid-template-columns:1fr;gap:24px}.two,.three,.four{grid-template-columns:1fr}.grid{gap:14px}.cover-grid{align-items:start}.cover-word{padding-top:10px}.cover .card{padding:24px}.card{padding:22px}.cover-subtitle{margin-top:18px}.flow .card:not(:last-child)::after{display:none}.toolbar{padding:0 12px;gap:8px}.toolbar .hint,.toolbar .brand{display:none}.toolbar button{padding:7px 10px}.foot{align-items:flex-start}.foot span:first-child{max-width:75%}.table-wrap{flex:none}table{min-width:570px}.tool-count{font-size:42px}.cover .grow{flex:0}.cover .foot{margin-top:24px}.timeline article{grid-template-columns:66px 1fr;gap:14px}.presenting .slide{overscroll-behavior:contain}.quote{padding:20px 0}}
+    @media screen and (min-width:851px) and (max-height:800px){.presenting .slide{padding:28px 42px;gap:16px}.card{padding:20px}.card li+li{margin-top:6px}h2{font-size:36px}.cover-grid{gap:36px}.callout{padding:14px 20px}.foot{padding-top:12px}}
+    @media screen and (max-width:850px){.toolbar-group:first-child,.toolbar #fullscreen{display:none}.toolbar-group:last-child{width:100%;justify-content:space-between}}
+    @media screen and (min-width:851px) and (max-height:800px){.demo-notes{gap:12px}.demo-notes .mini-shot,.demo-notes .mini-shot img{max-height:120px}}
+    @media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important;transition:none!important}}
+    @media print{@page{size:A4 landscape;margin:0}:root{background:white}.presenting main{height:auto;overflow:visible}.slide,.presenting .slide,.slide[hidden]{display:flex!important;width:297mm;max-width:none;height:209mm;min-height:0;margin:0;padding:13mm;gap:6mm;overflow:hidden;border-top-width:1.5mm;break-after:page;page-break-after:always;print-color-adjust:exact;-webkit-print-color-adjust:exact}.slide:last-child{break-after:auto;page-break-after:auto}.toolbar,.noscript{display:none!important}h1{font-size:66px}h2{font-size:32px}h3{font-size:19px}p,li{font-size:15px}.small{font-size:12px}.lead{font-size:24px}.card{padding:20px}.grid{gap:14px}.two{grid-template-columns:repeat(2,minmax(0,1fr))}.three{grid-template-columns:repeat(3,minmax(0,1fr))}.four{grid-template-columns:repeat(4,minmax(0,1fr))}.cover-grid{grid-template-columns:1.3fr 1fr;gap:35px}.architecture{grid-template-columns:1fr 1.7fr 1fr;gap:18px}.tool-count{font-size:44px}.node{font-size:13px;padding:12px}table{min-width:0;font-size:13px}th,td{padding:10px}.timeline article{padding:12px}.timeline p{font-size:14px}.foot{font-size:9px}.pill{font-size:11px}.checklist li{padding-top:8px;padding-bottom:8px}a{text-decoration:none}}
+  </style>
+</head>
+<body>
+  <noscript><p class="noscript">JavaScript 비활성화에 따른 전체 슬라이드 표시. 브라우저 인쇄를 통한 PDF 저장 가능.</p></noscript>
+  <main id="deck" tabindex="-1" aria-label="MORRONO 프로젝트 발표 자료">
+    <section class="slide cover" id="slide-1" aria-labelledby="title-1">
+      <p class="eyebrow">AI 네이티브 최종 프로젝트 / 공작기계 A/S 지원</p>
+      <div class="grid cover-grid grow">
+        <div>
+          <p class="tag">공작기계 A/S 요청 AI 분석 서비스</p>
+          <h1 class="cover-word" id="title-1">MORRONO<span class="accent">.</span></h1>
+          <p class="lead cover-subtitle">매뉴얼·과거 사례 기반<br>A/S 요청 분석·처리 지원</p>
+          <p class="muted" style="margin-top:22px">매뉴얼·과거 사례 검색,<br>부서 메일 작성과 처리 결과 관리</p>
+        </div>
+        <aside class="stack" aria-label="서비스의 핵심 원칙">
+          <div class="card"><h3>AI의 근거 검색·업무 제안</h3><p>매뉴얼·과거 사례 검색을 통한<br>원인 후보·후속 업무 제안</p></div>
+          <div class="card"><h3>운영진의 검토·실행</h3><p>원본 검토 후 메일 발송·재분석·종결<br>고객 대상 진행 상황·처리 결과 공개</p></div>
+        </aside>
+      </div>
+      <footer class="foot"><span>문제 정의 → AI 설계 → 구현·배포 → 사용자 검증 계획</span><span>MORRONO / 01</span></footer>
+    </section>
+
+    <section class="slide" id="slide-2" aria-labelledby="title-2">
+      <p class="eyebrow">01 / 문제 정의</p>
+      <h2 id="title-2">매뉴얼·과거 사례 탐색과<br>부서 협조 요청의 수작업 부담</h2>
+      <div class="grid three grow">
+        <article class="card"><span class="number">01 — 자료 탐색</span><h3>자료 분산</h3><p>기종별 매뉴얼과 과거 조치 이력의 개별 탐색 필요</p></article>
+        <article class="card"><span class="number">02 — 원본 대조</span><h3>유사한 번호의 위험</h3><p>알람·부품번호의 정확한 구분과 표·도면의 원본 대조 필요</p></article>
+        <article class="card"><span class="number">03 — 후속 업무</span><h3>후속 업무의 수작업 처리</h3><p>부서별 협조 요청 작성과 처리 경과의 별도 기록</p></article>
+      </div>
+      <p class="callout">서비스 목적: <strong>고장 확진이 아닌 근거 탐색·후속 업무 준비 지원</strong></p>
+      <footer class="foot"><span>시간 단축·정확도 향상 효과의 별도 측정 필요</span><span>MORRONO / 02</span></footer>
+    </section>
+
+    <section class="slide" id="slide-3" aria-labelledby="title-3">
+      <p class="eyebrow">02 / 사용자별 기능</p>
+      <h2 id="title-3">고객의 접수·결과 확인과<br>운영진의 분석·처리</h2>
+      <div class="grid two grow">
+        <article class="card"><p class="role-label">고객</p><h3>고객사 사용자</h3><ul><li>기종·접수 사유·증상으로 요청 접수</li><li>같은 회사의 요청·상태·고객용 이력 확인</li><li>종결 후 운영진이 작성한 처리 결과 확인</li></ul><p class="small muted" style="margin-top:20px">AI 분석·대화, 매뉴얼 원본, 부서 메일 비공개</p></article>
+        <article class="card dark"><p class="eyebrow">운영진</p><h3 style="margin-top:14px">서비스 운영진</h3><ul><li>AI 분석·대화와 근거 원본 검토</li><li>부서 메일 작성·발송</li><li>추가 정보 반영·재분석·종결</li></ul><p class="small muted" style="margin-top:20px">신규 접수의 고객 전용 제공. 부서별 별도 작업 화면 제외</p></article>
+      </div>
+      <footer class="foot"><span>서버의 역할·회사 검사를 통한 접근 제어</span><span>MORRONO / 03</span></footer>
+    </section>
+
+    <section class="slide" id="slide-4" aria-labelledby="title-4">
+      <p class="eyebrow">03 / 서비스 처리 흐름</p>
+      <h2 id="title-4">고객 접수부터 처리 결과 공개까지의 업무 흐름</h2>
+      <div class="grid four flow grow">
+        <article class="card"><span class="number">01</span><span class="state">접수됨</span><h3>고객 접수</h3><p>로그인 정보 기반 접수자·회사 자동 기록</p></article>
+        <article class="card"><span class="number">02</span><span class="state">처리 중</span><h3>AI 검토 지원</h3><p>운영진의 분석 실행<br>검색 근거·원인 후보 확인</p></article>
+        <article class="card"><span class="number">03</span><span class="state">필요 시 실행</span><h3>후속 업무</h3><p>대화·부서 메일 작성<br>추가 정보 저장·재분석</p></article>
+        <article class="card lime"><span class="number">04</span><span class="state">종결 → 고객 화면의 완료 표시</span><h3>처리 결과 공개</h3><p>운영진의 처리 결과 작성·요청 종결</p></article>
+      </div>
+      <p class="callout"><strong>AI 제안과 실제 실행의 분리.</strong> 발송·정보 반영·재분석·종결 시 운영진 조작 필요</p>
+      <footer class="foot"><span>분석 실패 후 처리 중 상태 유지. 분석 실행 중 종결 차단</span><span>MORRONO / 04</span></footer>
+    </section>
+
+    <section class="slide demo" id="demo-intake" aria-labelledby="demo-title-intake">
+      <p class="eyebrow">03-1 / 실제 화면 시연 · 고객 접수</p>
+      <h2 id="demo-title-intake">기종·접수 사유·증상 입력을 통한 고객 접수</h2>
+      <div class="demo-layout">
+        <figure class="demo-picture"><a class="shot-link" href="docs/assets/walkthrough/40-intake-form-readable.png"><img src="docs/assets/walkthrough/40-intake-form-readable.png" alt="고객이 VMCT-02, 공구 교환 이상을 선택하고 발표용 가상 고장 증상을 입력한 실제 접수 양식"></a><figcaption>동일 입력 내용의 접수 양식 확대 재촬영. 추가 접수 없음. 최초 화면: 전체 캡처 06~08</figcaption></figure>
+        <aside class="demo-notes"><span class="tag green">시연 문의 CLM-146</span><h3>공구 교환 중<br>ATC 암 정지</h3><ul><li>기종: VMCT-02</li><li>사유: 공구 교환 이상</li><li>발생 시점·반복 여부·작업 중단 상황 입력</li></ul><p class="callout small">발표용 가상 고장 명시 및 실제 배포 서비스의 접수·저장 기능 이용</p><p class="small muted">로그인 계정·소속 회사 기반 접수자 기록. 별도 연락처 입력 없음</p></aside>
+      </div>
+      <footer class="foot"><span>실제 UI 캡처 · CLM-146 · 이미지 클릭 시 확대 · 전체 과정: ‘전체 캡처’</span><span>MORRONO / DEMO</span></footer>
+    </section>
+
+    <section class="slide demo" id="demo-analysis" aria-labelledby="demo-title-analysis">
+      <p class="eyebrow">03-2 / 실제 화면 시연 · AI 분석</p>
+      <h2 id="demo-title-analysis">과거 사례·매뉴얼 근거를 연결한<br>원인 후보·권장 업무 제시</h2>
+      <div class="demo-layout">
+        <figure class="demo-picture"><a class="shot-link" href="docs/assets/walkthrough/14-analysis-result-detail.png"><img src="docs/assets/walkthrough/14-analysis-result-detail.png" alt="실제 첫 분석의 요약, 원인 후보 3개, 사례·매뉴얼 출처와 서비스 점검 메일 권장 활동"></a><figcaption>분석 1회차의 실제 모델 출력 · 과거 사례 2건·매뉴얼 1건의 근거 연결</figcaption></figure>
+        <aside class="demo-notes"><span class="tag">운영진 검토용</span><h3>원인 후보와<br>조회 근거의 연결</h3><ul><li>ATC 위치·매거진 원점 설정</li><li>위치 감지 센서·배선</li><li>매거진 공구번호 설정</li></ul><p class="callout small">다른 기종의 참고 사례 활용. 전용 매뉴얼 미확보 및 기종 적용 여부의 한계 표시</p><p class="small muted">실제 고장 확진·진단 정확도 평가 미수행</p></aside>
+      </div>
+      <footer class="foot"><span>실제 UI 캡처 · 첫 분석 결과 전체 · 모델의 실제 응답 사용</span><span>MORRONO / DEMO</span></footer>
+    </section>
+
+    <section class="slide demo" id="demo-source" aria-labelledby="demo-title-source">
+      <p class="eyebrow">03-3 / 실제 화면 시연 · 원본 확인</p>
+      <h2 id="demo-title-source">매뉴얼 발췌문과 PDF 원본 페이지 대조</h2>
+      <div class="demo-layout">
+        <figure class="demo-picture"><a class="shot-link" href="docs/assets/walkthrough/19-original-pdf-page.png"><img src="docs/assets/walkthrough/19-original-pdf-page.png" alt="실제 운영진 화면에서 열린 ATC ARM UP DOWN 관련 매뉴얼 원본 페이지 모달"></a><figcaption>저장된 인용 참조 기반 PDF 렌더링. 원본의 알람·점검 항목은 증상 참고 자료로 활용</figcaption></figure>
+        <aside class="demo-notes"><span class="tag">검색 → 원본 대조</span><h3>AI 분석 내용의<br>원본 대조</h3><ul><li>변환 텍스트의 누락·오독 확인</li><li>표·신호·점검 문구 대조</li><li>현재 기종·현장에 대한 운영진의 적용 가능성 판단</li></ul><p class="callout small">운영진 전용 원본 열람. 고객 대상 매뉴얼·기술 자료 비공개</p><a class="small" href="docs/assets/walkthrough/20-original-pdf-detail.png" target="_blank" rel="noopener noreferrer">모달 전체 캡처 열기 ↗</a></aside>
+      </div>
+      <footer class="foot"><span>실제 UI 캡처 · 원본 PDF 렌더링 · 이미지 클릭 시 확대</span><span>MORRONO / DEMO</span></footer>
+    </section>
+
+    <section class="slide demo" id="demo-chat" aria-labelledby="demo-title-chat">
+      <p class="eyebrow">03-4 / 실제 화면 시연 · 추가 질문</p>
+      <h2 id="demo-title-chat">대화를 통한 과거 사례의 조치 내역 추가 조회</h2>
+      <div class="demo-layout">
+        <figure class="demo-picture"><a class="shot-link" href="docs/assets/walkthrough/23-similar-cases-chat-detail.png"><img src="docs/assets/walkthrough/23-similar-cases-chat-detail.png" alt="운영진 질문에 실제 과거 사례 검색 도구를 사용해 FSR 번호별 증상과 조치를 정리한 AI 응답"></a><figcaption>실제 질문·모델 응답. 다른 기종의 참고 사례와 현재 고장 원인의 구분 요청</figcaption></figure>
+        <aside class="demo-notes"><span class="tag">과거 사례 검색 · 완료</span><h3>분석 후 대화를 통한<br>추가 사례 조회</h3><ul><li>FSR 번호로 사례 식별</li><li>증상과 실제 과거 조치 분리</li><li>현재 요청에 대한 직접 적용의 한계 안내</li></ul><p class="callout small">도구 조회 결과 기반 응답. 자유 서술 답변의 정확성에 대한 운영진 검토 필요</p></aside>
+      </div>
+      <footer class="foot"><span>실제 UI 캡처 · 추가 질문 1회차 · 서버에 요청별 대화 기록 보관</span><span>MORRONO / DEMO</span></footer>
+    </section>
+
+    <section class="slide demo" id="demo-mail" aria-labelledby="demo-title-mail">
+      <p class="eyebrow">03-5 / 실제 화면 시연 · 메일 작성</p>
+      <h2 id="demo-title-mail">부서 메일 초안 작성과<br>운영진의 발송 결정</h2>
+      <div class="demo-layout">
+        <figure class="demo-picture"><a class="shot-link" href="docs/assets/walkthrough/27-department-mail-ai-detail.png"><img src="docs/assets/walkthrough/27-department-mail-ai-detail.png" alt="서비스 점검 요청의 제목·본문을 실제 모델이 작성한 메일 양식과 운영진 보내기 버튼"></a><figcaption>메일 양식의 ‘AI로 작성’ 실행. 수신 주소 가림 처리. 실제 발송·초안 저장 미수행</figcaption></figure>
+        <aside class="demo-notes"><span class="tag pending">미발송</span><h3>메일 작성과<br>실제 발송의 분리</h3><ul><li>고정 양식 기반 작성</li><li>명시적 요청에 따른 AI 작성</li><li>운영진 검토·수정 후 발송</li></ul><p class="callout small">시연 범위: 메일 작성·검토. 실제 발송 및 외부 부서 점검·출동 요청 제외</p><p class="small muted">메일 작성 기능 확인 완료. SMTP 발송 검증 미수행</p></aside>
+      </div>
+      <footer class="foot"><span>실제 UI 캡처 · 실제 AI 메일 작성 · 개인정보 보호를 위해 수신 주소 가림</span><span>MORRONO / DEMO</span></footer>
+    </section>
+
+    <section class="slide demo" id="demo-info" aria-labelledby="demo-title-info">
+      <p class="eyebrow">03-6 / 실제 화면 시연 · 추가 정보 저장</p>
+      <h2 id="demo-title-info">운영진 확인에 따른 추가 정보 저장</h2>
+      <div class="demo-layout">
+        <figure class="demo-picture"><div class="capture-stack"><div><p class="capture-label">01 / 운영진이 확인한 제안 카드</p><a class="shot-link" href="docs/assets/walkthrough/43-confirmed-proposal-detail.png"><img src="docs/assets/walkthrough/43-confirmed-proposal-detail.png" alt="운영진 확인 후 저장했습니다 상태가 표시된 실제 추가 정보 제안 카드"></a></div><div><p class="capture-label">02 / 작성자·시각이 남는 추가 정보</p><a class="shot-link" href="docs/assets/walkthrough/44-saved-additional-info-detail.png"><img src="docs/assets/walkthrough/44-saved-additional-info-detail.png" alt="admin 작성자와 저장 시각, 시연용 추가 확인 조건이 기록된 실제 추가 정보 목록"></a></div></div><figcaption>확인 전 화면: 전체 캡처 31. 종결 후 확대 재촬영. 제안만으로 저장·재분석 실행 불가</figcaption></figure>
+        <aside class="demo-notes"><span class="tag">운영진 ‘저장’ 실행</span><h3>추가 확인 조건의<br>명시적 반영</h3><p>시연용 추가 조건:<br>빈 상태의 정상 동작·공구 장착 시 정지</p><p class="callout small">실제 현장 확인 결과가 아닌 시연용 가정임을 저장 내용에 명시</p><p class="small muted">고객 대상 내부 추가 정보 비공개. 저장 후 별도 재분석 실행</p></aside>
+      </div>
+      <footer class="foot"><span>실제 UI 캡처 · 제안 → 운영진 확인 → 추가 정보 1건 저장</span><span>MORRONO / DEMO</span></footer>
+    </section>
+
+    <section class="slide demo" id="demo-reanalysis" aria-labelledby="demo-title-reanalysis">
+      <p class="eyebrow">03-7 / 실제 화면 시연 · 재분석</p>
+      <h2 id="demo-title-reanalysis">추가 정보 반영을 통한<br>2회차 분석·원인 후보 재검토</h2>
+      <div class="demo-layout">
+        <figure class="demo-picture"><a class="shot-link" href="docs/assets/walkthrough/41-analysis-second-revision.png"><img src="docs/assets/walkthrough/41-analysis-second-revision.png" alt="추가 조건을 반영해 공구 간섭과 ATC 위치 정렬 등을 후보로 제시한 실제 분석 2회차 결과"></a><figcaption>종결 후 저장된 2회차 분석 재촬영. 첫 회차 별도 보관. 정확도 향상에 대한 정량 검증 미수행</figcaption></figure>
+        <aside class="demo-notes"><span class="tag green">분석 2회차</span><h3>입력 조건·검색 결과에<br>따른 원인 후보 재검토</h3><ul><li>공구·소재·주변 장치 간섭</li><li>ATC 암·공구 교환 위치 정렬</li><li>위치 감지 센서·배선</li></ul><p class="callout small">동일 기종의 참고 사례 조회. 실제 고장 확진·수리 미수행</p></aside>
+      </div>
+      <footer class="foot"><span>실제 UI 캡처 · 저장된 추가 정보 반영 · 이전 분석 회차 유지</span><span>MORRONO / DEMO</span></footer>
+    </section>
+
+    <section class="slide demo" id="demo-completed" aria-labelledby="demo-title-completed">
+      <p class="eyebrow">03-8 / 실제 화면 시연 · 고객 결과 확인</p>
+      <h2 id="demo-title-completed">요청 종결과 고객용 처리 결과·이력 공개</h2>
+      <div class="demo-layout">
+        <figure class="demo-picture"><div class="capture-stack"><div><p class="capture-label">01 / 고객에게 보이는 완료 안내·처리 결과</p><a class="shot-link" href="docs/assets/walkthrough/46-customer-result-detail.png"><img src="docs/assets/walkthrough/46-customer-result-detail.png" alt="실제 고객 화면의 완료 안내와 가상 시연·실제 수리 및 발송 없음이 명시된 처리 결과"></a></div><div><p class="capture-label">02 / 고객용 처리 이력</p><a class="shot-link" href="docs/assets/walkthrough/47-customer-history-detail.png"><img src="docs/assets/walkthrough/47-customer-history-detail.png" alt="고객에게 공개된 접수·처리 시작·완료의 실제 이력"></a></div></div><figcaption>고객 완료 화면의 요소별 확대 캡처. 처리 결과에 실제 점검·수리·메일 발송 미수행 명시</figcaption></figure>
+        <aside class="demo-notes"><span class="tag green">CLM-146 · 완료</span><h3>고객용 처리 결과와<br>진행 이력 공개</h3><ul><li>접수 내용과 상태</li><li>운영진이 작성한 처리 결과</li><li>접수·처리 시작·완료 이력</li></ul><p class="small muted">고객 화면의 AI 분석·대화·매뉴얼·부서 메일 비공개</p><p class="small"><a href="docs/assets/walkthrough/38-customer-completed.png" target="_blank" rel="noopener noreferrer">완료 화면 전체 ↗</a><br><a href="docs/assets/walkthrough/39-customer-completed-mobile.png" target="_blank" rel="noopener noreferrer">모바일 완료 화면 ↗</a></p></aside>
+      </div>
+      <footer class="foot"><span>실제 UI 캡처 · 1건 기능 시연 완료 · 최소 5명 실사용자 검증과는 별개</span><span>MORRONO / DEMO</span></footer>
+    </section>
+
+    <section class="slide" id="slide-5" aria-labelledby="title-5">
+      <p class="eyebrow">04 / 시스템 구성</p>
+      <h2 id="title-5">UI·API 통합 배포와 역할별 접근 제어</h2>
+      <div class="architecture grow" aria-label="React 화면이 FastAPI에 연결되고, API와 Agent가 DB·PDF·모델·SMTP를 이용하는 구조">
+        <div><p class="lane-title">BROWSER →</p><div class="node"><strong>React SPA</strong>고객 포털<br>운영진 요청·대화 화면<br>부서 메일 설정</div></div>
+        <div class="center"><h3>FastAPI · Docker</h3><div class="node"><strong>인증·요청 API</strong>서버 세션 / 회사·역할 / CSRF</div><div class="node"><strong>AI Agent + 도구</strong>분석 / 대화 / 검색 / 초안·제안</div><div class="node"><strong>메일 처리</strong>고객 알림 / 부서 발송 기록</div></div>
+        <div><p class="lane-title">→ DATA &amp; PROVIDERS</p><div class="node"><strong>PostgreSQL</strong>업무 기록 · 색인 · 벡터</div><div class="node"><strong>원본 PDF</strong>페이지 렌더링</div><div class="node"><strong>외부 연결</strong>LLM · 임베딩 · SMTP</div></div>
+      </div>
+      <footer class="foot"><span>단일 서버 프로세스 운영. 별도 마이그레이션을 통한 DB 스키마 변경</span><span>MORRONO / 05</span></footer>
+    </section>
+
+    <section class="slide" id="slide-6" aria-labelledby="title-6">
+      <p class="eyebrow">05 / AI 에이전트</p>
+      <h2 id="title-6">도구 선택·호출 기반<br>근거 검색과 후속 업무 지원</h2>
+      <div class="grid two grow">
+        <article class="card"><p class="tool-count">4 <span>검색·조회 도구 / 구조화 분석</span></p><h3 style="margin-top:18px">검색 → 원본 확인 → 검증된 형식으로 저장</h3><div class="pill-row"><span class="pill">과거 사례 검색</span><span class="pill">매뉴얼 검색</span><span class="pill">번호 정확 조회</span><span class="pill">원본 열람</span></div><p class="small muted" style="margin-top:20px">시도당 도구 12회 · 원본 3회 · 모델 요청 16회 제한.</p></article>
+        <article class="card"><p class="tool-count">12 <span>전체 도구 / 운영진 대화</span></p><h3 style="margin-top:18px">추가 조회 → 초안·제안 저장</h3><div class="pill-row"><span class="pill">검색·조회 4종 포함</span><span class="pill">FSR 상세</span><span class="pill">이력·메일 조회</span><span class="pill">메일 초안</span><span class="pill">추가 정보·재분석 제안</span></div><p class="small muted" style="margin-top:20px">첫 분석 성공 후 이용. 요청당 질문 30개, 종결 후 읽기 전용.</p></article>
+      </div>
+      <footer class="foot"><span>전체 도구 12종 중 분석용 4종 사용. 요청별 대화 이력의 서버 보관</span><span>MORRONO / 06</span></footer>
+    </section>
+
+    <section class="slide" id="slide-7" aria-labelledby="title-7">
+      <p class="eyebrow">06 / 검색 증강 생성(RAG)</p>
+      <h2 id="title-7">증상 하이브리드 검색과 식별자 정확 조회</h2>
+      <div class="grid three grow">
+        <article class="card"><span class="number">01 — 자료 준비</span><h3>자료 준비</h3><p>매뉴얼의 페이지·표·번호 색인<br>조치 내역이 있는 과거 사례 정리·중복 병합</p></article>
+        <article class="card"><span class="number">02 — 검색</span><h3>하이브리드 검색</h3><p>식별자 정확 조회·증상 검색 분리<br>키워드·문자열 유사도·벡터 순위의 RRF 결합</p></article>
+        <article class="card"><span class="number">03 — 원본 확인</span><h3>원본 대조</h3><p>구조화 분석의 원본 이미지·텍스트 활용<br>운영진의 근거 페이지 이미지 열람</p></article>
+      </div>
+      <p class="callout"><strong>정확 일치 조회의 범위: 자료 내 번호의 등장 여부 확인.</strong> 번호의 의미·고장 원인 확정 제외</p>
+      <footer class="foot"><span>대화의 원본 열람 도구는 텍스트만 제공. 벡터 검색 실패 시 다른 검색 경로 활용.</span><span>MORRONO / 07</span></footer>
+    </section>
+
+    <section class="slide" id="slide-8" aria-labelledby="title-8">
+      <p class="eyebrow">07 / 안전장치·검증 한계</p>
+      <h2 id="title-8">서버의 출처·형식 검증과 운영진의 최종 판단</h2>
+      <div class="grid two grow">
+        <article class="card"><h3>구조화 분석의 안전장치</h3><ul><li>조회 기록에 없는 출처 거부</li><li>DB 기반 근거 발췌문 구성</li><li>근거 부족 시 원인·부품·부서 추천 제거</li><li>호출·입력 한도와 고정 오류 코드 적용</li></ul></article>
+        <article class="card"><h3>업무·정보의 경계</h3><ul><li>AI 생성·검토용 초안 고지</li><li>고객에게 기술 자료·내부 메일 미공개</li><li>수신 주소는 서버의 부서 설정 사용</li><li>가명 담당 ID가 포함된 메일 차단</li></ul></article>
+      </div>
+      <p class="callout warn"><strong>검증 한계:</strong> 자유 서술 대화의 동일 출처·형식 검증 미적용. 원본·현장 상황에 대한 별도 대조 필요</p>
+      <footer class="foot"><span>본문 내 개인정보의 모델 전달 가능성. 실제 자료 사용 전 동의·보관 정책 점검 필요</span><span>MORRONO / 08</span></footer>
+    </section>
+
+    <section class="slide" id="slide-9" aria-labelledby="title-9">
+      <p class="eyebrow">08 / 기술 선정 이유</p>
+      <h2 id="title-9">기술 선정 기준: 기능 연계와 검증 가능성</h2>
+      <div class="table-wrap grow"><table><thead><tr><th scope="col">선택</th><th scope="col">이유</th><th scope="col">감수한 제약</th></tr></thead><tbody>
+        <tr><td>React · FastAPI</td><td>상태형 UI와 Python 검색·문서 처리 연결</td><td>백그라운드 상태 조회·스트리밍 관리 필요</td></tr>
+        <tr><td>PydanticAI</td><td>구조화 결과·도구 호출·사용량 제한 구성</td><td>스키마 검사가 사실성을 보장하지 않음</td></tr>
+        <tr><td>PostgreSQL + pgvector</td><td>업무 기록과 하이브리드 검색을 한 DB에서 관리</td><td>대규모 부하·검색 품질은 별도 검증 필요</td></tr>
+        <tr><td>OpenAI 호환 API</td><td>모델 제공자와 서비스 로직의 결합 완화</td><td>제공자별 API 호환성 확인 필요</td></tr>
+        <tr><td>Docker 단일 이미지</td><td>UI·API를 동일 주소로 배포</td><td>현재 단일 서버 프로세스, PDF 경로 일치 필요</td></tr>
+      </tbody></table></div>
+      <footer class="foot"><span>서비스 구현 방안: 프로젝트_기획서.md §4 / 아키텍처·인수 기준: 기능_요구_명세서.md</span><span>MORRONO / 09</span></footer>
+    </section>
+
+    <section class="slide" id="slide-10" aria-labelledby="title-10">
+      <p class="eyebrow">09 / 개발 이력·검증</p>
+      <h2 id="title-10">검색 Agent부터 서비스 요청 처리까지의 개발 이력</h2>
+      <div class="grid two grow">
+        <div class="timeline" aria-label="Git으로 확인되는 개발 이력">
+          <article><time>10.28</time><p><strong>서비스 기반</strong><br>React·FastAPI·pgvector와 단일 이미지 구성</p></article>
+          <article><time>11.01</time><p><strong>검색 Agent</strong><br>매뉴얼 검색·인증·스트리밍 연결</p></article>
+          <article><time>11.15</time><p><strong>업무 흐름 통합</strong><br>분석·대화·메일 연결, 승인·배정 흐름 단순화</p></article>
+          <article><time>11.16</time><p><strong>역할·반응형 개선</strong><br>고객 전용 접수와 좁은 화면의 운영진 목록 개선</p></article>
+        </div>
+        <article class="card"><h3>3단계 검증 체계</h3><div class="rule"><strong>① 자동화 회귀</strong><p class="small">격리 DB·모델 및 메일 대역 기반 권한·상태·저장·UI 검증</p></div><div class="rule"><strong>② 실제 모델·운영 환경</strong><p class="small">근거 타당성·원본 렌더링·서비스 연결의 별도 확인</p></div><div class="rule"><strong>③ 실사용자 검증</strong><p class="small">사용자의 과업 완료 여부·서비스 유용성 확인</p></div></article>
+      </div>
+      <footer class="foot"><span>개발 이력 기준: 312921b. 개발자 점검·자동화 검증과 실사용자 피드백의 구분</span><span>MORRONO / 10</span></footer>
+    </section>
+
+    <section class="slide" id="slide-11" aria-labelledby="title-11">
+      <p class="eyebrow">10 / 실사용자 검증 계획</p>
+      <h2 id="title-11">실사용자 테스트·피드백 수집 및 개선 검증 계획</h2>
+      <p class="tag pending">실사용자 결과 미확보 · 검증 계획</p>
+      <div class="grid three grow">
+        <article class="card"><span class="number">01 — 참여자 모집</span><h3>최소 5명 테스트</h3><p>고객·운영진 역할별 접수·분석·종결 과업 수행</p><p class="small muted">테스트용 자료·계정·수신함 사용</p></article>
+        <article class="card"><span class="number">02 — 관찰</span><h3>사용 중 불편 사항 기록</h3><p>완료 여부·소요 시간·용어 이해·근거 확인 가능 여부 관찰.</p><p class="small muted">익명 참여자 ID·과업별 의견 정리</p></article>
+        <article class="card"><span class="number">03 — 개선</span><h3>수정 후 재검증</h3><p>피드백·수정 커밋 연결 및 동일 과업 재검증</p><p class="small muted">미반영 사유·남은 한계 기록</p></article>
+      </div>
+      <p class="callout warn">참여자 수·만족도·시간 단축률의 측정 전 기재 제외. <strong>최종 발표 전 실제 결과 보완 필요</strong></p>
+      <footer class="foot"><span>상대 일정: D 모집·준비 / D+1 관찰 / D+2 개선 / D+3 재검증·자료 확정</span><span>MORRONO / 11</span></footer>
+    </section>
+
+    <section class="slide cover" id="slide-12" aria-labelledby="title-12">
+      <p class="eyebrow">11 / 시연·후속 과제</p>
+      <h2 id="title-12">AI 기반 근거 검색과 운영진의 검토·실행 지원</h2>
+      <div class="grid two grow">
+        <div class="stack"><p class="lead">MORRONO<span class="accent">.</span></p><p><a class="closing-link" href="https://demo.morrono.com" target="_blank" rel="noopener noreferrer">demo.morrono.com ↗</a></p><p class="muted">외부 접근 가능한 서비스<br>AI Agent · RAG · 원본 대조 · 운영진 실행</p><p class="small muted">공개 데모의 유료 모델 호출 가능성<br>SMTP 설정 시 실제 메일 발송 가능성</p></div>
+        <div class="card"><h3>시연 순서</h3><ol style="padding-left:22px"><li>고객 계정으로 요청 접수</li><li>운영진 분석·근거 원본 확인</li><li>대화와 부서 메일 초안 검토</li><li>처리 결과 작성·고객 화면 확인</li></ol><p class="small muted" style="margin-top:22px">시연 전 수신 주소·자료·모델 비용 점검<br>실제 발송 시 테스트 수신함 사용</p></div>
+      </div>
+      <p class="callout">다음 단계: 실제 모델 품질 검증 · 최소 5명 사용자 피드백 · 개선 후 재검증</p>
+      <footer class="foot"><span>기획서: 프로젝트_기획서.md / 기능 요구 명세서: 기능_요구_명세서.md</span><span>MORRONO / 12</span></footer>
+    </section>
+  </main>
+
+  <nav class="toolbar" aria-label="발표 제어">
+    <div class="progress" id="progress" aria-hidden="true"></div>
+    <div class="toolbar-group"><span class="brand small">MORRONO</span><span class="hint">← → 이동 · F 전체 화면 · P 인쇄 · 이미지 클릭 확대</span></div>
+    <div class="toolbar-group"><a href="docs/captures.html" target="_blank" rel="noopener noreferrer" aria-label="전체 과정 캡처 47장 열기">전체 캡처</a><button type="button" id="prev" aria-label="이전 슬라이드">← 이전</button><span class="counter" id="counter" aria-live="off">1 / 20</span><button type="button" id="next" aria-label="다음 슬라이드">다음 →</button><button type="button" id="fullscreen" aria-label="전체 화면 전환">전체 화면</button><button type="button" id="print">인쇄 / PDF</button></div>
+  </nav>
+  <dialog class="image-viewer" id="image-viewer" aria-labelledby="viewer-title"><header><strong id="viewer-title">실제 화면 확대</strong><div class="viewer-actions"><a id="viewer-original" target="_blank" rel="noopener noreferrer">원본 크기 ↗</a><button type="button" id="viewer-close" aria-label="확대 화면 닫기">닫기 ×</button></div></header><img id="viewer-image" alt=""></dialog>
+  <p class="sr-only" id="announcement" role="status" aria-live="polite" aria-atomic="true"></p>
+  <script>
+    (() => {
+      'use strict';
+      const slides = Array.from(document.querySelectorAll('.slide'));
+      const previous = document.getElementById('prev');
+      const next = document.getElementById('next');
+      const counter = document.getElementById('counter');
+      const progress = document.getElementById('progress');
+      const announcement = document.getElementById('announcement');
+      const fullscreen = document.getElementById('fullscreen');
+      let current = 0;
+      slides.forEach((slide, i) => {
+        slide.id = `slide-${i + 1}`;
+        slide.querySelector('.foot span:last-child').textContent = `MORRONO / ${String(i + 1).padStart(2, '0')}`;
+      });
+      const imageDialog = document.getElementById('image-viewer');
+      const viewerImage = document.getElementById('viewer-image');
+      const originalLink = document.getElementById('viewer-original');
+      document.getElementById('viewer-close').addEventListener('click', () => imageDialog.close());
+      document.getElementById('deck').addEventListener('click', event => {
+        const link = event.target.closest('a.shot-link');
+        if (!link || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+        event.preventDefault();
+        const description = link.querySelector('img').alt;
+        viewerImage.src = link.href;
+        viewerImage.alt = description;
+        originalLink.href = link.href;
+        document.getElementById('viewer-title').textContent = description;
+        imageDialog.showModal();
+      });
+      const fromHash = () => {
+        const match = /^#slide-(\d+)$/.exec(location.hash);
+        return match ? Math.min(slides.length - 1, Math.max(0, Number(match[1]) - 1)) : 0;
+      };
+      function show(index, updateHash = true) {
+        current = Math.max(0, Math.min(slides.length - 1, index));
+        slides.forEach((slide, i) => {
+          slide.hidden = i !== current;
+          slide.setAttribute('role', 'group');
+          slide.setAttribute('aria-roledescription', '슬라이드');
+        });
+        slides[current].scrollTop = 0;
+        previous.disabled = current === 0;
+        next.disabled = current === slides.length - 1;
+        counter.textContent = `${current + 1} / ${slides.length}`;
+        progress.style.width = `${(current + 1) / slides.length * 100}%`;
+        const heading = slides[current].querySelector('h1, h2').textContent;
+        document.title = `MORRONO · ${current + 1}/${slides.length} — 프로젝트 발표`;
+        announcement.textContent = `${current + 1} / ${slides.length}. ${heading}`;
+        if (updateHash) history.replaceState(null, '', `#slide-${current + 1}`);
+      }
+      async function toggleFullscreen() {
+        try {
+          if (document.fullscreenElement) await document.exitFullscreen();
+          else if (document.documentElement.requestFullscreen) await document.documentElement.requestFullscreen();
+        } catch (_) {
+          announcement.textContent = '전체 화면 전환 불가. 브라우저 전체 화면 기능 이용 필요.';
+        }
+      }
+      previous.addEventListener('click', () => show(current - 1));
+      next.addEventListener('click', () => show(current + 1));
+      fullscreen.addEventListener('click', toggleFullscreen);
+      if (!document.documentElement.requestFullscreen) fullscreen.hidden = true;
+      document.addEventListener('fullscreenchange', () => {
+        fullscreen.textContent = document.fullscreenElement ? '전체 화면 종료' : '전체 화면';
+      });
+      document.getElementById('print').addEventListener('click', () => window.print());
+      window.addEventListener('hashchange', () => show(fromHash(), false));
+      window.addEventListener('keydown', event => {
+        if (imageDialog.open || event.ctrlKey || event.metaKey || event.altKey || event.target.closest('input, textarea, select, [contenteditable="true"]')) return;
+        if ((event.key === ' ' || event.key === 'Enter') && event.target.closest('button, a')) return;
+        const key = event.key.toLowerCase();
+        if (key === 'arrowright' || key === 'pagedown' || key === ' ') { event.preventDefault(); show(current + 1); }
+        else if (key === 'arrowleft' || key === 'pageup') { event.preventDefault(); show(current - 1); }
+        else if (key === 'home') { event.preventDefault(); show(0); }
+        else if (key === 'end') { event.preventDefault(); show(slides.length - 1); }
+        else if (key === 'f') { event.preventDefault(); toggleFullscreen(); }
+        else if (key === 'p') { event.preventDefault(); window.print(); }
+      });
+      document.body.classList.add('presenting');
+      show(fromHash(), false);
+    })();
+  </script>
+</body>
+</html>

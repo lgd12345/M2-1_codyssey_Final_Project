@@ -89,7 +89,7 @@ flowchart TD
 ```mermaid
 flowchart TD
     B["브라우저 · React SPA<br/>고객 포털 · 운영진 화면"] --> API
-    subgraph APP["FastAPI · 단일 컨테이너"]
+    subgraph APP["Docker · FastAPI 단일 컨테이너 / 단일 프로세스"]
         API["API<br/>로그인·권한 · 요청 처리"]
         AG["AI 에이전트<br/>분석 · 대화 · 초안·제안"]
         T["도구<br/>검색 · 원본 열람 · 기록"]
@@ -102,7 +102,7 @@ flowchart TD
     PDF[["원본 PDF"]]
     LLM["LLM<br/>OpenAI 호환 API"]
     EMB["임베딩 서버<br/>Qwen3"]
-    SMTP["Gmail SMTP"]
+    SMTP["SMTP"]
     API --> DB
     T --> DB
     T --> PDF
@@ -150,7 +150,8 @@ stateDiagram-v2
     state "종결" as CLOSED
     [*] --> RECEIVED : 요청 접수
     RECEIVED --> IN_PROGRESS : 첫 분석 시작
-    IN_PROGRESS --> CLOSED : 처리 결과 작성 후 종결
+    IN_PROGRESS --> IN_PROGRESS : 재시도·추가 정보·재분석·메일
+    IN_PROGRESS --> CLOSED : 실행 중 분석 없음 + 처리 결과 입력
     CLOSED --> [*]
 ```
 
