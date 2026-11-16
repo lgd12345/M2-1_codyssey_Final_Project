@@ -13,7 +13,7 @@ const LABELS = {
   search_cases: '과거 사례 검색', search_manual: '매뉴얼 검색', lookup_identifier: '번호 조회',
   open_source: '원본 페이지 열람', lookup_case: '사례 담당 기록 조회',
   get_history: '이력 조회', list_mail_drafts: '메일 목록 조회', read_mail_draft: '메일 내용 조회',
-  list_departments: '부서 목록 조회', draft_department_mail: '메일 초안 작성', propose_additional_info: '추가 정보 저장 제안', propose_reanalysis: '재분석 제안',
+  list_departments: '부서 목록 조회', draft_department_mail: '메일 초안 작성', propose_reanalysis: '재분석 제안',
 }
 export const toolLabel = name => LABELS[name] ?? name
 
@@ -109,15 +109,15 @@ export function timeline(messages, analyses) {
 
 // Cards for what the agent proposed. A proposal is only a proposal until the operator confirms it.
 const PROPOSALS = {
-  add_info: { title: '추가 정보 저장 제안', pending: '아직 저장하지 않았습니다', done: '저장했습니다', confirm: '저장' },
   reanalysis: { title: '재분석 제안', pending: '아직 실행하지 않았습니다', done: '재분석을 시작했습니다', confirm: '재분석 시작' },
 }
 export function proposalCard(proposal) {
   const base = PROPOSALS[proposal.kind]
+  if (!base) return null
   const state = proposal.status === 'confirmed' ? base.done : proposal.status === 'cancelled' ? '취소했습니다' : base.pending
   return {
     title: base.title, state, confirm: base.confirm, open: proposal.status === 'pending',
-    detail: proposal.kind === 'reanalysis' ? '추가 정보를 반영해 분석을 다시 실행합니다.' : proposal.text,
+    detail: '접수 내용을 기준으로 분석을 다시 실행합니다.',
   }
 }
 

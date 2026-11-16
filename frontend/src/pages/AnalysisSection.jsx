@@ -2,7 +2,6 @@ import React, { useState } from 'react'
 import { analysisRunNotice, identifierCheckLine, isAnalysisRunning } from '../domain/workflow.js'
 import { SourcePageButton } from './SourcePage.jsx'
 import { MailCompose } from './MailCompose.jsx'
-import { formatTime } from '../ui.jsx'
 import { activitiesFor, firstSentences } from '../domain/analysis.js'
 
 // 분석은 대화의 말풍선 하나로 나온다. 짧게: 요약, 원인 후보, 권장 활동(메일 초안 요청), 근거 접기.
@@ -79,22 +78,6 @@ export function AnalysisBubble({ analysis: a, item, current, revision, dispatch,
       <div className="ai-foot">
         <span className="ai-chip">✦ AI 생성</span>
       </div>
-    </div>
-  )
-}
-
-// 앱 밖에서 알게 된 내용(전화·현장 확인)은 대화에서 AI가 저장을 제안하고 카드의 버튼으로 저장한다. 여기는 저장된 목록만 보여 준다.
-// 고객에게는 표시되지 않고 다음 재분석에 반영된다.
-export function AdditionalInfo({ item }) {
-  const notes = item.additionalInfo ?? []
-  if (notes.length === 0) return null
-  return (
-    <div className="additional-info">
-      <h3>추가 정보</h3>
-      <ul className="info-notes" aria-label="운영진이 입력한 추가 정보">
-        {notes.map((note) => <li key={note.id}><span className="muted small">{note.by} · {formatTime(note.at)}</span><p>{note.text}</p></li>)}
-      </ul>
-      <p className="muted small">다음 재분석에 반영됩니다. 고객에게는 표시되지 않습니다.</p>
     </div>
   )
 }

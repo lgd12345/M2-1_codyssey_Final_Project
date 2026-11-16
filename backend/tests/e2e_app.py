@@ -38,8 +38,7 @@ async def controlled_model(request):
         return {'status': 'insufficient_evidence', 'summary': 'E2E 근거 부족 응답', 'causes': [], 'steps': [],
                 'questions': ['알람 번호를 알려주세요.'], 'parts': [], 'evidence': [], 'departments': [], 'case_search': 'ok'}
     return {
-        'status': 'answered', 'summary': 'E2E 통제된 분석 응답: ' + request['machine']
-        + (f" · 추가 정보 {len(request['additional_info'])}건 반영" if request.get('additional_info') else ''),
+        'status': 'answered', 'summary': 'E2E 통제된 분석 응답: ' + request['machine'],
         'causes': [{'title': 'ATC 암 구동 불량', 'level': '높음', 'detail': '교환 중 정지 증상', 'evidence': ['E1', 'E2']}],
         'steps': ['알람 이력 확인', 'ATC 암 점검'], 'questions': ['정지 위치를 알려주세요.'],
         'parts': [{'name': 'ATC 암 모터', 'note': '마모 시 교체', 'source': 'E2E 매뉴얼 p.45'}],
@@ -109,10 +108,6 @@ def chat_plan(messages):
             return [('text', '서비스 부서 메일 초안을 만들었습니다. 카드에서 확인하고 보내기를 눌러 주세요.')]
         return [('tool', 'draft_department_mail', {'department_key': 'service', 'subject': '[출동 요청] ATC 정지',
                                                    'body': 'F400 ATC 정지 증상입니다. 현장 점검을 부탁드립니다.'})]
-    if '추가 정보 제안' in asked:
-        if done:
-            return [('text', '추가 정보 저장을 제안했습니다. 카드에서 확인해 주세요.')]
-        return [('tool', 'propose_additional_info', {'text': '전화 확인: 알람 2023이 스핀들 정지 직후 발생'})]
     if '재분석 제안' in asked:
         if done:
             return [('text', '재분석을 제안했습니다. 카드에서 확인해 주세요.')]

@@ -17,24 +17,12 @@ from app.service_requests.routes import (
 router = APIRouter(prefix='/api/v1/service-requests', tags=['service-requests-workflow'])
 
 
-class AdditionalInfoIn(Input):
-    text: str = Field(min_length=1, max_length=2000)
-
-
 class ResolveIn(Input):
     note: str = Field(min_length=1, max_length=2000)  # processing result: customer portal and completion mail
 
 
 def _operator_item(connection, number: int) -> dict:
     return views.fetch_items(connection, 'r.id=%s', (number,), staff=True)[0]
-
-
-@router.post('/{identity}/additional-info', status_code=201)
-def add_additional_info(identity: str, body: AdditionalInfoIn, session: SessionInfo = Depends(require_operator_csrf)):
-    number = request_number(identity)
-    with request_database() as connection:
-        workflow.add_additional_info(connection, number, session.user, body.text)
-        return _operator_item(connection, number)
 
 
 @router.post('/{identity}/reanalysis', status_code=202)

@@ -79,7 +79,6 @@ def test_only_current_screen_and_analysis_routes_remain():
         ("POST", "/api/v1/service-requests/{identity}/analysis"),
         ("GET", "/api/v1/service-requests/{identity}/evidence/{evidence_id}/page"),
         ("POST", "/api/v1/service-requests/{identity}/reanalysis"),
-        ("POST", "/api/v1/service-requests/{identity}/additional-info"),
         ("GET", "/api/v1/service-requests/departments"),
         ("GET", "/api/v1/service-requests/departments/manage"),
         ("POST", "/api/v1/service-requests/departments"),

@@ -19,6 +19,9 @@ def test_archive_migration_preserves_rows_and_current_request_data(setup):
             # Recreate the pre-026 location only inside this rollback-only transaction.
             for table in TABLES:
                 db.execute(f'ALTER TABLE service_legacy.{table} SET SCHEMA public')
+            # Additional retirement archives belong to 028, not this 026 replay.
+            for table in ('service_additional_info', 'service_additional_info_proposal'):
+                db.execute(f'ALTER TABLE service_legacy.{table} SET SCHEMA public')
             db.execute('DROP SCHEMA service_legacy')
             actor, login = db.execute("SELECT id,login_id FROM app_user WHERE role='admin' LIMIT 1").fetchone()
             db.execute("INSERT INTO service_comment(request_id,author_id,author,kind,text) VALUES (%s,%s,%s,'public','보존할 옛 답변')", (number, actor, login))

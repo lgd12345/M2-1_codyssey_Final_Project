@@ -117,11 +117,11 @@ function ChatSession({ item, csrf, initial, onChanged, dispatch, onAnalyze, anal
   )
 }
 
-// 에이전트가 제안한 변경(추가 정보 저장, 재분석). 제안만 기록되어 있고, 확인 버튼을 눌러야 실행된다.
+// 재분석 제안. 확인 버튼을 눌러야 실행된다.
 function Proposals({ item, csrf, onChanged }) {
   return (
     <div className="proposals" aria-label="AI 제안">
-      {item.proposals.map((proposal) => <ProposalCard key={proposal.id} proposal={proposal} itemId={item.id} csrf={csrf} onChanged={onChanged} />)}
+      {item.proposals.filter(proposal => proposal.kind === 'reanalysis').map((proposal) => <ProposalCard key={proposal.id} proposal={proposal} itemId={item.id} csrf={csrf} onChanged={onChanged} />)}
     </div>
   )
 }

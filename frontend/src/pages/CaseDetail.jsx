@@ -1,7 +1,6 @@
 import React, { useState } from 'react'
-import { canResolve, chatReady, isAnalysisRunning, mailLines } from '../domain/workflow.js'
+import { canResolve, isAnalysisRunning, mailLines } from '../domain/workflow.js'
 import { Avatar, formatTime } from '../ui.jsx'
-import { AdditionalInfo } from './AnalysisSection.jsx'
 import { Activity } from './Activity.jsx'
 import { ChatPanel } from './ChatPanel.jsx'
 
@@ -16,7 +15,6 @@ export function CaseDetail({ item, dispatch, me, onAnalyze, analyzing, analysisE
           <h1 id="detail-title">{item.title}</h1>
           <RequestCard item={item} />
           {csrf && <ChatPanel item={item} csrf={csrf} onChanged={onChanged} dispatch={dispatch} onAnalyze={onAnalyze} analyzing={analyzing} analysisError={analysisError} />}
-          {chatReady(item) && <AdditionalInfo item={item} />}
           <Activity item={item} />
         </div>
         <aside className="issue-side" aria-label="상태와 세부 정보">

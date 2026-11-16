@@ -1,4 +1,4 @@
-"""State transitions after filing: additional information and closure.
+"""State transitions after filing: closure.
 
 A request is 접수됨 -> 처리 중 (its first analysis starts, see analysis.begin) -> 종결 (an operator writes the result).
 Every transition locks the request row first, so concurrent clicks cannot close twice. The server decides actors and times.
@@ -13,7 +13,7 @@ from psycopg.types.json import Jsonb
 from app.auth.service import AuthError
 from app.service_requests.analysis import add_history
 
-IN_PROGRESS = ('처리 중',)  # additional information and re-analysis are possible exactly while a request is being processed
+IN_PROGRESS = ('처리 중',)  # re-analysis is possible exactly while a request is being processed
 
 
 class InvalidState(AuthError):
@@ -32,16 +32,6 @@ def lock(connection, number: int) -> dict[str, Any]:
     if row is None:
         raise NotFound()
     return row
-
-
-def add_additional_info(connection, number: int, actor, text: str) -> None:
-    """Operator-entered facts from outside the app. Only while the request is being processed."""
-    row = lock(connection, number)
-    if row['status'] not in IN_PROGRESS:
-        raise InvalidState()
-    connection.execute('INSERT INTO service_additional_info(request_id,author_id,author,text) VALUES (%s,%s,%s,%s)',
-                       (number, actor.id, actor.login_id, text))
-    add_history(connection, number, f'추가 정보 입력 · {actor.login_id}')  # internal only: no public wording
 
 
 def resolve(connection, number: int, actor, note: str) -> None:

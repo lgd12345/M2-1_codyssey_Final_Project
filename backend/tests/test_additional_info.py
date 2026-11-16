@@ -1,127 +1,110 @@
-"""Operators add what they learned outside the app; re-analysis receives it. Customers are never asked anything.
+"""Retired additional-information endpoints and data stay outside the current workflow.
 
-Real sessions/CSRF/authorization/DB; only the model runner is a controlled double.
-Run ONLY through scripts/test_isolated.py (disposable DB).
+Real sessions/CSRF/DB in disposable regression databases only.
 """
+from pathlib import Path
+
+import psycopg
 import pytest
-from fastapi.testclient import TestClient
 
-from app.main import app
-from test_service_analysis_api import Runner, good_result, use_runner, submit, start  # noqa: F401
-from test_service_requests_api import setup, BASE, pytestmark  # noqa: F401
-from test_service_workflow_api import INSUFFICIENT, closed, item, post, reviewed  # noqa: F401
+from test_service_analysis_api import Runner, use_runner, submit, start  # noqa: F401
+from test_service_requests_api import setup, BASE, DSN, pytestmark  # noqa: F401
+from test_service_workflow_api import reviewed, item, post
+from test_service_chat import Script, use_model, send  # noqa: F401
 
-CALL_NOTE = '현장 확인 결과 알람 2023이 스핀들 정지 직후에 발생함. 고객 통화로 확인.'
-
-
-def add_info(clients, identity, text=CALL_NOTE, who='staff'):
-    return clients[who].post(f'{BASE}/{identity}/additional-info', json={'text': text})
+CALL_NOTE = '보존 전용 현장 기록: 알람 3001'
 
 
-def test_operator_adds_information_with_author_time_and_an_internal_history_entry(setup, use_runner):
-    clients, equipment = setup
-    use_runner(Runner(good_result(**INSUFFICIENT)))
-    identity = reviewed(clients, equipment)
-    response = add_info(clients, identity)
-    assert response.status_code == 201
-    view = response.json()
-    assert [note['text'] for note in view['additionalInfo']] == [CALL_NOTE]
-    author = view['additionalInfo'][0]['by']
-    assert author.startswith('staff')  # the logged-in operator, never a value sent by the browser
-    assert view['additionalInfo'][0]['at'] and view['additionalInfo'][0]['id']
-    assert any(entry['text'] == f'추가 정보 입력 · {author}' for entry in view['history'])
-    with TestClient(app, cookies=clients['staff'].cookies) as fresh:  # durable, not process-local
-        assert fresh.get(f'{BASE}/{identity}').json()['additionalInfo'] == view['additionalInfo']
-
-
-def test_notes_are_kept_in_entry_order(setup, use_runner):
-    clients, equipment = setup
-    use_runner(Runner(good_result(**INSUFFICIENT)))
-    identity = reviewed(clients, equipment)
-    for text in ('첫 번째 확인', '두 번째 확인'):
-        assert add_info(clients, identity, text).status_code == 201
-    assert [note['text'] for note in item(clients, 'staff', identity)['additionalInfo']] == ['첫 번째 확인', '두 번째 확인']
-
-
-def test_reanalysis_input_contains_the_notes_but_the_first_analysis_has_none(setup, use_runner):
-    clients, equipment = setup
-    runner = use_runner(Runner(good_result(**INSUFFICIENT)))
-    identity = reviewed(clients, equipment)
-    assert runner.inputs[0]['additional_info'] == []
-    assert add_info(clients, identity).status_code == 201
-    runner.result = good_result()
-    assert post(clients, 'staff', identity, 'reanalysis').status_code == 202
-    assert runner.inputs[1]['additional_info'] == [CALL_NOTE]
-    assert 'contact' not in runner.inputs[1]
-    after = item(clients, 'staff', identity)
-    assert after['status'] == '처리 중' and after['additionalInfo'][0]['text'] == CALL_NOTE
-
-
-def test_adding_information_does_not_start_an_analysis_by_itself(setup, use_runner):
-    clients, equipment = setup
-    runner = use_runner(Runner(good_result(**INSUFFICIENT)))
-    identity = reviewed(clients, equipment)
-    assert add_info(clients, identity).status_code == 201
-    assert len(runner.inputs) == 1 and item(clients, 'staff', identity)['status'] == '처리 중'
-
-
-@pytest.mark.parametrize('who, expected', [('alice', 403), ('colleague', 403), ('bob', 403)])
-def test_customers_cannot_add_information(setup, use_runner, who, expected):
-    clients, equipment = setup
-    use_runner(Runner(good_result(**INSUFFICIENT)))
-    identity = reviewed(clients, equipment)
-    assert add_info(clients, identity, who=who).status_code == expected
-    assert item(clients, 'staff', identity)['additionalInfo'] == []
-
-
-def test_session_csrf_and_origin_are_required(setup, use_runner):
-    clients, equipment = setup
-    use_runner(Runner(good_result(**INSUFFICIENT)))
-    identity = reviewed(clients, equipment)
-    url = f'{BASE}/{identity}/additional-info'
-    assert TestClient(app).post(url, json={'text': CALL_NOTE}).status_code == 401
-    with TestClient(app, cookies=clients['staff'].cookies) as no_csrf:
-        assert no_csrf.post(url, json={'text': CALL_NOTE}, headers={'Origin': 'http://testserver'}).status_code == 403
-    assert clients['staff'].post(url, json={'text': CALL_NOTE}, headers={'Origin': 'https://evil.example'}).status_code == 403
-    assert item(clients, 'staff', identity)['additionalInfo'] == []
-
-
-@pytest.mark.parametrize('payload', [{}, {'text': ''}, {'text': '   '}, {'text': 'x' * 2001},
-                                      {'text': 'ok', 'by': 'forged'}, {'text': 5}])
-def test_invalid_notes_are_rejected(setup, use_runner, payload):
-    clients, equipment = setup
-    use_runner(Runner(good_result(**INSUFFICIENT)))
-    identity = reviewed(clients, equipment)
-    assert clients['staff'].post(f'{BASE}/{identity}/additional-info', json=payload).status_code == 422
-    assert item(clients, 'staff', identity)['additionalInfo'] == []
-
-
-def test_information_can_only_be_added_while_the_request_is_being_processed(setup, use_runner):
+@pytest.mark.parametrize('state', ['접수됨', '처리 중', '종결'])
+def test_retired_endpoint_is_absent_for_all_roles_and_states(setup, use_runner, state):
     clients, equipment = setup
     use_runner(Runner())
-    received = submit(clients, equipment)
-    assert add_info(clients, received).status_code == 409
-    identity = closed(clients, equipment)  # the result is written: nothing more can be added
-    response = add_info(clients, identity)
-    assert response.status_code == 409 and response.json()['code'] == 'INVALID_STATE'
-    assert item(clients, 'staff', identity)['additionalInfo'] == []
-    processing = reviewed(clients, equipment)
-    assert add_info(clients, processing).status_code == 201
+    identity = submit(clients, equipment) if state == '접수됨' else reviewed(clients, equipment)
+    if state == '종결':
+        assert post(clients, 'staff', identity, 'resolution', note='고객 처리 결과').status_code == 200
+    before = item(clients, 'staff', identity)
+    for who in clients:
+        answer = post(clients, who, identity, 'additional-info', text=CALL_NOTE)
+        assert answer.status_code in (404, 405)
+    assert item(clients, 'staff', identity) == before
 
 
-def test_unknown_request_is_not_found(setup):
-    clients, _ = setup
-    assert add_info(clients, 'CLM-999999').status_code == 404
+def archive_note(identity):
+    with psycopg.connect(DSN) as db:
+        actor, login = db.execute("SELECT id,login_id FROM app_user WHERE role='admin' LIMIT 1").fetchone()
+        db.execute('INSERT INTO service_legacy.service_additional_info(request_id,author_id,author,text) VALUES (%s,%s,%s,%s)',
+                   (int(identity[4:]), actor, login, CALL_NOTE))
 
 
-def test_customers_never_see_the_notes_the_questions_or_a_request_for_information(setup, use_runner):
+def test_archived_facts_are_not_projected_or_used_for_reanalysis_or_chat(setup, use_runner):
     clients, equipment = setup
-    use_runner(Runner(good_result(**INSUFFICIENT)))
+    runner = use_runner(Runner())
     identity = reviewed(clients, equipment)
-    assert add_info(clients, identity).status_code == 201
-    for who in ('alice', 'colleague'):
-        view = item(clients, who, identity)
-        assert view['status'] == '처리 중'  # nothing is asked of the customer
-        text = str(view)
-        assert CALL_NOTE not in text and '알람 번호는?' not in text and 'additionalInfo' not in view
-        assert all('추가 정보' not in entry['text'] for entry in view['history'])
+    archive_note(identity)
+    for who in ('staff', 'alice', 'colleague'):
+        detail = item(clients, who, identity)
+        listed = next(r for r in clients[who].get(BASE).json()['requests'] if r['id'] == identity)
+        for view in (detail, listed):
+            assert 'additionalInfo' not in view and CALL_NOTE not in str(view)
+    assert post(clients, 'staff', identity, 'reanalysis').status_code == 202
+    assert len(runner.inputs) == 2
+    assert all('additional_info' not in request for request in runner.inputs)
+    from app.service_requests import chat
+    row, _ = chat._load(int(identity[4:]))
+    assert CALL_NOTE not in chat.request_context(identity, row)
+
+
+def test_archived_pending_proposals_cannot_be_listed_confirmed_or_cancelled(setup, use_runner):
+    clients, equipment = setup
+    runner = use_runner(Runner())
+    identity = reviewed(clients, equipment)
+    with psycopg.connect(DSN) as db:
+        pid = db.execute("""INSERT INTO service_legacy.service_additional_info_proposal(id,request_id,kind,text)
+            OVERRIDING SYSTEM VALUE
+            VALUES (nextval(pg_get_serial_sequence('service_chat_proposal','id')),%s,'add_info',%s) RETURNING id""",
+                         (int(identity[4:]), CALL_NOTE)).fetchone()[0]
+    assert item(clients, 'staff', identity)['proposals'] == []
+    for action in ('confirm', 'cancel'):
+        response = clients['staff'].post(f'{BASE}/{identity}/proposals/{pid}/{action}', json={})
+        assert response.status_code == 404 and response.json()['code'] == 'PROPOSAL_NOT_FOUND'
+    assert len(runner.inputs) == 1 and 'additional_info' not in runner.inputs[0]
+
+
+def test_archive_migration_preserves_all_rows_and_removes_old_proposals_from_execution(setup, use_runner):
+    clients, equipment = setup
+    use_runner(Runner())
+    identity = reviewed(clients, equipment)
+    number = int(identity[4:])
+    migration = Path(__file__).resolve().parents[1] / 'migrations/028_archive_additional_info.sql'
+    with psycopg.connect(DSN) as db:
+        with db.transaction(force_rollback=True):
+            # Reconstruct the pre-028 schema only in this rollback-only transaction.
+            db.execute('ALTER TABLE service_legacy.service_additional_info SET SCHEMA public')
+            db.execute('ALTER TABLE service_legacy.service_additional_info_proposal RENAME TO service_additional_info_proposal_before_test')
+            db.execute('ALTER TABLE service_chat_proposal DROP CONSTRAINT service_chat_proposal_kind_check')
+            db.execute("ALTER TABLE service_chat_proposal ADD CONSTRAINT service_chat_proposal_kind_check CHECK (kind IN ('add_info','reanalysis'))")
+            actor, login = db.execute("SELECT id,login_id FROM app_user WHERE role='admin' LIMIT 1").fetchone()
+            db.execute('INSERT INTO service_additional_info(request_id,author_id,author,text) VALUES (%s,%s,%s,%s)',
+                       (number, actor, login, CALL_NOTE))
+            old_ids = [db.execute("INSERT INTO service_chat_proposal(request_id,kind,text,status) VALUES (%s,'add_info',%s,%s) RETURNING id",
+                                 (number, CALL_NOTE, status)).fetchone()[0] for status in ('pending', 'confirmed', 'cancelled')]
+            current = db.execute("INSERT INTO service_chat_proposal(request_id,kind) VALUES (%s,'reanalysis') RETURNING id", (number,)).fetchone()[0]
+            notes = db.execute('SELECT row_to_json(n) FROM service_additional_info n ORDER BY id').fetchall()
+            old = db.execute("SELECT row_to_json(p) FROM service_chat_proposal p WHERE kind='add_info' ORDER BY id").fetchall()
+            request_before = db.execute('SELECT row_to_json(r) FROM service_request r WHERE id=%s', (number,)).fetchone()
+            db.execute(migration.read_text(encoding='utf-8'))
+            assert db.execute("SELECT to_regclass('public.service_additional_info')").fetchone()[0] is None
+            assert db.execute('SELECT row_to_json(n) FROM service_legacy.service_additional_info n ORDER BY id').fetchall() == notes
+            assert db.execute('SELECT row_to_json(p) FROM service_legacy.service_additional_info_proposal p ORDER BY id').fetchall() == old
+            assert not db.execute('SELECT id FROM service_chat_proposal WHERE id=ANY(%s)', (old_ids,)).fetchall()
+            assert db.execute('SELECT id FROM service_chat_proposal WHERE id=%s', (current,)).fetchone()
+            assert db.execute('SELECT row_to_json(r) FROM service_request r WHERE id=%s', (number,)).fetchone() == request_before
+            from app.service_requests import proposals, views
+            from app.auth.service import AuthError
+            assert [p['kind'] for p in views.fetch_items(db, 'r.id=%s', (number,), staff=True)[0]['proposals']] == ['reanalysis']
+            for pid in old_ids:
+                with pytest.raises(AuthError) as error:
+                    proposals._lock(db, number, pid)
+                assert error.value.status_code == 404
+            with pytest.raises(psycopg.errors.CheckViolation), db.transaction():
+                db.execute("INSERT INTO service_chat_proposal(request_id,kind) VALUES (%s,'add_info')", (number,))

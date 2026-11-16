@@ -40,7 +40,6 @@ def closed(clients, equipment):
 # ---------- authorization ----------
 
 OPERATOR_ACTIONS = [
-    ('post', 'additional-info', {'text': '확인'}),
     ('post', 'reanalysis', None), ('post', 'resolution', {'note': RESULT}),
 ]
 
@@ -59,7 +58,7 @@ def test_operator_actions_require_staff_session_csrf_and_origin(setup, use_runne
         assert send(no_csrf, headers={'Origin': 'http://testserver'}).status_code == 403
     assert send(clients['staff'], headers={'Origin': 'https://evil.example'}).status_code == 403
     after = item(clients, 'staff', identity)
-    assert after['status'] == '처리 중' and 'comments' not in after and after['additionalInfo'] == [] and 'resolution' in after
+    assert after['status'] == '처리 중' and 'comments' not in after and 'additionalInfo' not in after and 'resolution' in after
     assert after['resolution'] is None
 
 
@@ -244,11 +243,11 @@ def test_closing_needs_a_request_that_is_being_processed_and_happens_once(setup,
     assert item(clients, 'staff', done)['resolution']['note'] == RESULT
 
 
-def test_a_closed_request_takes_no_more_additional_information_or_proposals(setup, use_runner):
+def test_a_closed_request_cannot_be_reanalysed(setup, use_runner):
     clients, equipment = setup
     use_runner(Runner())
     done = closed(clients, equipment)
-    assert post(clients, 'staff', done, 'additional-info', text='뒤늦은 정보').status_code == 409
+    assert post(clients, 'staff', done, 'reanalysis').status_code == 409
 
 
 # ---------- customer projection ----------
@@ -257,7 +256,6 @@ def test_customer_view_never_contains_internal_workflow_data(setup, use_runner):
     clients, equipment = setup
     use_runner(Runner())
     identity = reviewed(clients, equipment)
-    post(clients, 'staff', identity, 'additional-info', text='내부전용추가정보')
     customer = item(clients, 'alice', identity)
     listed = next(x for x in clients['alice'].get(BASE).json()['requests'] if x['id'] == identity)
     for view in (customer, listed):
@@ -295,17 +293,16 @@ def test_customer_follow_up_actions_do_not_exist(setup, use_runner, who, suffix,
     assert after == before
 
 
-def test_insufficient_evidence_stays_processing_and_the_operator_adds_information_and_re_analyses(setup, use_runner):
+def test_insufficient_evidence_stays_processing_and_the_operator_can_reanalyse(setup, use_runner):
     clients, equipment = setup
     runner = use_runner(Runner(good_result(**INSUFFICIENT)))
     identity = reviewed(clients, equipment)
     view = item(clients, 'staff', identity)
     assert view['status'] == '처리 중' and view['analysis']['status'] == 'insufficient_evidence' and view['revision'] == 1
     assert item(clients, 'alice', identity)['status'] == '처리 중'
-    assert post(clients, 'staff', identity, 'additional-info', text='전화 확인: 알람 2023').status_code == 201
     runner.result = good_result()
     assert post(clients, 'staff', identity, 'reanalysis').status_code == 202
-    assert len(runner.inputs) == 2 and runner.inputs[1]['additional_info'] == ['전화 확인: 알람 2023'] and 'contact' not in runner.inputs[1]
+    assert len(runner.inputs) == 2 and runner.inputs[1] == runner.inputs[0] and 'additional_info' not in runner.inputs[1]
     after = item(clients, 'staff', identity)
     assert after['status'] == '처리 중' and after['revision'] == 2 and after['analysis']['status'] == 'answered'
 

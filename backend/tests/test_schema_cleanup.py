@@ -19,7 +19,7 @@ def test_what_the_product_uses_is_still_there(test_db, table):
     assert exists(test_db, table)
 
 
-@pytest.mark.parametrize('table', ['service_comment', 'service_work', 'service_request_department'])
+@pytest.mark.parametrize('table', ['service_comment', 'service_work', 'service_request_department', 'service_additional_info', 'service_additional_info_proposal'])
 def test_retired_workflow_tables_are_archived_not_active(test_db, table):
     assert not exists(test_db, table)
     assert test_db.execute('SELECT to_regclass(%s)', (f'service_legacy.{table}',)).fetchone()[0] is not None

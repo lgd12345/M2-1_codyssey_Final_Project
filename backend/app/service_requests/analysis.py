@@ -207,12 +207,10 @@ def begin(connection, number: int, user_id: UUID, *, first: bool = True,
             add_history(connection, number, '처리 시작 · 분석 시작', '담당부서에서 처리를 시작했습니다.')
         if history:
             add_history(connection, number, history)
-        notes = [note[0] for note in connection.execute(
-            'SELECT text FROM service_additional_info WHERE request_id=%s ORDER BY created_at,id', (number,)).fetchall()]
     snapshot = row[4]
     # Only diagnostic facts: the customer's contact details are deliberately not sent to a model.
     return analysis_id, {'message': row[1], 'reason': row[2], 'alarm_numbers': list(row[3]),
-                         'machine': snapshot['machine'], 'additional_info': notes}, started
+                         'machine': snapshot['machine']}, started
 
 
 def finish_success(connection, analysis_id: UUID, result: dict[str, Any]) -> None:

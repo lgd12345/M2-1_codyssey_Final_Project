@@ -138,14 +138,13 @@ test('answers split over several stored messages still read as one turn on the t
 })
 
 test('a proposal card says what it would do and what happened, never that it was done before the server did', () => {
-  assert.deepEqual(proposalCard({ kind: 'add_info', text: '전화 확인 내용', status: 'pending' }),
-    { title: '추가 정보 저장 제안', detail: '전화 확인 내용', state: '아직 저장하지 않았습니다', confirm: '저장', open: true })
+  assert.equal(proposalCard({ kind: 'add_info', text: '전화 확인 내용', status: 'pending' }), null)
+  assert.equal(proposalCard({ kind: 'unknown', status: 'pending' }), null)
   assert.deepEqual(proposalCard({ kind: 'reanalysis', text: '', status: 'pending' }),
-    { title: '재분석 제안', detail: '추가 정보를 반영해 분석을 다시 실행합니다.', state: '아직 실행하지 않았습니다', confirm: '재분석 시작', open: true })
-  assert.equal(proposalCard({ kind: 'add_info', text: 'x', status: 'confirmed' }).state, '저장했습니다')
+    { title: '재분석 제안', detail: '접수 내용을 기준으로 분석을 다시 실행합니다.', state: '아직 실행하지 않았습니다', confirm: '재분석 시작', open: true })
   assert.equal(proposalCard({ kind: 'reanalysis', text: '', status: 'confirmed' }).state, '재분석을 시작했습니다')
-  assert.equal(proposalCard({ kind: 'add_info', text: 'x', status: 'cancelled' }).state, '취소했습니다')
-  assert.equal(proposalCard({ kind: 'add_info', text: 'x', status: 'confirmed' }).open, false)
+  assert.equal(proposalCard({ kind: 'reanalysis', text: '', status: 'cancelled' }).state, '취소했습니다')
+  assert.equal(proposalCard({ kind: 'reanalysis', text: '', status: 'confirmed' }).open, false)
 })
 
 test('deciding a proposal addresses only a request number and a numeric proposal id', () => {

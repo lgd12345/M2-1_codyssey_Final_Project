@@ -23,7 +23,7 @@ test('unknown actions and unsafe identifiers are rejected instead of being sent'
   assert.throws(() => requestFor({ type: 'RESET', id: 'CLM-005' }, item), /지원하지 않는 작업/)
   assert.throws(() => requestFor({ type: 'ADD_COMMENT', id: 'CLM-005', kind: 'public', text: '안내' }, item), /지원하지 않는 작업/)  // notes and replies are gone
   assert.throws(() => requestFor({ type: 'RESOLVE', id: '../admin', note: 'x' }, item), /요청 번호/)
-  for (const type of ['APPROVE', 'DECLINE', 'ASSIGN', 'TOGGLE_DEPT', 'EDIT_DRAFT', 'WORK_START', 'WORK_COMPLETE']) {
+  for (const type of ['ADD_INFO', 'APPROVE', 'DECLINE', 'ASSIGN', 'TOGGLE_DEPT', 'EDIT_DRAFT', 'WORK_START', 'WORK_COMPLETE']) {
     assert.throws(() => requestFor({ type, id: 'CLM-005', workKey: 'SVC-005' }, item), /지원하지 않는 작업/, type)  // retired with the old workflow
   }
 })

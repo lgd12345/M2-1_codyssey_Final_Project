@@ -120,7 +120,7 @@ test('a failed analysis leaves the request processing and can be retried', async
   await staff.context.close()
 })
 
-test('insufficient evidence: questions are for operators, who add information they gathered and re-analyse', async ({ browser }) => {
+test('insufficient evidence: operators can re-analyse the original request without saving facts', async ({ browser }) => {
   const customer = await newContext(browser, process.env.E2E_CUSTOMER, 'portal')
   const staff = await newContext(browser, process.env.E2E_STAFF, 'cases')
   const id = await createRequest(customer.page, '근거부족 증상 설명입니다.')
@@ -139,26 +139,16 @@ test('insufficient evidence: questions are for operators, who add information th
   await expect(customer.page.getByText('알람 번호를 알려주세요.', { exact: false })).toHaveCount(0)
   await noFollowUp(customer.page)
 
-  // There is no separate input box: what the operator learned by phone or on site goes through the conversation,
-  // where the agent proposes saving it and the card button does it (recorded with who and when).
-  const note = '전화 확인: 알람 2023이 스핀들 정지 직후 발생'
+  // No fact-saving input, proposal, list, or server endpoint remains.
   await expect(staff.page.getByLabel('추가 정보 입력', { exact: true })).toHaveCount(0)
-  await staff.page.getByLabel('질문 입력', { exact: true }).fill('전화로 확인한 내용이 있습니다. 추가 정보 제안해 주세요')
-  await staff.page.getByRole('button', { name: '보내기', exact: true }).click()
-  const proposal = staff.page.getByRole('region', { name: '추가 정보 저장 제안' })
-  await expect(proposal.getByText(note, { exact: true })).toBeVisible({ timeout: 15000 })
-  await proposal.getByRole('button', { name: '저장', exact: true }).click()
-  const entry = staff.page.getByRole('list', { name: '운영진이 입력한 추가 정보' }).getByRole('listitem')
-  await expect(entry).toHaveCount(1)
-  await expect(entry).toContainText(note)
-  await expect(entry).toContainText(process.env.E2E_STAFF)
-  await expect(staff.page.getByText('추가 정보 입력', { exact: false }).first()).toBeVisible()  // history
-
-  // Re-analysis is the operator's own decision and now receives the information.
+  await expect(staff.page.getByRole('region', { name: '추가 정보 저장 제안' })).toHaveCount(0)
+  await expect(staff.page.getByRole('list', { name: '운영진이 입력한 추가 정보' })).toHaveCount(0)
+  expect(await serverItem(staff.page, id)).not.toHaveProperty('additionalInfo')
+  const headers = { Origin: new URL(staff.page.url()).origin, 'X-CSRF-Token': (await (await staff.page.request.get('/api/v1/auth/me')).json()).csrf_token }
+  expect([404, 405]).toContain((await staff.page.request.post(`/api/v1/service-requests/${id}/additional-info`, { headers, data: { text: '저장 금지' } })).status())
   await staff.page.getByRole('button', { name: '재분석', exact: true }).click()
-  await expect(staff.page.getByText('추가 정보 1건 반영', { exact: false })).toBeVisible()
+  await expect(staff.page.getByText('분석 2회차', { exact: true })).toBeVisible({ timeout: 20000 })
   await customer.page.reload()
-  await expect(customer.page.getByText(note, { exact: false })).toHaveCount(0)
   await customer.context.close()
   await staff.context.close()
 })
@@ -170,7 +160,7 @@ test('companies are isolated and customers cannot act on a request', async ({ br
   const id = await createRequest(customer.page, '회사 격리 확인용입니다.')
   await noFollowUp(customer.page)
 
-  // Nothing an operator writes into the conversation or the notes ever reaches the customer's view.
+  // The internal conversation never reaches the customer's view.
   await analyse(staff.page, id)
   await analysisDone(staff.page)
   expect(JSON.stringify(await serverItem(customer.page, id))).not.toContain('E2E 통제된 분석 응답')
@@ -421,7 +411,7 @@ test('operators edit the department mail addresses on a settings page; customers
   await staff.context.close()
 })
 
-test('the agent only proposes saving information and re-analysing: the card button does it', async ({ browser }) => {
+test('the agent only proposes re-analysis: the card button starts or cancels it', async ({ browser }) => {
   const customer = await newContext(browser, process.env.E2E_CUSTOMER, 'portal')
   const staff = await newContext(browser, process.env.E2E_STAFF, 'cases')
   const id = await createRequest(customer.page, '제안 카드 확인용 증상 설명입니다.')
@@ -432,18 +422,8 @@ test('the agent only proposes saving information and re-analysing: the card butt
     await staff.page.getByRole('button', { name: '보내기', exact: true }).click()
   }
 
-  await ask('전화로 확인한 내용이 있습니다. 추가 정보 제안해 주세요')
-  const infoCard = staff.page.getByRole('region', { name: '추가 정보 저장 제안' })
-  await expect(infoCard.getByText('아직 저장하지 않았습니다', { exact: true })).toBeVisible({ timeout: 15000 })
-  await expect(infoCard.getByText('전화 확인: 알람 2023이 스핀들 정지 직후 발생', { exact: true })).toBeVisible()
-  expect((await serverItem(staff.page, id)).additionalInfo).toEqual([])  // proposing saved nothing
-
-  await infoCard.getByRole('button', { name: '저장', exact: true }).click()
-  await expect(infoCard.getByText('저장했습니다', { exact: true })).toBeVisible()
-  await expect(infoCard.getByRole('button', { name: '저장', exact: true })).toHaveCount(0)
-  const saved = await serverItem(staff.page, id)
-  expect(saved.additionalInfo.map(n => n.text)).toEqual(['전화 확인: 알람 2023이 스핀들 정지 직후 발생'])
-  expect(saved.analysisHistory).toHaveLength(1)  // saving does not analyse
+  await expect(staff.page.getByRole('region', { name: '추가 정보 저장 제안' })).toHaveCount(0)
+  expect(await serverItem(staff.page, id)).not.toHaveProperty('additionalInfo')
 
   await ask('재분석 제안해 주세요')
   const reCard = staff.page.getByRole('region', { name: '재분석 제안' })
@@ -452,15 +432,15 @@ test('the agent only proposes saving information and re-analysing: the card butt
   await reCard.getByRole('button', { name: '재분석 시작', exact: true }).click()
   const log = staff.page.getByRole('log', { name: 'AI 대화 내용' })
   await expect(log.getByText('분석 2회차', { exact: true })).toBeVisible({ timeout: 20000 })
-  await expect(log.getByText('추가 정보 1건 반영', { exact: false }).first()).toBeVisible()
+  expect((await serverItem(staff.page, id)).analysisHistory).toHaveLength(2)
 
-  // A cancelled proposal changes nothing.
-  await ask('전화로 확인한 내용이 있습니다. 추가 정보 제안해 주세요')
-  const second = staff.page.getByRole('region', { name: '추가 정보 저장 제안' }).last()
+  // Cancelling another re-analysis proposal starts no further analysis.
+  await ask('재분석 제안해 주세요')
+  const second = staff.page.getByRole('region', { name: '재분석 제안' }).last()
   await expect(second.getByRole('button', { name: '취소', exact: true })).toBeVisible({ timeout: 15000 })
   await second.getByRole('button', { name: '취소', exact: true }).click()
   await expect(second.getByText('취소했습니다', { exact: true })).toBeVisible()
-  expect((await serverItem(staff.page, id)).additionalInfo).toHaveLength(1)
+  expect((await serverItem(staff.page, id)).analysisHistory).toHaveLength(2)
   expect(JSON.stringify(await serverItem(customer.page, id))).not.toContain('proposals')
   await customer.context.close()
   await staff.context.close()

@@ -443,7 +443,9 @@
       "height": 1000,
       "selected": false,
       "sha256": "aa12f329b6847786fbcef0992a5a93036b19273f089d8e33922330d93c233b94",
-      "bytes": 194231
+      "bytes": 194231,
+      "retired": true,
+      "retirementReason": "폐기 기능 또는 해당 입력에 의존한 결과의 구버전 촬영 기록. 원본 보존 전용, 현재 발표·갤러리에서 제외."
     },
     {
       "file": "29-additional-info-answer.png",
@@ -458,7 +460,9 @@
       "height": 1000,
       "selected": false,
       "sha256": "413a58ad40be72002287ac356dfba1fef927d77070cfb7f84d1b1ef36dcc698a",
-      "bytes": 199128
+      "bytes": 199128,
+      "retired": true,
+      "retirementReason": "폐기 기능 또는 해당 입력에 의존한 결과의 구버전 촬영 기록. 원본 보존 전용, 현재 발표·갤러리에서 제외."
     },
     {
       "file": "30-additional-info-detail.png",
@@ -473,7 +477,9 @@
       "height": 97,
       "selected": false,
       "sha256": "e4ab96cac17327df416ccb1be66952ae046af967f0acc1ce0354011c2367cb0b",
-      "bytes": 19900
+      "bytes": 19900,
+      "retired": true,
+      "retirementReason": "폐기 기능 또는 해당 입력에 의존한 결과의 구버전 촬영 기록. 원본 보존 전용, 현재 발표·갤러리에서 제외."
     },
     {
       "file": "31-additional-info-proposal.png",
@@ -488,7 +494,9 @@
       "height": 1000,
       "selected": false,
       "sha256": "413a58ad40be72002287ac356dfba1fef927d77070cfb7f84d1b1ef36dcc698a",
-      "bytes": 199128
+      "bytes": 199128,
+      "retired": true,
+      "retirementReason": "폐기 기능 또는 해당 입력에 의존한 결과의 구버전 촬영 기록. 원본 보존 전용, 현재 발표·갤러리에서 제외."
     },
     {
       "file": "32-additional-info-saved.png",
@@ -503,7 +511,9 @@
       "height": 1000,
       "selected": false,
       "sha256": "dc06a6be28155c0869183f39fc068054da6b4ed8befb20cc86ed6ce4c2743b0e",
-      "bytes": 205243
+      "bytes": 205243,
+      "retired": true,
+      "retirementReason": "폐기 기능 또는 해당 입력에 의존한 결과의 구버전 촬영 기록. 원본 보존 전용, 현재 발표·갤러리에서 제외."
     },
     {
       "file": "33-reanalysis-running.png",
@@ -518,7 +528,9 @@
       "height": 1000,
       "selected": false,
       "sha256": "4a895a255b90896b08b6734a18bd2dd4599f54db6cebb40d37d9f35b0fa8f2e8",
-      "bytes": 175060
+      "bytes": 175060,
+      "retired": true,
+      "retirementReason": "폐기 기능 또는 해당 입력에 의존한 결과의 구버전 촬영 기록. 원본 보존 전용, 현재 발표·갤러리에서 제외."
     },
     {
       "file": "34-reanalysis-complete.png",
@@ -534,7 +546,9 @@
       "selected": false,
       "notes": "서버 완료와 UI 갱신의 시차. 실제 2회차 결과는 41·42번 캡처 사용.",
       "sha256": "7416f1fce45b912124f3b2c62f85ff9b96e4e3cbd321ac80a336877ef8d0ca30",
-      "bytes": 184769
+      "bytes": 184769,
+      "retired": true,
+      "retirementReason": "폐기 기능 또는 해당 입력에 의존한 결과의 구버전 촬영 기록. 원본 보존 전용, 현재 발표·갤러리에서 제외."
     },
     {
       "file": "35-reanalysis-result-detail.png",
@@ -550,7 +564,9 @@
       "selected": false,
       "notes": "서버 완료와 UI 갱신의 시차. 실제 2회차 결과는 41·42번 캡처 사용.",
       "sha256": "3a9cdda60bc1da8137ddd2a97988ae6e0d7eb35a2fe7566bc01ccdc4b72939b0",
-      "bytes": 70368
+      "bytes": 70368,
+      "retired": true,
+      "retirementReason": "폐기 기능 또는 해당 입력에 의존한 결과의 구버전 촬영 기록. 원본 보존 전용, 현재 발표·갤러리에서 제외."
     },
     {
       "file": "36-resolution-input.png",
@@ -565,7 +581,9 @@
       "height": 1000,
       "selected": false,
       "sha256": "b3d776ed59e91dbaedcb6f1ca4e004c3b847b5ad00de75e22d0643d6427f3af7",
-      "bytes": 221304
+      "bytes": 221304,
+      "retired": true,
+      "retirementReason": "폐기 기능 또는 해당 입력에 의존한 결과의 구버전 촬영 기록. 원본 보존 전용, 현재 발표·갤러리에서 제외."
     },
     {
       "file": "37-operator-closed.png",
@@ -580,7 +598,9 @@
       "height": 1000,
       "selected": false,
       "sha256": "d93859c8a9334178cfb18d9adb643e33048637fab3db421153dc3fbdec6a057a",
-      "bytes": 221272
+      "bytes": 221272,
+      "retired": true,
+      "retirementReason": "폐기 기능 또는 해당 입력에 의존한 결과의 구버전 촬영 기록. 원본 보존 전용, 현재 발표·갤러리에서 제외."
     },
     {
       "file": "38-customer-completed.png",
@@ -595,7 +615,9 @@
       "height": 1038,
       "selected": false,
       "sha256": "f360445a2a56d89e6841081bbc753f34d3c59572ab29eeb9402a58d6fa548cfa",
-      "bytes": 149643
+      "bytes": 149643,
+      "retired": true,
+      "retirementReason": "폐기 기능 또는 해당 입력에 의존한 결과의 구버전 촬영 기록. 원본 보존 전용, 현재 발표·갤러리에서 제외."
     },
     {
       "file": "39-customer-completed-mobile.png",
@@ -610,7 +632,9 @@
       "height": 1379,
       "selected": false,
       "sha256": "2541e04728213549fc12f7fd41722e1a562d2934a10924f578cda80f1acec27c",
-      "bytes": 131404
+      "bytes": 131404,
+      "retired": true,
+      "retirementReason": "폐기 기능 또는 해당 입력에 의존한 결과의 구버전 촬영 기록. 원본 보존 전용, 현재 발표·갤러리에서 제외."
     },
     {
       "file": "40-intake-form-readable.png",
@@ -636,11 +660,13 @@
       "masked": "mail recipient row, when present",
       "kind": "element",
       "notes": "서버 완료와 화면 갱신의 시차를 피하기 위해 종결 후 새로 열어 촬영.",
-      "selected": true,
+      "selected": false,
       "sha256": "91059346f43d9dc1bbe8d94e4527e6662532a97c464d7a08b08cba8ae3eaa77d",
       "bytes": 62374,
       "width": 1038,
-      "height": 496
+      "height": 496,
+      "retired": true,
+      "retirementReason": "폐기 기능 또는 해당 입력에 의존한 결과의 구버전 촬영 기록. 원본 보존 전용, 현재 발표·갤러리에서 제외."
     },
     {
       "file": "42-analysis-second-context.png",
@@ -654,7 +680,9 @@
       "sha256": "c47b731ea0da3d13f1eb2bf9f33ae9a963b89cb12e9d773a808e1ac1d2af02b6",
       "bytes": 62958,
       "width": 1062,
-      "height": 512
+      "height": 512,
+      "retired": true,
+      "retirementReason": "폐기 기능 또는 해당 입력에 의존한 결과의 구버전 촬영 기록. 원본 보존 전용, 현재 발표·갤러리에서 제외."
     },
     {
       "file": "43-confirmed-proposal-detail.png",
@@ -664,11 +692,13 @@
       "at": "2026-11-16T05:02:29.207Z",
       "masked": "mail recipient row, when present",
       "kind": "element",
-      "selected": true,
+      "selected": false,
       "sha256": "29fb49fb09fb9216558d44215445a172beacaa9f35b7e5f9b0349518bc940a37",
       "bytes": 21935,
       "width": 1062,
-      "height": 111
+      "height": 111,
+      "retired": true,
+      "retirementReason": "폐기 기능 또는 해당 입력에 의존한 결과의 구버전 촬영 기록. 원본 보존 전용, 현재 발표·갤러리에서 제외."
     },
     {
       "file": "44-saved-additional-info-detail.png",
@@ -678,11 +708,13 @@
       "at": "2026-11-16T05:02:29.346Z",
       "masked": "mail recipient row, when present",
       "kind": "element",
-      "selected": true,
+      "selected": false,
       "sha256": "99950f23d321518d103de6a33932ce01cc6d1756ff366a1bf7824025df3c597d",
       "bytes": 23620,
       "width": 1068,
-      "height": 163
+      "height": 163,
+      "retired": true,
+      "retirementReason": "폐기 기능 또는 해당 입력에 의존한 결과의 구버전 촬영 기록. 원본 보존 전용, 현재 발표·갤러리에서 제외."
     },
     {
       "file": "45-operator-history-detail.png",
@@ -696,7 +728,9 @@
       "sha256": "42136ac6911c50e76c185e5d1f638e0081e320684f13acdb58249b36e3859149",
       "bytes": 18156,
       "width": 1068,
-      "height": 265
+      "height": 265,
+      "retired": true,
+      "retirementReason": "폐기 기능 또는 해당 입력에 의존한 결과의 구버전 촬영 기록. 원본 보존 전용, 현재 발표·갤러리에서 제외."
     },
     {
       "file": "46-customer-result-detail.png",
@@ -706,11 +740,13 @@
       "at": "2026-11-16T05:02:30.074Z",
       "masked": "mail recipient row, when present",
       "kind": "element",
-      "selected": true,
+      "selected": false,
       "sha256": "a9e4aea53353581ffe64a9deb5a0847d25719e92ff88c411ce51e9e7fd8482fd",
       "bytes": 26449,
       "width": 1000,
-      "height": 97
+      "height": 97,
+      "retired": true,
+      "retirementReason": "폐기 기능 또는 해당 입력에 의존한 결과의 구버전 촬영 기록. 원본 보존 전용, 현재 발표·갤러리에서 제외."
     },
     {
       "file": "47-customer-history-detail.png",
@@ -727,7 +763,8 @@
       "height": 232
     }
   ],
-  "selectedCount": 10,
+  "selectedCount": 6,
+  "presentationScope": "현재 발표 관련 캡처 29장. 폐기 기능 또는 해당 입력에 의존한 구버전 캡처 18장은 원본 보존 전용. 전체 촬영 사실은 변경하지 않음.",
   "presentation": "../../../발표자료.html",
   "gallery": "../../captures.html"
 }
