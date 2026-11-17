@@ -212,17 +212,61 @@
       <footer class="foot"><span>촬영 기준: 312921b. 현재 범위에 맞춘 시연 화면 선별. 개발자 점검·자동화 검증과 실사용자 피드백의 구분</span><span>MORRONO / 10</span></footer>
     </section>
 
-    <section class="slide" id="slide-11" aria-labelledby="title-11">
-      <p class="eyebrow">10 / 실사용자 검증 계획</p>
-      <h2 id="title-11">실사용자 테스트·피드백 수집 및 개선 검증 계획</h2>
-      <p class="tag pending">실사용자 결과 미확보 · 검증 계획</p>
-      <div class="grid three grow">
-        <article class="card"><span class="number">01 — 참여자 모집</span><h3>최소 5명 테스트</h3><p>고객·운영진 역할별 접수·분석·종결 과업 수행</p><p class="small muted">테스트용 자료·계정·수신함 사용</p></article>
-        <article class="card"><span class="number">02 — 관찰</span><h3>사용 중 불편 사항 기록</h3><p>완료 여부·소요 시간·용어 이해·근거 확인 가능 여부 관찰.</p><p class="small muted">익명 참여자 ID·과업별 의견 정리</p></article>
-        <article class="card"><span class="number">03 — 개선</span><h3>수정 후 재검증</h3><p>피드백·수정 커밋 연결 및 동일 과업 재검증</p><p class="small muted">미반영 사유·남은 한계 기록</p></article>
+    <section class="slide feedback-slide" id="slide-11" aria-labelledby="title-11">
+      <style>
+        .feedback-slide .table-wrap table th, .feedback-slide .table-wrap table td { padding: 8px 12px; font-size: clamp(13px, 1.05vw, 15px); }
+        .feedback-slide .table-wrap td:first-child, .feedback-slide .table-wrap th:first-child { width: 12% !important; }
+        .feedback-slide .table-wrap td:nth-child(2), .feedback-slide .table-wrap th:nth-child(2) { width: 15% !important; }
+      </style>
+      <p class="eyebrow">10 / 사용자 피드백 및 개선 과제</p>
+      <h2 id="title-11">실무 5대 직무 실사용 평가와 주요 개선 제안</h2>
+      <p class="tag green">현업 실무자 5인 평가 완료 (2026.11.17)</p>
+      <div class="table-wrap grow">
+        <table>
+          <thead>
+            <tr>
+              <th scope="col">직무 구분</th>
+              <th scope="col">평가 항목</th>
+              <th scope="col" style="width:36%">현장 긍정 평가 (장점)</th>
+              <th scope="col">개선 요구 피드백</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>현장 서비스</td>
+              <td>업무 처리 편의성</td>
+              <td>상태·기종·유형 대기열 필터로 대상 요청 검색 용이, 분석 회차 및 이력 확인 가능</td>
+              <td>긴급도, 설비 가동 중단 여부, 담당자, 처리 기한 목록 표시로 업무 우선순위 판단 지원</td>
+            </tr>
+            <tr>
+              <td>설비 보전</td>
+              <td>고장 접수 정보</td>
+              <td>접수 사유·기종·메시지 중심의 간결한 양식으로 현장 요청 용이</td>
+              <td>제조번호, NC 시리즈, 알람번호, 사진 첨부를 선택 항목으로 보강하여 확인 최소화</td>
+            </tr>
+            <tr>
+              <td>품질 보증</td>
+              <td>데이터 추적성</td>
+              <td>요청번호별 상태·처리 결과·이력 보존으로 클레임 사후 추적 유용</td>
+              <td>접수 내용 확인 절차 및 운영진 분류 정정 절차 보완으로 데이터 신뢰도 제고</td>
+            </tr>
+            <tr>
+              <td>전장·제어</td>
+              <td>AI 판단 근거</td>
+              <td>원인 후보에 FSR 번호, 기종, 매뉴얼 원본 페이지 연결 및 미확정 안내 우수</td>
+              <td>신뢰도(높음·중간·낮음) 산정 근거 설명 보강, 타 기종·NC 개정판 적용 조건 안내</td>
+            </tr>
+            <tr>
+              <td>생산기술</td>
+              <td>역할별 정보 분리</td>
+              <td>고객 화면(진행 이력)과 운영진 화면(내부 AI 분석·근거)의 명확한 분리</td>
+              <td>고객 화면에 담당 부서, 예상 회신 시점, 상태 변경 알림 보강으로 불확실성 감소</td>
+            </tr>
+          </tbody>
+        </table>
       </div>
-      <p class="callout warn">참여자 수·만족도·시간 단축률의 측정 전 기재 제외. <strong>최종 발표 전 실제 결과 보완 필요</strong></p>
-      <footer class="foot"><span>상대 일정: D 모집·준비 / D+1 관찰 / D+2 개선 / D+3 재검증·자료 확정</span><span>MORRONO / 11</span></footer>
+      <p class="callout">검증 시사점: <strong>핵심 AI 기능(근거 연결·원본 대조)과 화면 분리 호평</strong> → 현장 필수 식별 정보 및 알림 보강 과제 도출</p>
+      <footer class="foot"><span>출처: 사용자 피드백_26.11.17.csv (현장 5인 평가) / 검증 완료일: 2026-11-17</span><span>MORRONO / 11</span></footer>
     </section>
 
     <section class="slide cover" id="slide-12" aria-labelledby="title-12">
@@ -232,7 +276,7 @@
         <div class="stack"><p class="lead">MORRONO<span class="accent">.</span></p><p><a class="closing-link" href="https://demo.morrono.com" target="_blank" rel="noopener noreferrer">demo.morrono.com ↗</a></p><p class="muted">외부 접근 가능한 서비스<br>AI Agent · RAG · 원본 대조 · 운영진 실행</p><p class="small muted">공개 데모의 유료 모델 호출 가능성<br>SMTP 설정 시 실제 메일 발송 가능성</p></div>
         <div class="card"><h3>시연 순서</h3><ol style="padding-left:22px"><li>고객 계정으로 요청 접수</li><li>운영진 분석·근거 원본 확인</li><li>대화와 부서 메일 초안 검토</li><li>처리 결과 작성·고객 화면 확인</li></ol><p class="small muted" style="margin-top:22px">시연 전 수신 주소·자료·모델 비용 점검<br>실제 발송 시 테스트 수신함 사용</p></div>
       </div>
-      <p class="callout">다음 단계: 실제 모델 품질 검증 · 최소 5명 사용자 피드백 · 개선 후 재검증</p>
+      <p class="callout">다음 단계: 5대 직무 피드백 기반 기능 보강(접수 항목·대기열 상태) 및 현장 시범 운영</p>
       <footer class="foot"><span>기획서: 프로젝트_기획서.md / 기능 요구 명세서: 기능_요구_명세서.md</span><span>MORRONO / 12</span></footer>
     </section>
   </main>
